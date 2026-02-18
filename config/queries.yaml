@@ -26,6 +26,10 @@ queries:
   - name: "dotnet"
     q: ".NET Developer contract remote"
 
+domain_resolution:
+  enabled: true
+  top_n: 50
+
 sales_intel:
   enabled: true
 

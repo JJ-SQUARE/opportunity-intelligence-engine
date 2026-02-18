@@ -184,6 +184,31 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
             c["remote_friendly_ai"] = ai.get("remote_friendly")
             c["notes_ai"] = ai.get("notes")
 
+    # Resolve domain for top companies (so Sales CSV has it, even if enrichment disabled)
+    domain_cfg = cfg.get("domain_resolution", {})
+    domain_enabled = bool(domain_cfg.get("enabled", True))
+    domain_top_n = int(domain_cfg.get("top_n", 50))
+
+    if domain_enabled:
+        for c in scored[:domain_top_n]:
+            if c.get("resolved_domain"):
+                continue
+
+            domain = c.get("domain_guess")
+
+            if not domain:
+                cached = get_cached_domain(c.get("company", ""))
+                if cached:
+                    domain = cached
+                else:
+                    domain = resolve_company_domain_serpapi(c.get("company", ""))
+                    if domain:
+                        set_cached_domain(c.get("company", ""), domain)
+
+            c["resolved_domain"] = domain
+
+
+
     out_companies = export_companies_csv(scored, companies_csv)
 
     rows = []
@@ -200,6 +225,7 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "remote_friendly_signal": c.get("remote_friendly_signal"),
                 "us_only_signal": c.get("us_only_signal"),
                 "nearshore_friendly_signal": c.get("nearshore_friendly_signal"),
+                "resolved_domain": c.get("resolved_domain"),
             }
         )
 
@@ -222,7 +248,7 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         for c in scored:
             score = float(c.get("score") or 0)
             vendor_prob = float(c.get("vendor_acceptance_probability_ai") or 0)
-            domain = c.get("domain_guess")
+            domain = c.get("resolved_domain") or c.get("domain_guess")
             if score < min_score:
                 continue
             if vendor_prob < vendor_min:
@@ -239,6 +265,7 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         set_cached_domain(c.get("company", ""), domain)
 
             c["resolved_domain"] = domain
+
             if not domain:
                 continue
 
