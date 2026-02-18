@@ -19,6 +19,10 @@ import pandas as pd
 from domain_resolution.google_serpapi import resolve_company_domain_serpapi
 from domain_resolution.cache import get_cached_domain, set_cached_domain
 
+from sales_intel.classify import build_sales_and_competitive_lists
+from export.to_sales_opportunities_csv import export_sales_opportunities_csv
+from export.to_competitive_watchlist_csv import export_competitive_watchlist_csv
+
 
 def company_signals(company_obj):
     jobs = company_obj.get("jobs", [])
@@ -252,6 +256,23 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
     else:
         out_leads = None
 
+    sales_intel_cfg = cfg.get("sales_intel", {})
+    if sales_intel_cfg.get("enabled", True):
+        sales_list, competitive_list = build_sales_and_competitive_lists(scored, sales_intel_cfg)
+
+        out_cfg = sales_intel_cfg.get("outputs", {})
+        sales_path = out_cfg.get("sales_opportunities_csv", "data/processed/sales_opportunities.csv")
+        comp_path = out_cfg.get("competitive_watchlist_csv", "data/processed/competitive_watchlist.csv")
+
+        out_sales = export_sales_opportunities_csv(sales_list, sales_path)
+        out_comp = export_competitive_watchlist_csv(competitive_list, comp_path)
+
+        print(f"Saved sales opportunities to {out_sales} ({len(sales_list)} rows)")
+        print(f"Saved competitive watchlist to {out_comp} ({len(competitive_list)} rows)")
+    else:
+        out_sales, out_comp = None, None
+        sales_list, competitive_list = [], []
+
     return {
         "jobs_count": len(jobs),
         "companies_count": len(scored),
@@ -261,4 +282,8 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "enrichment_input_csv": enrichment_input_csv,
         "leads_csv": leads_csv,
         "leads_count": len(all_leads) if enrichment_cfg.get("enabled", False) else 0,
+        "sales_opportunities_csv": out_sales,
+        "competitive_watchlist_csv": out_comp,
+        "sales_opportunities_count": len(sales_list),
+        "competitive_watchlist_count": len(competitive_list),
     }
