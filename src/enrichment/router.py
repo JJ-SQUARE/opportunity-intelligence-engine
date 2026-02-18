@@ -13,12 +13,16 @@ def enrich_company(company_obj: Dict[str, Any], enrichment_cfg: Dict[str, Any]) 
         return leads
 
     if hunter_cfg.get("enabled", False):
-        resp = hunter_domain_search(
-            domain=domain,
-            api_key_env=hunter_cfg.get("api_key_env", "HUNTER_API_KEY"),
-            sleep_s=float(hunter_cfg.get("rate_limit_sleep_s", 1.0)),
-            limit=10,
-        )
-        leads.extend(extract_leads_from_hunter_response(company_obj.get("company"), domain, resp))
+        try:
+            resp = hunter_domain_search(
+                domain=domain,
+                api_key_env=hunter_cfg.get("api_key_env", "HUNTER_API_KEY"),
+                sleep_s=float(hunter_cfg.get("rate_limit_sleep_s", 1.0)),
+                limit=10,
+            )
+            leads.extend(extract_leads_from_hunter_response(company_obj.get("company"), domain, resp))
+        except Exception as e:
+            print(
+                f"[WARN] Hunter enrichment failed for domain='{domain}' company='{company_obj.get('company')}': {type(e).__name__}: {e}")
 
     return leads

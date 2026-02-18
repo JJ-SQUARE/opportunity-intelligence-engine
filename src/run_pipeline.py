@@ -23,6 +23,7 @@ from sales_intel.classify import build_sales_and_competitive_lists
 from export.to_sales_opportunities_csv import export_sales_opportunities_csv
 from export.to_competitive_watchlist_csv import export_competitive_watchlist_csv
 from utils.run_paths import build_run_dir, join_run_path
+from utils.run_summary import write_run_summary
 
 def company_signals(company_obj):
     jobs = company_obj.get("jobs", [])
@@ -310,6 +311,17 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         sales_list, competitive_list = [], []
 
     print(f"Run saved to: {run_dir}")
+
+    summary_path = write_run_summary(
+        run_dir=run_dir,
+        jobs_count=len(jobs),
+        companies_count=len(scored),
+        sales_list=sales_list,
+        competitive_list=competitive_list,
+        leads_count=len(all_leads) if enrichment_cfg.get("enabled", False) else 0,
+    )
+
+    print(f"Run summary written to: {summary_path}")
 
     return {
         "jobs_count": len(jobs),
