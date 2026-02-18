@@ -7,7 +7,7 @@ from pipeline.dedupe import dedupe_jobs
 from export.to_csv import export_jobs_csv
 from pipeline.aggregate import aggregate_by_company
 from scoring.basic_score import basic_opportunity_score
-
+from scoring.signals import enrich_job_with_signals
 
 def main():
     load_dotenv()
@@ -19,6 +19,10 @@ def main():
     jobs = fetch_google_jobs_serpapi(query=query, location=location, num_pages=num_pages)
     jobs = normalize_jobs(jobs)
     jobs = dedupe_jobs(jobs)
+    jobs = [enrich_job_with_signals(j) for j in jobs]
+    out_path_jobs = export_jobs_csv(jobs, "data/processed/jobs_enriched.csv")
+    print(f"Saved {len(jobs)} enriched jobs to {out_path_jobs}")
+
     companies = aggregate_by_company(jobs)
 
     scored_companies = []
