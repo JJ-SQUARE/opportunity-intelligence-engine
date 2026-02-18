@@ -1,14 +1,31 @@
-global:
+run:
   num_pages: 3
-  location: "United States"
-  top_n_ai: 10
+  sleep_s: 1.0
+
+sources:
+  google_jobs:
+    enabled: true
+    location_mode: "matrix"   # matrix = queries x locations
+    locations:
+      - "United States"
+      - "Canada"
+
+llm:
+  enabled: true
+  provider: "openai"          # openai | gemini
+  model: "gpt-4.1-mini"
+  temperature: 0.2
+  top_n: 10
+  cache_path: "data/processed/company_ai_cache.json"
 
 queries:
-  - name: "angular_remote_contract"
+  - name: "angular"
     q: "Angular Developer contract remote"
-
-  - name: "react_remote_contract"
+  - name: "react"
     q: "React Developer contract remote"
-
-  - name: "dotnet_remote_contract"
+  - name: "dotnet"
     q: ".NET Developer contract remote"
+
+outputs:
+  jobs_csv: "data/processed/jobs_enriched.csv"
+  companies_csv: "data/processed/companies_scored.csv"
