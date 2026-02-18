@@ -20,6 +20,7 @@ def export_companies_csv(companies: List[Dict[str, Any]], path: str) -> str:
                 "industry_ai": c.get("industry_ai"),
                 "vendor_acceptance_probability_ai": c.get("vendor_acceptance_probability_ai"),
                 "notes_ai": " | ".join(c.get("notes_ai") or []),
+                "us_only_signal": c.get("us_only_signal"),
             }
         )
 

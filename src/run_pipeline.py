@@ -18,10 +18,16 @@ def company_signals(company_obj):
     jobs = company_obj.get("jobs", [])
 
     contractor = any(j.get("is_contractor") for j in jobs)
-    nearshore = any(j.get("nearshore_friendly") for j in jobs)
+
+    # Remote signals
     remote = any(j.get("is_remote") for j in jobs) or any(
         "remote" in (j.get("location") or "").lower() for j in jobs
     )
+
+    us_only = any(j.get("us_only") for j in jobs)
+
+    # Nearshore-friendly: explícito nearshore/latam + no US-only
+    nearshore = any(j.get("nearshore_friendly") for j in jobs) and not us_only
 
     urgency = sum(int(j.get("urgency_hits") or 0) for j in jobs) + sum(
         1 for j in jobs if j.get("many_openings_signal")
@@ -32,12 +38,12 @@ def company_signals(company_obj):
 
     return {
         "contractor_signal": contractor,
-        "nearshore_friendly_signal": nearshore,
         "remote_friendly_signal": remote,
+        "us_only_signal": us_only,
+        "nearshore_friendly_signal": nearshore,
         "urgency_signal": urgency,
         "country_focus": country_focus,
     }
-
 
 def fetch_jobs_from_config(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     run_cfg = cfg.get("run", {})
@@ -122,7 +128,21 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
     scored = []
     for c in companies:
         c.update(company_signals(c))
-        c["score"] = basic_opportunity_score(c) + min(c.get("urgency_signal", 0), 8)
+        score = basic_opportunity_score(c) + min(c.get("urgency_signal", 0), 8)
+
+        if c.get("contractor_signal"):
+            score += 2
+
+        if c.get("remote_friendly_signal") and not c.get("us_only_signal"):
+            score += 2
+
+        if c.get("nearshore_friendly_signal"):
+            score += 3
+
+        if c.get("us_only_signal"):
+            score -= 3
+
+        c["score"] = round(score, 2)
         scored.append(c)
 
     scored = sorted(scored, key=lambda x: x["score"], reverse=True)
