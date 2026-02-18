@@ -22,7 +22,7 @@ from domain_resolution.cache import get_cached_domain, set_cached_domain
 from sales_intel.classify import build_sales_and_competitive_lists
 from export.to_sales_opportunities_csv import export_sales_opportunities_csv
 from export.to_competitive_watchlist_csv import export_competitive_watchlist_csv
-
+from utils.run_paths import build_run_dir, join_run_path
 
 def company_signals(company_obj):
     jobs = company_obj.get("jobs", [])
@@ -114,11 +114,20 @@ def fetch_jobs_from_config(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    outputs = cfg.get("outputs", {})
-    jobs_csv = outputs.get("jobs_csv", "data/processed/jobs_enriched.csv")
-    companies_csv = outputs.get("companies_csv", "data/processed/companies_scored.csv")
-    enrichment_input_csv = outputs.get("enrichment_input_csv", "data/processed/enrichment_input.csv")
-    leads_csv = outputs.get("leads_csv", "data/processed/leads.csv")
+
+    run_dir = build_run_dir(cfg)
+
+    # si quieres mantener data/processed para caches, NO lo toques.
+    # Solo outputs van al run_dir:
+    jobs_csv = join_run_path(run_dir, "jobs_enriched.csv")
+    companies_csv = join_run_path(run_dir, "companies_scored.csv")
+    enrichment_input_csv = join_run_path(run_dir, "enrichment_input.csv")
+    leads_csv = join_run_path(run_dir, "leads.csv")
+
+    # sales intel outputs
+    sales_opportunities_csv = join_run_path(run_dir, "sales_opportunities.csv")
+    competitive_watchlist_csv = join_run_path(run_dir, "competitive_watchlist.csv")
+
 
     os.makedirs("data/processed", exist_ok=True)
 
@@ -288,8 +297,8 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         sales_list, competitive_list = build_sales_and_competitive_lists(scored, sales_intel_cfg)
 
         out_cfg = sales_intel_cfg.get("outputs", {})
-        sales_path = out_cfg.get("sales_opportunities_csv", "data/processed/sales_opportunities.csv")
-        comp_path = out_cfg.get("competitive_watchlist_csv", "data/processed/competitive_watchlist.csv")
+        sales_path = sales_opportunities_csv
+        comp_path = competitive_watchlist_csv
 
         out_sales = export_sales_opportunities_csv(sales_list, sales_path)
         out_comp = export_competitive_watchlist_csv(competitive_list, comp_path)
@@ -299,6 +308,8 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
     else:
         out_sales, out_comp = None, None
         sales_list, competitive_list = [], []
+
+    print(f"Run saved to: {run_dir}")
 
     return {
         "jobs_count": len(jobs),
@@ -313,4 +324,5 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "competitive_watchlist_csv": out_comp,
         "sales_opportunities_count": len(sales_list),
         "competitive_watchlist_count": len(competitive_list),
+        "run_dir": run_dir
     }

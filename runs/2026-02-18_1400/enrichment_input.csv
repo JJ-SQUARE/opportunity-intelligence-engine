@@ -1,0 +1,79 @@
+company,domain_guess,score,industry_ai,company_type_ai,vendor_acceptance_probability_ai,contractor_signal,remote_friendly_signal,us_only_signal,nearshore_friendly_signal,resolved_domain
+TWO95 International INC,,19.5,SaaS,consulting,75.0,True,True,False,False,two95intl.com
+FreelanceJobs,ca.bebee.com,19.5,SaaS,staffing_agency,75.0,True,False,False,False,ca.bebee.com
+Two95 International Inc.,jobs.workable.com,13.0,SaaS,consulting,75.0,True,True,False,False,jobs.workable.com
+YO IT CONSULTING,,11.5,SaaS,consulting,75.0,True,True,False,False,yoconsulting.org
+Sky Solutions LLC.,,11.0,SaaS,product_company,70.0,True,True,False,False,skysolutions.com
+Upwork,upwork.com,11.0,SaaS,marketplace,75.0,True,True,False,False,upwork.com
+"Georgia IT, Inc.",jobgether.com,11.0,SaaS,staffing_agency,75.0,True,True,False,False,jobgether.com
+GuruLink,app.gurulink.ca,10.5,logistics,product_company,30.0,True,True,False,False,app.gurulink.ca
+Source Code,learn4good.com,9.5,SaaS,product_company,75.0,True,True,False,False,learn4good.com
+Ignite Talent Solutions,recruiterflow.com,9.5,manufacturing_technology,product_company,75.0,False,True,False,True,recruiterflow.com
+Link Group,nofluffjobs.com,9.0,,,,False,True,False,False,nofluffjobs.com
+Singlemind,,8.5,,,,True,True,False,False,singlemindconsulting.com
+Hostfully,wellfound.com,8.5,,,,False,True,False,True,wellfound.com
+Build in Motion,,8.5,,,,True,True,False,False,buildinmotion.com
+Orium,,8.5,,,,True,True,False,False,orium.com
+NIC Systems Inc.,,8.5,,,,True,True,False,False,nicsystems.com
+Sutherland Digital Services Inc,dice.com,8.5,,,,False,True,False,True,dice.com
+Iconvergence,,7.5,,,,True,True,False,False,iconvergence.com
+Treinetic,,7.5,,,,True,True,False,False,treinetic.com
+Sharkbyte Inc.,,7.5,,,,True,True,False,False,sharkbyte.ca
+G2i Inc.,,7.5,,,,True,True,False,False,g2i.co
+G2i,himalayas.app,7.5,,,,True,True,False,False,himalayas.app
+Nextbeat Singapore Pte.Ltd.,learn4good.com,7.5,,,,True,True,False,False,learn4good.com
+careerbox.42web,careerbox.42web.io,7.5,,,,True,True,False,False,careerbox.42web.io
+Valce Talent Solutions,himalayas.app,7.5,,,,True,True,False,False,himalayas.app
+Jun Group,careervault.io,7.5,,,,True,True,False,False,careervault.io
+COOLSOFT,learn4good.com,7.5,,,,True,True,False,False,learn4good.com
+TEKsystems,learn4good.com,7.5,,,,True,True,False,False,learn4good.com
+Georgia IT Inc,lensa.com,7.5,,,,True,True,False,False,lensa.com
+Geovea,,7.5,,,,True,True,False,False,geovea.com
+Aarorn Technologies Inc,ca.jobrapido.com,7.5,,,,True,True,False,False,ca.jobrapido.com
+Lazer,,7.5,,,,True,True,False,False,lazersport.com
+SherlockTalent,sherlocktalent.com,7.5,,,,True,True,False,False,sherlocktalent.com
+GTT,monster.com,7.5,,,,True,True,False,False,monster.com
+Realign LLC,,7.5,,,,True,True,False,False,realign-llc.com
+Compose,app.dover.com,7.5,,,,True,True,False,False,app.dover.com
+Crowdlinker,,7.5,,,,True,True,False,False,crowdlinker.com
+Twine,techjobs.ca,7.5,,,,True,True,False,False,techjobs.ca
+Ward Technology Talent,jobleads.com,7.5,,,,True,True,False,False,jobleads.com
+Handis Consulting Inc.,ca.talent.com,7.5,,,,True,True,False,False,ca.talent.com
+Turing,,7.5,,,,True,True,False,False,turing.com
+CBC/Radio-Canada,,7.5,,,,True,True,False,False,cbc.radio-canada.ca
+Storetasker,weworkremotely.com,7.5,,,,True,True,False,False,weworkremotely.com
+Stack And Co Software Recruiters,jobgether.com,7.5,,,,True,True,False,False,jobgether.com
+Recutify Inc.,,7.5,,,,True,True,False,False,recutify.com
+GT Ecom BV,dailyremote.com,7.5,,,,True,True,False,False,dailyremote.com
+The Elite Job,theelitejob.com,7.5,,,,True,True,False,False,theelitejob.com
+Orangutech,,7.5,,,,True,True,False,False,orangutech.com
+Noramtec Consultants,learn4good.com,7.5,,,,True,True,False,False,learn4good.com
+Enavate,theorg.com,7.5,,,,True,True,False,False,theorg.com
+Reddit,careervault.io,7.5,,,,True,True,False,False,
+Namefi,wellfound.com,6.5,,,,False,True,False,False,
+NAAS Technologies,dice.com,5.5,,,,False,True,False,False,
+Concero,jobright.ai,5.5,,,,False,True,False,False,
+GRT Corporation,dice.com,5.5,,,,False,True,False,False,
+TekShapers,dice.com,5.5,,,,False,True,False,False,
+iitjobs inc,iitjobs.com,5.5,,,,False,True,False,False,
+Intone Networks,techfetch.com,5.5,,,,False,True,False,False,
+C4 Technical Services,dice.com,5.5,,,,False,True,False,False,
+Lumenalta,jobright.ai,5.5,,,,False,True,False,False,
+Robert Half,dice.com,5.5,,,,True,False,False,False,
+Gov Services Hub,remoterocketship.com,5.5,,,,False,True,False,False,
+Brillio,,5.5,,,,False,True,False,False,
+"Clevertech Partners, LLC DBA Lumenalta",virtualvocations.com,5.5,,,,False,True,False,False,
+Augusta Hitech Soft Solutions,,5.5,,,,False,True,False,False,
+GENIE AI,wellfound.com,5.5,,,,False,True,False,False,
+Ocean Blue Solutions,,5.5,,,,False,True,False,False,
+TC Transcontinental,,5.5,,,,True,False,False,False,
+Becca Jules & Co.,,5.5,,,,False,True,False,False,
+S.i. Systems,learn4good.com,5.5,,,,False,True,False,False,
+Limit Break,beincrypto.com,5.5,,,,True,False,False,False,
+IDR Group,jobera.com,5.5,,,,False,True,False,False,
+Bck Tech,laborx.com,3.5,,,,False,False,False,False,
+Carl Hamiltom,laborx.com,3.5,,,,False,False,False,False,
+Anou Kham,laborx.com,3.5,,,,False,False,False,False,
+Daniel Rechard,laborx.com,3.5,,,,False,False,False,False,
+David Tan,laborx.com,3.5,,,,False,False,False,False,
+Lofi Eth,laborx.com,3.5,,,,False,False,False,False,

@@ -2,6 +2,11 @@ run:
   num_pages: 3
   sleep_s: 1.0
 
+runs:
+  enabled: true
+  base_dir: "runs"
+  run_id_format: "%Y-%m-%d_%H%M"
+
 sources:
   google_jobs:
     enabled: true
@@ -74,6 +79,8 @@ enrichment:
   # Cuántas empresas máximo enriquecer por corrida
   limits:
     max_companies: 25
+
+
 
 outputs:
   jobs_csv: "data/processed/jobs_enriched.csv"
