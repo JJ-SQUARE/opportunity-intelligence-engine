@@ -8,7 +8,7 @@ def enrich_company(company_obj: Dict[str, Any], enrichment_cfg: Dict[str, Any]) 
     hunter_cfg = providers.get("hunter", {})
     leads: List[Dict[str, Any]] = []
 
-    domain = company_obj.get("domain_guess")
+    domain = company_obj.get("resolved_domain") or company_obj.get("domain_guess")
     if not domain:
         return leads
 

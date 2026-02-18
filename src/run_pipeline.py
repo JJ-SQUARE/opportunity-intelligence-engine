@@ -16,6 +16,9 @@ from export.to_leads_csv import export_leads_csv
 from enrichment.router import enrich_company
 import pandas as pd
 
+from domain_resolution.google_serpapi import resolve_company_domain_serpapi
+from domain_resolution.cache import get_cached_domain, set_cached_domain
+
 
 def company_signals(company_obj):
     jobs = company_obj.get("jobs", [])
@@ -215,14 +218,24 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         for c in scored:
             score = float(c.get("score") or 0)
             vendor_prob = float(c.get("vendor_acceptance_probability_ai") or 0)
-
+            domain = c.get("domain_guess")
             if score < min_score:
                 continue
             if vendor_prob < vendor_min:
                 continue
             if require_not_us_only and c.get("us_only_signal"):
                 continue
-            if not c.get("domain_guess"):
+            if not domain:
+                cached = get_cached_domain(c.get("company", ""))
+                if cached:
+                    domain = cached
+                else:
+                    domain = resolve_company_domain_serpapi(c.get("company", ""))
+                    if domain:
+                        set_cached_domain(c.get("company", ""), domain)
+
+            c["resolved_domain"] = domain
+            if not domain:
                 continue
 
             eligible.append(c)
