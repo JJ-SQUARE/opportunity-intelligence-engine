@@ -1,0 +1,14 @@
+global:
+  num_pages: 3
+  location: "United States"
+  top_n_ai: 10
+
+queries:
+  - name: "angular_remote_contract"
+    q: "Angular Developer contract remote"
+
+  - name: "react_remote_contract"
+    q: "React Developer contract remote"
+
+  - name: "dotnet_remote_contract"
+    q: ".NET Developer contract remote"
