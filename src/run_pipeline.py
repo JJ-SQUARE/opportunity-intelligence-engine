@@ -12,6 +12,9 @@ from scoring.ai_company_classifier import classify_company_with_llm
 
 from export.to_csv import export_jobs_csv
 from export.to_company_csv import export_companies_csv
+from export.to_leads_csv import export_leads_csv
+from enrichment.router import enrich_company
+import pandas as pd
 
 
 def company_signals(company_obj):
@@ -107,6 +110,8 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
     outputs = cfg.get("outputs", {})
     jobs_csv = outputs.get("jobs_csv", "data/processed/jobs_enriched.csv")
     companies_csv = outputs.get("companies_csv", "data/processed/companies_scored.csv")
+    enrichment_input_csv = outputs.get("enrichment_input_csv", "data/processed/enrichment_input.csv")
+    leads_csv = outputs.get("leads_csv", "data/processed/leads.csv")
 
     os.makedirs("data/processed", exist_ok=True)
 
@@ -174,10 +179,73 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     out_companies = export_companies_csv(scored, companies_csv)
 
+    rows = []
+    for c in scored:
+        rows.append(
+            {
+                "company": c.get("company"),
+                "domain_guess": c.get("domain_guess"),
+                "score": c.get("score"),
+                "industry_ai": c.get("industry_ai"),
+                "company_type_ai": c.get("company_type_ai"),
+                "vendor_acceptance_probability_ai": c.get("vendor_acceptance_probability_ai"),
+                "contractor_signal": c.get("contractor_signal"),
+                "remote_friendly_signal": c.get("remote_friendly_signal"),
+                "us_only_signal": c.get("us_only_signal"),
+                "nearshore_friendly_signal": c.get("nearshore_friendly_signal"),
+            }
+        )
+
+    pd.DataFrame(rows).to_csv(enrichment_input_csv, index=False)
+
+    enrichment_cfg = cfg.get("enrichment", {})
+    all_leads = []
+
+    if enrichment_cfg.get("enabled", False):
+        filters = enrichment_cfg.get("filters", {})
+        limits = enrichment_cfg.get("limits", {})
+        max_companies = int(limits.get("max_companies", 25))
+
+        min_score = float(filters.get("min_score", 0))
+        vendor_min = float(filters.get("vendor_prob_min", 0))
+        require_not_us_only = bool(filters.get("require_not_us_only", False))
+
+        # filtrar companies elegibles
+        eligible = []
+        for c in scored:
+            score = float(c.get("score") or 0)
+            vendor_prob = float(c.get("vendor_acceptance_probability_ai") or 0)
+
+            if score < min_score:
+                continue
+            if vendor_prob < vendor_min:
+                continue
+            if require_not_us_only and c.get("us_only_signal"):
+                continue
+            if not c.get("domain_guess"):
+                continue
+
+            eligible.append(c)
+
+        eligible = eligible[:max_companies]
+        print(f"Enrichment: eligible companies = {len(eligible)}")
+
+        for c in eligible:
+            leads = enrich_company(c, enrichment_cfg)
+            all_leads.extend(leads)
+
+        out_leads = export_leads_csv(all_leads, leads_csv)
+        print(f"Saved leads to {out_leads}")
+    else:
+        out_leads = None
+
     return {
         "jobs_count": len(jobs),
         "companies_count": len(scored),
         "jobs_csv": jobs_csv,
         "companies_csv": out_companies,
         "top_companies": scored[:10],
+        "enrichment_input_csv": enrichment_input_csv,
+        "leads_csv": leads_csv,
+        "leads_count": len(all_leads) if enrichment_cfg.get("enabled", False) else 0,
     }

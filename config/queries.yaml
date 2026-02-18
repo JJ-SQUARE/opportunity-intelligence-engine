@@ -26,6 +26,30 @@ queries:
   - name: "dotnet"
     q: ".NET Developer contract remote"
 
+enrichment:
+  enabled: true
+  providers:
+    hunter:
+      enabled: true
+      api_key_env: "HUNTER_API_KEY"
+      rate_limit_sleep_s: 1.0
+    apollo:
+      enabled: false
+      api_key_env: "APOLLO_API_KEY"
+      rate_limit_sleep_s: 1.0
+
+  # Solo enriquecer empresas que pasen este filtro
+  filters:
+    min_score: 8
+    vendor_prob_min: 70
+    require_not_us_only: true
+
+  # Cuántas empresas máximo enriquecer por corrida
+  limits:
+    max_companies: 25
+
 outputs:
   jobs_csv: "data/processed/jobs_enriched.csv"
   companies_csv: "data/processed/companies_scored.csv"
+  enrichment_input_csv: "data/processed/enrichment_input.csv"
+  leads_csv: "data/processed/leads.csv"
