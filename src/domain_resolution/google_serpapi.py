@@ -8,31 +8,51 @@ import requests
 SERPAPI_URL = "https://serpapi.com/search.json"
 
 # dominios que NO queremos como “website oficial”
-BLOCKLIST = (
-    "linkedin.com",
-    "indeed.com",
-    "glassdoor.com",
-    "ziprecruiter.com",
-    "facebook.com",
-    "twitter.com",
-    "x.com",
-    "instagram.com",
-    "wikipedia.org",
-    "crunchbase.com",
-    "bloomberg.com",
-)
+BLOCKLIST = {
+    "linkedin.com", "indeed.com", "glassdoor.com", "ziprecruiter.com",
+    "facebook.com", "twitter.com", "x.com", "instagram.com",
+    "wikipedia.org", "crunchbase.com", "bloomberg.com",
+    "dice.com", "nofluffjobs.com", "workable.com",
+    "greenhouse.io", "lever.co", "ashbyhq.com",
+    "myworkdayjobs.com", "taleo.net", "icims.com",
+}
+
+COMMON_SUBDOMAINS = {"jobs", "careers", "boards", "apply", "join"}
+
+
+def _is_blocked(host: str) -> bool:
+    host = (host or "").lower().strip()
+    for d in BLOCKLIST:
+        if host == d:
+            return True
+        if host.endswith("." + d):
+            return True
+    return False
+
 
 def _clean_domain(url: str) -> Optional[str]:
     try:
-        host = (urlparse(url).hostname or "").lower()
-        host = host.replace("www.", "")
+        host = (urlparse(url).hostname or "").lower().strip()
         if not host:
             return None
-        if any(host.endswith(d) or d in host for d in BLOCKLIST):
+
+        # normalize
+        if host.startswith("www."):
+            host = host[4:]
+
+        # drop common job subdomains (keeps company base domain)
+        parts = host.split(".")
+        if len(parts) >= 3 and parts[0] in COMMON_SUBDOMAINS:
+            host = ".".join(parts[1:])
+
+        # blocklist (exact or subdomain)
+        if _is_blocked(host):
             return None
+
         return host
     except Exception:
         return None
+
 
 def resolve_company_domain_serpapi(
     company_name: str,
@@ -48,37 +68,42 @@ def resolve_company_domain_serpapi(
     if not api_key:
         raise RuntimeError(f"Missing {api_key_env} env var")
 
-    q = f"{company_name} official website"
+    queries = [
+        f"{company_name} official website",
+        f"{company_name} website",
+    ]
 
-    params: Dict[str, Any] = {
-        "engine": "google",
-        "q": q,
-        "api_key": api_key,
-        "gl": gl,   # country
-        "hl": hl,   # language
-    }
+    for q in queries:
+        params: Dict[str, Any] = {
+            "engine": "google",
+            "q": q,
+            "api_key": api_key,
+            "gl": gl,
+            "hl": hl,
+        }
 
-    r = requests.get(SERPAPI_URL, params=params, timeout=30)
-    r.raise_for_status()
-    data = r.json()
+        r = requests.get(SERPAPI_URL, params=params, timeout=30)
+        r.raise_for_status()
+        data = r.json()
 
-    # intentar knowledge graph primero
-    kg = (data.get("knowledge_graph") or {})
-    if kg.get("website"):
-        d = _clean_domain(kg["website"])
-        if d:
-            time.sleep(max(0.0, sleep_s))
-            return d
+        # knowledge graph first
+        kg = (data.get("knowledge_graph") or {})
+        if kg.get("website"):
+            d = _clean_domain(kg["website"])
+            if d:
+                time.sleep(max(0.0, sleep_s))
+                return d
 
-    # luego resultados orgánicos
-    for item in (data.get("organic_results") or [])[:8]:
-        link = item.get("link")
-        if not link:
-            continue
-        d = _clean_domain(link)
-        if d:
-            time.sleep(max(0.0, sleep_s))
-            return d
+        # organic results fallback
+        for item in (data.get("organic_results") or [])[:8]:
+            link = item.get("link")
+            if not link:
+                continue
+            d = _clean_domain(link)
+            if d:
+                time.sleep(max(0.0, sleep_s))
+                return d
 
-    time.sleep(max(0.0, sleep_s))
+        time.sleep(max(0.0, sleep_s))
+
     return None
