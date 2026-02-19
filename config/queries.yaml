@@ -14,13 +14,56 @@ sources:
     locations:
       - "United States"
       - "Canada"
+      - "Peru"
+      - "Mexico"
+      - "Colombia"
+      - "Spain"
+      - "Chile"
+
+  discovery:
+    linkedin_serpapi:
+      enabled: true
+      num_pages: 5
+      sleep_s: 1.0
+      gl: "us"
+      hl: "en"
+    indeed_serpapi:
+      enabled: false
+      num_pages: 5
+      sleep_s: 1.0
+
+    career_pages_serpapi: { enabled: true }
+
+  ats:
+    greenhouse: { enabled: true }
+    lever: { enabled: true }
+    smartrecruiters: { enabled: true }
+    workable: { enabled: false }
+    ashby: { enabled: false }
+    teamtailor: { enabled: false }
+    recruitee: { enabled: false }
+
+  enterprise_ats:
+    workday: { enabled: false }
+    icims: { enabled: false }
+    taleo: { enabled: false }
+    successfactors: { enabled: false }
+    brassring: { enabled: false }
+    oracle: { enabled: false }
+    jobvite: { enabled: false }
+    phenom: { enabled: false }
+    eightfold: { enabled: false }
+    ukg: { enabled: false }
+    adp: { enabled: false }
+    cornerstone: { enabled: false }
+
 
 llm:
   enabled: true
   provider: "openai"          # openai | gemini
   model: "gpt-4.1-mini"
   temperature: 0.2
-  top_n: 10
+  top_n: 20
   cache_path: "data/processed/company_ai_cache.json"
 
 queries:
@@ -42,9 +85,7 @@ sales_intel:
     high_min_score: 14
     medium_min_score: 11
     vendor_prob_min: 70
-    exclude_company_types:
-      - "staffing_agency"
-      - "marketplace"
+    exclude_company_types: []
     require_not_us_only: true
     max_medium: 25
 
@@ -56,8 +97,8 @@ sales_intel:
 
   segmentation:
     mode: "split"   # split | exclude | include_all
-    end_client_types: [ "product_company", "marketplace" ]
     partner_types: [ "consulting", "staffing_agency" ]
+    competitive_types: [ "staffing_agency" ]
 
     allow_unknown_end_clients: true
     unknown_min_score: 16

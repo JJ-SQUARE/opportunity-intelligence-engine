@@ -14,38 +14,33 @@ def build_sales_and_competitive_lists(
     cfg: Dict[str, Any],
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
-    Returns: (end_clients, partners, competitive)
-    - end_clients: targets directos (product companies)
-    - partners: consultoras / staffing con fit alto (también pueden ser clientes)
-    - competitive: watchlist (competencia / players a vigilar)
+    Returns:
+        end_clients,
+        partners,
+        competitive
     """
 
     sales_cfg = cfg.get("sales", {})
     comp_cfg = cfg.get("competitive", {})
-    seg_cfg = cfg.get("segmentation", {})  # <--- nuevo en YAML
+    seg_cfg = cfg.get("segmentation", {})
 
-    # thresholds
+    # ---- Thresholds ----
     high_min = float(sales_cfg.get("high_min_score", 14))
     med_min = float(sales_cfg.get("medium_min_score", 11))
     vendor_min = float(sales_cfg.get("vendor_prob_min", 70))
     require_not_us_only = bool(sales_cfg.get("require_not_us_only", True))
     max_medium = int(sales_cfg.get("max_medium", 25))
 
-    # segmentation config
-    mode = (seg_cfg.get("mode", "split") or "split").lower()  # split | include_all | exclude
-    end_client_types = set(seg_cfg.get("end_client_types", ["product_company", "marketplace"]))
-    partner_types = set(seg_cfg.get("partner_types", ["consulting", "staffing_agency"]))
+    exclude_types = {x.strip().lower() for x in sales_cfg.get("exclude_company_types", [])}
 
-    allow_unknown_end_clients = bool(seg_cfg.get("allow_unknown_end_clients", True))
-    unknown_min_score = float(seg_cfg.get("unknown_min_score", 16))
-    unknown_min_vendor_prob = float(seg_cfg.get("unknown_min_vendor_prob", 70))
+    # ---- Segmentation ----
+    mode = (seg_cfg.get("mode", "split") or "split").strip().lower()
+    partner_types = {x.strip().lower() for x in seg_cfg.get("partner_types", ["consulting", "staffing_agency"])}
+    end_client_exclude_types = {x.strip().lower() for x in seg_cfg.get("end_client_exclude_types", ["staffing_agency"])}
 
-    # sales exclude types (optional legacy behavior)
-    exclude_types = set(sales_cfg.get("exclude_company_types", []))
-
-    # Competitive watchlist config
+    # ---- Competitive ----
     comp_enabled = bool(comp_cfg.get("enabled", True))
-    comp_types = set(comp_cfg.get("include_company_types", ["staffing_agency"]))
+    comp_types = {x.strip().lower() for x in comp_cfg.get("include_company_types", ["staffing_agency"])}
     comp_min_openings = int(comp_cfg.get("min_openings", 2))
 
     end_candidates: List[Dict[str, Any]] = []
@@ -55,7 +50,8 @@ def build_sales_and_competitive_lists(
     for c in companies:
         score = float(c.get("score") or 0)
         company_type = (c.get("company_type_ai") or "unknown").strip().lower()
-        vendor_prob = float(c.get("vendor_acceptance_probability_ai") or 0)
+        vendor_prob_raw = c.get("vendor_acceptance_probability_ai")
+        vendor_prob = float(vendor_prob_raw) if vendor_prob_raw is not None else None
         us_only = bool(c.get("us_only_signal"))
         openings = int(c.get("total_openings") or 0)
 
@@ -66,56 +62,49 @@ def build_sales_and_competitive_lists(
             cc["segment"] = "competitive"
             competitive.append(cc)
 
-        # ---- Global sales eligibility (aplica a end y partners) ----
+        # ---- Sales eligibility ----
         if company_type in exclude_types:
             continue
         if require_not_us_only and us_only:
             continue
-        if vendor_prob < vendor_min:
+        if vendor_prob is not None and vendor_prob < vendor_min:
             continue
 
         sc = dict(c)
         sc["priority_band"] = classify_priority(score, high_min, med_min)
 
-        # ---- Segmentation rules ----
-        is_end_client = company_type in end_client_types
         is_partner = company_type in partner_types
+        is_end_client = company_type not in end_client_exclude_types
 
-        is_unknown_end = (
-            allow_unknown_end_clients
-            and company_type == "unknown"
-            and score >= unknown_min_score
-            and vendor_prob >= unknown_min_vendor_prob
-        )
+        # ---- Mode handling ----
 
         if mode == "exclude":
-            # solo end clients
-            if is_end_client or is_unknown_end:
+            # Solo end clients
+            if is_end_client:
                 sc["segment"] = "end_client"
                 end_candidates.append(sc)
             continue
 
         if mode == "include_all":
-            # todo a un solo bucket (end_candidates), pero marcamos segmento
-            if is_end_client or is_unknown_end:
-                sc["segment"] = "end_client"
-            elif is_partner:
+            if is_partner:
                 sc["segment"] = "partner"
             else:
-                sc["segment"] = "other"
+                sc["segment"] = "end_client"
             end_candidates.append(sc)
             continue
 
-        # default: split
-        if is_end_client or is_unknown_end:
-            sc["segment"] = "end_client"
-            end_candidates.append(sc)
-        elif is_partner:
-            sc["segment"] = "partner"
-            partner_candidates.append(sc)
-        else:
-            # no es end client ni partner -> lo ignoramos (o podrías mandarlo a competitive si quieres)
-            continue
+        # ---- Default: split ----
+        if is_partner:
+            sc_partner = dict(sc)
+            sc_partner["segment"] = "partner"
+            partner_candidates.append(sc_partner)
+
+        if is_end_client:
+            sc_client = dict(sc)
+            sc_client["segment"] = "end_client"
+            end_candidates.append(sc_client)
+
+    # ---- Finalize priority selection ----
 
     def finalize(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         candidates.sort(key=lambda x: float(x.get("score") or 0), reverse=True)
@@ -126,11 +115,8 @@ def build_sales_and_competitive_lists(
         return final
 
     end_clients = finalize(end_candidates)
-
-    # partners: misma regla (HIGH + top MEDIUM) pero puedes darle otro max si quieres
     partners = finalize(partner_candidates) if mode == "split" else []
 
-    # Competitive ordenado por openings desc y score desc
     competitive.sort(
         key=lambda x: (int(x.get("total_openings") or 0), float(x.get("score") or 0)),
         reverse=True,
