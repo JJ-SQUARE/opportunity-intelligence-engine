@@ -18,12 +18,14 @@ import pandas as pd
 
 from domain_resolution.google_serpapi import resolve_company_domain_serpapi
 from domain_resolution.cache import get_cached_domain, set_cached_domain
+from domain_resolution.google_serpapi import is_blocked_domain
 
 from sales_intel.classify import build_sales_and_competitive_lists
 from export.to_sales_opportunities_csv import export_sales_opportunities_csv
 from export.to_competitive_watchlist_csv import export_competitive_watchlist_csv
 from utils.run_paths import build_run_dir, join_run_path
 from utils.run_summary import write_run_summary
+
 
 def company_signals(company_obj):
     jobs = company_obj.get("jobs", [])
@@ -117,6 +119,7 @@ def fetch_jobs_from_config(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
 def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     run_dir = build_run_dir(cfg)
+    os.makedirs(run_dir, exist_ok=True)
 
     # si quieres mantener data/processed para caches, NO lo toques.
     # Solo outputs van al run_dir:
@@ -128,7 +131,7 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
     # sales intel outputs
     sales_opportunities_csv = join_run_path(run_dir, "sales_opportunities.csv")
     competitive_watchlist_csv = join_run_path(run_dir, "competitive_watchlist.csv")
-
+    partners_path = join_run_path(run_dir, "partner_opportunities.csv")
 
     os.makedirs("data/processed", exist_ok=True)
 
@@ -204,7 +207,11 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
             if c.get("resolved_domain"):
                 continue
 
-            domain = c.get("domain_guess")
+            domain = (c.get("domain_guess") or "").strip().lower() or None
+
+            # Si el domain_guess es job board, ignóralo y fuerza resolución
+            if domain and is_blocked_domain(domain):
+                domain = None
 
             if not domain:
                 cached = get_cached_domain(c.get("company", ""))
@@ -219,7 +226,7 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
-    out_companies = export_companies_csv(scored, companies_csv)
+    out_companies = export_companies_csv(scored, companies_csv) or companies_csv
 
     rows = []
     for c in scored:
@@ -255,25 +262,51 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         # filtrar companies elegibles
         eligible = []
+
         for c in scored:
             score = float(c.get("score") or 0)
             vendor_prob = float(c.get("vendor_acceptance_probability_ai") or 0)
-            domain = c.get("resolved_domain") or c.get("domain_guess")
+
+            # ---- Normalizar dominio inicial ----
+            domain = (c.get("resolved_domain") or c.get("domain_guess") or "").strip().lower()
+            domain = domain.replace("www.", "") or None
+
+            # Si el domain_guess es job board, descartarlo
+            if domain and is_blocked_domain(domain):
+                domain = None
+
+            # ---- Filtros de elegibilidad ----
             if score < min_score:
                 continue
             if vendor_prob < vendor_min:
                 continue
             if require_not_us_only and c.get("us_only_signal"):
                 continue
+
+            # ---- Resolver dominio si no existe ----
             if not domain:
                 cached = get_cached_domain(c.get("company", ""))
-                if cached:
-                    domain = cached
-                else:
-                    domain = resolve_company_domain_serpapi(c.get("company", ""))
-                    if domain:
-                        set_cached_domain(c.get("company", ""), domain)
 
+                if cached:
+                    cached = cached.strip().lower().replace("www.", "")
+                    if not is_blocked_domain(cached):
+                        domain = cached
+                    else:
+                        domain = None
+
+                if not domain:
+                    resolved = resolve_company_domain_serpapi(c.get("company", ""))
+
+                    if resolved:
+                        resolved = resolved.strip().lower().replace("www.", "")
+
+                        if not is_blocked_domain(resolved):
+                            domain = resolved
+                            set_cached_domain(c.get("company", ""), domain)
+                        else:
+                            domain = None
+
+            # Guardar dominio final
             c["resolved_domain"] = domain
 
             if not domain:
@@ -295,20 +328,21 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     sales_intel_cfg = cfg.get("sales_intel", {})
     if sales_intel_cfg.get("enabled", True):
-        sales_list, competitive_list = build_sales_and_competitive_lists(scored, sales_intel_cfg)
+        end_clients, partners, competitive_list = build_sales_and_competitive_lists(scored, sales_intel_cfg)
 
-        out_cfg = sales_intel_cfg.get("outputs", {})
         sales_path = sales_opportunities_csv
         comp_path = competitive_watchlist_csv
 
-        out_sales = export_sales_opportunities_csv(sales_list, sales_path)
+        out_sales = export_sales_opportunities_csv(end_clients, sales_path)
+        out_partners = export_sales_opportunities_csv(partners, partners_path)
         out_comp = export_competitive_watchlist_csv(competitive_list, comp_path)
 
-        print(f"Saved sales opportunities to {out_sales} ({len(sales_list)} rows)")
+        print(f"Saved sales opportunities to {out_sales} ({len(end_clients)} rows)")
+        print(f"Saved possible partners to {out_partners} ({len(partners)} rows)")
         print(f"Saved competitive watchlist to {out_comp} ({len(competitive_list)} rows)")
     else:
-        out_sales, out_comp = None, None
-        sales_list, competitive_list = [], []
+        (out_sales, out_partners, out_comp) = None, None, None
+        end_clients, partners, competitive_list = [], [], []
 
     print(f"Run saved to: {run_dir}")
 
@@ -316,7 +350,8 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         run_dir=run_dir,
         jobs_count=len(jobs),
         companies_count=len(scored),
-        sales_list=sales_list,
+        end_clients=end_clients,
+        partners=partners,
         competitive_list=competitive_list,
         leads_count=len(all_leads) if enrichment_cfg.get("enabled", False) else 0,
     )
@@ -334,7 +369,9 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "leads_count": len(all_leads) if enrichment_cfg.get("enabled", False) else 0,
         "sales_opportunities_csv": out_sales,
         "competitive_watchlist_csv": out_comp,
-        "sales_opportunities_count": len(sales_list),
+        "sales_opportunities_count": len(end_clients),
+        "partners_opportunities_count": len(partners),
         "competitive_watchlist_count": len(competitive_list),
+        "partner_opportunities_csv": out_partners or partners_path,
         "run_dir": run_dir
     }

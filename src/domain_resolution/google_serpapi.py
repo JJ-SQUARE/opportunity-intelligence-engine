@@ -29,6 +29,14 @@ def _is_blocked(host: str) -> bool:
             return True
     return False
 
+def is_blocked_domain(domain: str) -> bool:
+    d = (domain or "").lower().strip()
+    d = d.replace("https://", "").replace("http://", "").split("/")[0]
+    d = d.replace("www.", "")
+    for b in BLOCKLIST:
+        if d == b or d.endswith("." + b):
+            return True
+    return False
 
 def _clean_domain(url: str) -> Optional[str]:
     try:
