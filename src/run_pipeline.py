@@ -1,7 +1,7 @@
 import os
 from typing import Any, Dict, List
 
-from collectors.google_jobs_serpapi import fetch_google_jobs_serpapi
+from collectors.google_jobs.google_jobs_serpapi_client import fetch_google_jobs_serpapi
 from pipeline.normalize import normalize_jobs
 from pipeline.dedupe import dedupe_jobs
 from pipeline.aggregate import aggregate_by_company

@@ -1,7 +1,7 @@
 from typing import Any, Dict, List
 
-from collectors.registry import REGISTRY
-from collectors.base import BaseCollector
+from src.collectors.registry import REGISTRY
+from src.collectors.base import BaseCollector
 
 def _is_enabled(cfg: Dict[str, Any], path: List[str]) -> bool:
     cur = cfg

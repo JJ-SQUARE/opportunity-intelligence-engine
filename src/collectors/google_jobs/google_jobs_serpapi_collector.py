@@ -1,12 +1,12 @@
 from __future__ import annotations
 from typing import Any, Dict, List
 
-from collectors.google_jobs_serpapi import fetch_google_jobs_serpapi
+from collectors.google_jobs.google_jobs_serpapi_client import fetch_google_jobs_serpapi
 from collectors.registry import register
 
 @register
 class GoogleJobsSerpApiCollector:
-    name = "google_jobs"
+    name = "google_jobs_serpapi"
     source = "google_jobs"
 
     def collect(self, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -14,7 +14,7 @@ class GoogleJobsSerpApiCollector:
         num_pages = int(run_cfg.get("num_pages", 3))
         sleep_s = float(run_cfg.get("sleep_s", 1.0))
 
-        c_cfg = cfg.get("collector_cfg", {})  # sources.google_jobs
+        c_cfg = cfg.get("collector_cfg", {})
         locations = c_cfg.get("locations", ["United States"])
         queries = cfg.get("queries", [])
         remote_fallback_location = c_cfg.get("remote_fallback_location", "United States")
@@ -42,6 +42,8 @@ class GoogleJobsSerpApiCollector:
                 )
 
                 for j in batch:
+                    j["source"] = j.get("source") or "google_jobs"
+                    j["collector"] = j.get("collector") or self.name
                     j["source_meta"] = j.get("source_meta") or {}
                     j["source_meta"].update({
                         "query_name": q_name,
