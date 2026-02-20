@@ -12,17 +12,13 @@ sources:
     enabled: true
     location_mode: "matrix"   # matrix = queries x locations
     locations:
-      - "United States"
       - "Canada"
-      - "Peru"
+      - "United States"
       - "Mexico"
-      - "Colombia"
-      - "Spain"
-      - "Chile"
 
   discovery:
     linkedin_serpapi:
-      enabled: true
+      enabled: false
       num_pages: 5
       sleep_s: 1.0
       gl: "us"
@@ -32,12 +28,12 @@ sources:
       num_pages: 5
       sleep_s: 1.0
 
-    career_pages_serpapi: { enabled: true }
+    career_pages_serpapi: { enabled: false }
 
   ats:
-    greenhouse: { enabled: true }
-    lever: { enabled: true }
-    smartrecruiters: { enabled: true }
+    greenhouse: { enabled: false }
+    lever: { enabled: false }
+    smartrecruiters: { enabled: false }
     workable: { enabled: false }
     ashby: { enabled: false }
     teamtailor: { enabled: false }
@@ -67,12 +63,8 @@ llm:
   cache_path: "data/processed/company_ai_cache.json"
 
 queries:
-  - name: "angular"
-    q: "Angular Developer contract remote"
-  - name: "react"
-    q: "React Developer contract remote"
-  - name: "dotnet"
-    q: ".NET Developer contract remote"
+  - name: "SE"
+    q: "software engineer contract remote"
 
 domain_resolution:
   enabled: true

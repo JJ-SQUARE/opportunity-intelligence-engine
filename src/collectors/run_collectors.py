@@ -1,29 +1,48 @@
+# src/collectors/run_collectors.py
+from __future__ import annotations
+
 from typing import Any, Dict, List
 
-from src.collectors.registry import REGISTRY
-from src.collectors.base import BaseCollector
+from collectors.autodiscover import autodiscover_collectors
+from collectors.registry import get_enabled_collectors
+from pipeline.job_contract import ensure_job_contract
 
-def _is_enabled(cfg: Dict[str, Any], path: List[str]) -> bool:
-    cur = cfg
-    for k in path:
-        cur = (cur or {}).get(k, {})
-    return bool((cur or {}).get("enabled", False))
+Job = Dict[str, Any]
 
-def run_collectors(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
-    sources = cfg.get("sources", {})
-    out: List[Dict[str, Any]] = []
 
-    for name, cls in REGISTRY.items():
-        collector: BaseCollector = cls()
+def run_collectors(cfg: Dict[str, Any]) -> List[Job]:
+    # IMPORTANT: load modules so @register executes
+    autodiscover_collectors()
 
-        # convención: el collector declara su family y usamos eso para leer cfg
-        family = getattr(collector, "family", "unknown")
-        enabled = _is_enabled(cfg, ["sources", family, name]) if family != "unknown" else False
+    out: List[Job] = []
 
-        if not enabled:
+    enabled = get_enabled_collectors(cfg)
+    print(f"[collectors] enabled={len(enabled)} -> {[k for (k, _, __) in enabled]}")
+
+    for registry_key, cls, c_cfg in enabled:
+        collector = cls()
+        collector_name = getattr(collector, "name", registry_key)
+        collector_source = getattr(collector, "source", registry_key)
+        collector_family = getattr(collector, "family", None)
+
+        print(
+            f"[collectors] running '{collector_name}' "
+            f"source='{collector_source}' family='{collector_family}' "
+            f"cfg_keys={list((c_cfg or {}).keys())}"
+        )
+
+        try:
+            batch = collector.collect({**cfg, "collector_cfg": c_cfg}) or []
+        except Exception as e:
+            print(f"[collectors][ERROR] collector='{collector_name}' -> {type(e).__name__}: {e}")
             continue
 
-        batch = collector.fetch(cfg)
+        print(f"[collectors] collector='{collector_name}' returned {len(batch)} jobs")
+
+        for j in batch:
+            ensure_job_contract(j, source=collector_source, collector=collector_name)
+
         out.extend(batch)
 
+    print(f"[collectors] total_jobs={len(out)}")
     return out

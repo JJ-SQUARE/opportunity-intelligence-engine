@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import os
 from typing import Any, Dict, List
 
-from collectors.google_jobs.google_jobs_serpapi_client import fetch_google_jobs_serpapi
+import pandas as pd
+
+from collectors.run_collectors import run_collectors as run_enabled_collectors
+
 from pipeline.normalize import normalize_jobs
 from pipeline.dedupe import dedupe_jobs
 from pipeline.aggregate import aggregate_by_company
@@ -13,33 +18,30 @@ from scoring.ai_company_classifier import classify_company_with_llm
 from export.to_csv import export_jobs_csv
 from export.to_company_csv import export_companies_csv
 from export.to_leads_csv import export_leads_csv
-from enrichment.router import enrich_company
-import pandas as pd
 
-from domain_resolution.google_serpapi import resolve_company_domain_serpapi
+from enrichment.router import enrich_company
+
+from domain_resolution.google_serpapi import resolve_company_domain_serpapi, is_blocked_domain
 from domain_resolution.cache import get_cached_domain, set_cached_domain
-from domain_resolution.google_serpapi import is_blocked_domain
 
 from sales_intel.classify import build_sales_and_competitive_lists
 from export.to_sales_opportunities_csv import export_sales_opportunities_csv
 from export.to_competitive_watchlist_csv import export_competitive_watchlist_csv
+
 from utils.run_paths import build_run_dir, join_run_path
 from utils.run_summary import write_run_summary
 
 
-def company_signals(company_obj):
+def company_signals(company_obj: Dict[str, Any]) -> Dict[str, Any]:
     jobs = company_obj.get("jobs", [])
 
     contractor = any(j.get("is_contractor") for j in jobs)
 
-    # Remote signals
     remote = any(j.get("is_remote") for j in jobs) or any(
         "remote" in (j.get("location") or "").lower() for j in jobs
     )
 
     us_only = any(j.get("us_only") for j in jobs)
-
-    # Nearshore-friendly: explícito nearshore/latam + no US-only
     nearshore = any(j.get("nearshore_friendly") for j in jobs) and not us_only
 
     urgency = sum(int(j.get("urgency_hits") or 0) for j in jobs) + sum(
@@ -58,85 +60,38 @@ def company_signals(company_obj):
         "country_focus": country_focus,
     }
 
-def fetch_jobs_from_config(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
-    run_cfg = cfg.get("run", {})
-    num_pages = int(run_cfg.get("num_pages", 3))
-    sleep_s = float(run_cfg.get("sleep_s", 1.0))
 
-    sources = cfg.get("sources", {})
-    google_jobs_cfg = sources.get("google_jobs", {})
-    if not google_jobs_cfg.get("enabled", True):
-        return []
-
-    locations = google_jobs_cfg.get("locations", ["United States"])
-    queries = cfg.get("queries", [])
-
-    # Fallback válido para SerpApi cuando loc = "Remote"
-    remote_fallback_location = google_jobs_cfg.get("remote_fallback_location", "United States")
-
-    all_jobs: List[Dict[str, Any]] = []
-
-    for q in queries:
-        q_name = q.get("name", "query")
-        q_text = q.get("q", "")
-
-        for loc in locations:
-            serp_location = loc
-            serp_query = q_text
-
-            # "Remote" NO es location válido para google_jobs en SerpApi
-            if isinstance(loc, str) and loc.strip().lower() == "remote":
-                serp_location = remote_fallback_location
-                if "remote" not in (serp_query or "").lower():
-                    serp_query = f"{serp_query} remote"
-
-            try:
-                batch = fetch_google_jobs_serpapi(
-                    query=serp_query,
-                    location=serp_location,
-                    num_pages=num_pages,
-                    sleep_s=sleep_s,
-                )
-            except Exception as e:
-                print(
-                    f"[WARN] Failed fetch | query='{q_name}' | loc='{loc}' "
-                    f"(serp_location='{serp_location}') | {type(e).__name__}: {e}"
-                )
-                continue
-
-            for j in batch:
-                j["query_name"] = q_name
-                j["query_text"] = q_text
-                j["search_location"] = loc
-                j["serp_location_used"] = serp_location
-                j["serp_query_used"] = serp_query
-
-            all_jobs.extend(batch)
-
-    return all_jobs
+def _norm_domain(domain: str | None) -> str | None:
+    if not domain:
+        return None
+    d = domain.strip().lower()
+    if d.startswith("http://"):
+        d = d[len("http://") :]
+    if d.startswith("https://"):
+        d = d[len("https://") :]
+    d = d.replace("www.", "")
+    d = d.split("/")[0]
+    return d or None
 
 
 def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
-
     run_dir = build_run_dir(cfg)
     os.makedirs(run_dir, exist_ok=True)
+    os.makedirs("data/processed", exist_ok=True)
 
-    # si quieres mantener data/processed para caches, NO lo toques.
-    # Solo outputs van al run_dir:
     jobs_csv = join_run_path(run_dir, "jobs_enriched.csv")
     companies_csv = join_run_path(run_dir, "companies_scored.csv")
     enrichment_input_csv = join_run_path(run_dir, "enrichment_input.csv")
     leads_csv = join_run_path(run_dir, "leads.csv")
 
-    # sales intel outputs
     sales_opportunities_csv = join_run_path(run_dir, "sales_opportunities.csv")
     competitive_watchlist_csv = join_run_path(run_dir, "competitive_watchlist.csv")
     partners_path = join_run_path(run_dir, "partner_opportunities.csv")
 
-    os.makedirs("data/processed", exist_ok=True)
-
-    # 1) Fetch
-    jobs = fetch_jobs_from_config(cfg)
+    # ---------------------------------------------------------------------
+    # 1) COLLECT (all enabled collectors, unified schema enforced upstream)
+    # ---------------------------------------------------------------------
+    jobs = run_enabled_collectors(cfg)  # <- centraliza todo por YAML
 
     # 2) Normalize + dedupe
     jobs = normalize_jobs(jobs)
@@ -150,30 +105,27 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
     # 4) Aggregate + score
     companies = aggregate_by_company(jobs)
 
-    scored = []
+    scored: List[Dict[str, Any]] = []
     for c in companies:
         c.update(company_signals(c))
         score = basic_opportunity_score(c) + min(c.get("urgency_signal", 0), 8)
 
         if c.get("contractor_signal"):
             score += 2
-
         if c.get("remote_friendly_signal") and not c.get("us_only_signal"):
             score += 2
-
         if c.get("nearshore_friendly_signal"):
             score += 3
-
         if c.get("us_only_signal"):
             score -= 3
 
         c["score"] = round(score, 2)
         scored.append(c)
 
-    scored = sorted(scored, key=lambda x: x["score"], reverse=True)
+    scored.sort(key=lambda x: float(x.get("score") or 0), reverse=True)
 
     # 5) LLM classification (optional)
-    llm_cfg = cfg.get("llm", {})
+    llm_cfg = cfg.get("llm", {}) or {}
     if llm_cfg.get("enabled", True):
         top_n = int(llm_cfg.get("top_n", 10))
         provider = llm_cfg.get("provider", "openai")
@@ -183,7 +135,7 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         for c in scored[:top_n]:
             ai = classify_company_with_llm(
-                company=c["company"],
+                company=c.get("company", ""),
                 context=c,
                 provider=provider,
                 model=model,
@@ -197,43 +149,41 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
             c["remote_friendly_ai"] = ai.get("remote_friendly")
             c["notes_ai"] = ai.get("notes")
 
-    # Resolve domain for top companies (so Sales CSV has it, even if enrichment disabled)
-    domain_cfg = cfg.get("domain_resolution", {})
-    domain_enabled = bool(domain_cfg.get("enabled", True))
-    domain_top_n = int(domain_cfg.get("top_n", 50))
+    # 6) Domain resolution (top N)
+    domain_cfg = cfg.get("domain_resolution", {}) or {}
+    if bool(domain_cfg.get("enabled", True)):
+        domain_top_n = int(domain_cfg.get("top_n", 50))
 
-    if domain_enabled:
         for c in scored[:domain_top_n]:
             if c.get("resolved_domain"):
                 continue
 
-            domain = (c.get("domain_guess") or "").strip().lower() or None
-
-            # Si el domain_guess es job board, ignóralo y fuerza resolución
+            domain = _norm_domain(c.get("domain_guess"))
             if domain and is_blocked_domain(domain):
                 domain = None
 
             if not domain:
-                cached = get_cached_domain(c.get("company", ""))
-                if cached:
+                cached = _norm_domain(get_cached_domain(c.get("company", "")))
+                if cached and not is_blocked_domain(cached):
                     domain = cached
                 else:
-                    domain = resolve_company_domain_serpapi(c.get("company", ""))
-                    if domain:
+                    resolved = _norm_domain(resolve_company_domain_serpapi(c.get("company", "")))
+                    if resolved and not is_blocked_domain(resolved):
+                        domain = resolved
                         set_cached_domain(c.get("company", ""), domain)
 
             c["resolved_domain"] = domain
 
-
-
     out_companies = export_companies_csv(scored, companies_csv) or companies_csv
 
+    # 7) enrichment_input.csv (debug/trace)
     rows = []
     for c in scored:
         rows.append(
             {
                 "company": c.get("company"),
                 "domain_guess": c.get("domain_guess"),
+                "resolved_domain": c.get("resolved_domain"),
                 "score": c.get("score"),
                 "industry_ai": c.get("industry_ai"),
                 "company_type_ai": c.get("company_type_ai"),
@@ -242,40 +192,33 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "remote_friendly_signal": c.get("remote_friendly_signal"),
                 "us_only_signal": c.get("us_only_signal"),
                 "nearshore_friendly_signal": c.get("nearshore_friendly_signal"),
-                "resolved_domain": c.get("resolved_domain"),
             }
         )
-
     pd.DataFrame(rows).to_csv(enrichment_input_csv, index=False)
 
-    enrichment_cfg = cfg.get("enrichment", {})
-    all_leads = []
+    # 8) Enrichment (optional)
+    enrichment_cfg = cfg.get("enrichment", {}) or {}
+    all_leads: List[Dict[str, Any]] = []
 
     if enrichment_cfg.get("enabled", False):
-        filters = enrichment_cfg.get("filters", {})
-        limits = enrichment_cfg.get("limits", {})
+        filters = enrichment_cfg.get("filters", {}) or {}
+        limits = enrichment_cfg.get("limits", {}) or {}
         max_companies = int(limits.get("max_companies", 25))
 
         min_score = float(filters.get("min_score", 0))
         vendor_min = float(filters.get("vendor_prob_min", 0))
         require_not_us_only = bool(filters.get("require_not_us_only", False))
 
-        # filtrar companies elegibles
-        eligible = []
-
+        eligible: List[Dict[str, Any]] = []
         for c in scored:
             score = float(c.get("score") or 0)
-            vendor_prob = float(c.get("vendor_acceptance_probability_ai") or 0)
+            vendor_prob_raw = c.get("vendor_acceptance_probability_ai")
+            vendor_prob = float(vendor_prob_raw or 0)
 
-            # ---- Normalizar dominio inicial ----
-            domain = (c.get("resolved_domain") or c.get("domain_guess") or "").strip().lower()
-            domain = domain.replace("www.", "") or None
-
-            # Si el domain_guess es job board, descartarlo
+            domain = _norm_domain(c.get("resolved_domain") or c.get("domain_guess"))
             if domain and is_blocked_domain(domain):
                 domain = None
 
-            # ---- Filtros de elegibilidad ----
             if score < min_score:
                 continue
             if vendor_prob < vendor_min:
@@ -283,32 +226,17 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
             if require_not_us_only and c.get("us_only_signal"):
                 continue
 
-            # ---- Resolver dominio si no existe ----
             if not domain:
-                cached = get_cached_domain(c.get("company", ""))
+                cached = _norm_domain(get_cached_domain(c.get("company", "")))
+                if cached and not is_blocked_domain(cached):
+                    domain = cached
+                else:
+                    resolved = _norm_domain(resolve_company_domain_serpapi(c.get("company", "")))
+                    if resolved and not is_blocked_domain(resolved):
+                        domain = resolved
+                        set_cached_domain(c.get("company", ""), domain)
 
-                if cached:
-                    cached = cached.strip().lower().replace("www.", "")
-                    if not is_blocked_domain(cached):
-                        domain = cached
-                    else:
-                        domain = None
-
-                if not domain:
-                    resolved = resolve_company_domain_serpapi(c.get("company", ""))
-
-                    if resolved:
-                        resolved = resolved.strip().lower().replace("www.", "")
-
-                        if not is_blocked_domain(resolved):
-                            domain = resolved
-                            set_cached_domain(c.get("company", ""), domain)
-                        else:
-                            domain = None
-
-            # Guardar dominio final
             c["resolved_domain"] = domain
-
             if not domain:
                 continue
 
@@ -326,22 +254,20 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
     else:
         out_leads = None
 
-    sales_intel_cfg = cfg.get("sales_intel", {})
+    # 9) Sales intel
+    sales_intel_cfg = cfg.get("sales_intel", {}) or {}
     if sales_intel_cfg.get("enabled", True):
         end_clients, partners, competitive_list = build_sales_and_competitive_lists(scored, sales_intel_cfg)
 
-        sales_path = sales_opportunities_csv
-        comp_path = competitive_watchlist_csv
-
-        out_sales = export_sales_opportunities_csv(end_clients, sales_path)
+        out_sales = export_sales_opportunities_csv(end_clients, sales_opportunities_csv)
         out_partners = export_sales_opportunities_csv(partners, partners_path)
-        out_comp = export_competitive_watchlist_csv(competitive_list, comp_path)
+        out_comp = export_competitive_watchlist_csv(competitive_list, competitive_watchlist_csv)
 
         print(f"Saved sales opportunities to {out_sales} ({len(end_clients)} rows)")
         print(f"Saved possible partners to {out_partners} ({len(partners)} rows)")
         print(f"Saved competitive watchlist to {out_comp} ({len(competitive_list)} rows)")
     else:
-        (out_sales, out_partners, out_comp) = None, None, None
+        out_sales, out_partners, out_comp = None, None, None
         end_clients, partners, competitive_list = [], [], []
 
     print(f"Run saved to: {run_dir}")
@@ -355,7 +281,6 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         competitive_list=competitive_list,
         leads_count=len(all_leads) if enrichment_cfg.get("enabled", False) else 0,
     )
-
     print(f"Run summary written to: {summary_path}")
 
     return {
@@ -368,10 +293,10 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "leads_csv": leads_csv,
         "leads_count": len(all_leads) if enrichment_cfg.get("enabled", False) else 0,
         "sales_opportunities_csv": out_sales,
+        "partner_opportunities_csv": out_partners or partners_path,
         "competitive_watchlist_csv": out_comp,
         "sales_opportunities_count": len(end_clients),
         "partners_opportunities_count": len(partners),
         "competitive_watchlist_count": len(competitive_list),
-        "partner_opportunities_csv": out_partners or partners_path,
-        "run_dir": run_dir
+        "run_dir": run_dir,
     }

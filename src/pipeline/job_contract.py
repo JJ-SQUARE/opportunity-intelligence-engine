@@ -1,69 +1,87 @@
 from __future__ import annotations
-from typing import Any, Dict, Optional
-from urllib.parse import urlparse
+
+from dataclasses import asdict, is_dataclass
+from typing import Any, Dict
+
+REQUIRED_FIELDS = ["title", "company", "job_url", "source", "collector"]
+
+# Common aliases we might receive from collectors / APIs
+URL_ALIASES = ["job_url", "url", "link", "listing_url"]
+APPLY_URL_ALIASES = ["apply_url", "applyUrl", "application_url", "applyLink"]
 
 
-WORKPLACE_ALIASES = {
-    "remote": "remote",
-    "remoto": "remote",
-    "hybrid": "hybrid",
-    "híbrido": "hybrid",
-    "onsite": "onsite",
-    "on-site": "onsite",
-    "presencial": "onsite",
-}
-
-def _norm_str(x: Any) -> Optional[str]:
-    if x is None:
-        return None
-    s = str(x).strip()
-    return s or None
-
-def _norm_url(u: Any) -> Optional[str]:
-    u = _norm_str(u)
-    if not u:
-        return None
-    try:
-        p = urlparse(u)
-        if not p.scheme or not p.netloc:
-            return None
-        return u
-    except Exception:
-        return None
-
-def _norm_workplace_type(x: Any) -> Optional[str]:
-    s = (_norm_str(x) or "").lower()
-    if not s:
-        return None
-    return WORKPLACE_ALIASES.get(s, s)  # deja pasar otros si llegan
-
-def ensure_job_contract(job: Dict[str, Any], *, source: str, collector: str) -> Dict[str, Any]:
+def _to_dict(job: Any) -> Dict[str, Any]:
     """
-    Enforce Job v1 contract. Mutates and returns job.
-    Always sets source/collector, always ensures offer dict, source_meta dict.
+    Accept either:
+    - Dict[str, Any]
+    - dataclass instance (e.g., JobPosting)
     """
-    job["title"] = _norm_str(job.get("title"))
-    job["company"] = _norm_str(job.get("company"))
-    job["location"] = _norm_str(job.get("location"))
-    job["description"] = _norm_str(job.get("description"))
+    if isinstance(job, dict):
+        return job
+    if is_dataclass(job):
+        return asdict(job)
+    # If someone returns an object with __dict__, we can still try (optional)
+    if hasattr(job, "__dict__"):
+        return dict(job.__dict__)
+    raise TypeError(f"Unsupported job type: {type(job).__name__}")
 
-    job["job_url"] = _norm_url(job.get("job_url") or job.get("url") or job.get("link"))
-    job["apply_url"] = _norm_url(job.get("apply_url"))
 
-    job["source"] = _norm_str(job.get("source")) or source
-    job["collector"] = _norm_str(job.get("collector")) or collector
+def _pick_first(job: Dict[str, Any], keys: list[str]) -> Any:
+    for k in keys:
+        v = job.get(k)
+        if v:
+            return v
+    return None
 
-    job["source_id"] = _norm_str(job.get("source_id"))
-    job["source_meta"] = job.get("source_meta") or {}
-    if not isinstance(job["source_meta"], dict):
-        job["source_meta"] = {"raw_source_meta": job["source_meta"]}
 
-    job["workplace_type"] = _norm_workplace_type(job.get("workplace_type"))
+def ensure_job_contract(job: Any, source: str, collector: str) -> Dict[str, Any]:
+    """
+    Enforces your standard Job schema in-place and returns job dict.
 
-    offer = job.get("offer") or {}
-    if not isinstance(offer, dict):
-        offer = {"raw_offer": offer}
-    # no obligamos campos adentro, pero aseguramos dict
-    job["offer"] = offer
+    Required (mínimos):
+      - title
+      - company
+      - job_url
+      - source
+      - collector
 
-    return job
+    Optional core:
+      - location
+      - description
+      - apply_url
+      - source_id
+      - source_meta (dict)
+      - workplace_type
+      - offer (dict)
+    """
+    # normalize input
+    job_dict = _to_dict(job)
+
+    # required provenance
+    job_dict["source"] = job_dict.get("source") or source
+    job_dict["collector"] = job_dict.get("collector") or collector
+
+    # normalize job_url from aliases
+    job_url = _pick_first(job_dict, URL_ALIASES)
+    if job_url:
+        job_dict["job_url"] = job_url
+
+    # normalize apply_url from aliases
+    apply_url = _pick_first(job_dict, APPLY_URL_ALIASES)
+    job_dict["apply_url"] = apply_url or job_dict.get("apply_url") or None
+
+    # defaults for optional structured fields
+    if not isinstance(job_dict.get("source_meta"), dict):
+        job_dict["source_meta"] = {}
+    if not isinstance(job_dict.get("offer"), dict):
+        job_dict["offer"] = {}
+
+    # optional fields you asked for
+    job_dict["workplace_type"] = job_dict.get("workplace_type") or None
+
+    # soft validation
+    missing = [k for k in REQUIRED_FIELDS if not job_dict.get(k)]
+    if missing:
+        job_dict["source_meta"]["contract_missing_fields"] = missing
+
+    return job_dict

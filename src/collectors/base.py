@@ -3,13 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict, field
 from typing import Any, Dict, List, Optional, Protocol
 
+# Canonical dict job type used in the pipeline
+Job = Dict[str, Any]
 
-# -------------------------
-# Canonical Job Contract
-# -------------------------
 
 @dataclass
 class JobPosting:
+    """
+    Canonical JobPosting schema (reference / helper).
+    In the pipeline we still pass dicts (Job) to keep everything simple,
+    but those dicts must conform to this schema (validated elsewhere).
+    """
     # Required / provenance
     source: str                 # e.g. "linkedin", "google_jobs"
     collector: str              # e.g. "linkedin_serpapi", "google_jobs_serpapi"
@@ -24,18 +28,11 @@ class JobPosting:
 
     # Standard identifiers + metadata
     source_id: Optional[str] = None
-    source_meta: Dict[str, Any] = field(default_factory=dict)  # free-form extra data
+    source_meta: Dict[str, Any] = field(default_factory=dict)
 
-    # Workplace + offer (what you asked)
+    # Workplace + offer
     workplace_type: Optional[str] = None  # "remote" | "hybrid" | "onsite" | None
-
     offer: Dict[str, Any] = field(default_factory=dict)
-    # recommended keys inside offer (optional):
-    # - employment_type: "contract" | "full_time" | "part_time" | ...
-    # - contract_type: "w2" | "c2c" | "contractor" | ...
-    # - rate_min / rate_max / rate_currency / rate_unit
-    # - salary_min / salary_max / salary_currency / salary_unit
-    # - benefits / notes
 
     # Useful signals (optional)
     is_remote: Optional[bool] = None
@@ -46,33 +43,34 @@ class JobPosting:
     ats_slug: Optional[str] = None
     domain_guess: Optional[str] = None
 
-    # debugging raw payload
+    # debugging
     raw: Optional[Dict[str, Any]] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> Job:
         return asdict(self)
 
 
-# -------------------------
-# Collector interface
-# -------------------------
-
 class Collector(Protocol):
-    name: str                   # collector key in YAML, e.g. "google_jobs"
-    source: str                 # e.g. "google_jobs"
-    family: str                 # e.g. "job_board" | "ats" | "discovery"
+    """
+    Each collector returns List[Job] (dicts) and must be registered via @register.
+    Enabled by YAML: sources.<name>.enabled = true
+    """
+    name: str       # key used in YAML under sources.<name>.enabled
+    source: str     # "linkedin", "google_jobs", "indeed", "greenhouse", etc.
+    family: str     # "job_board" | "search" | "ats" | "enterprise_ats" | "discovery"
 
-    def collect(self, cfg: Dict[str, Any]) -> List[JobPosting]:
+    def collect(self, cfg: Dict[str, Any]) -> List[Job]:
         ...
 
 
 class BaseCollector:
     """
-    Implementa .collect(cfg) -> List[JobPosting]
+    Optional convenience base class.
+    Collectors can inherit to standardize attributes.
     """
     name: str = "base"
     source: str = "unknown"
-    family: str = "unknown"     # google_jobs | job_board | ats | enterprise_ats | discovery
+    family: str = "unknown"
 
-    def collect(self, cfg: Dict[str, Any]) -> List[JobPosting]:
+    def collect(self, cfg: Dict[str, Any]) -> List[Job]:
         raise NotImplementedError

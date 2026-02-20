@@ -1,12 +1,11 @@
+from __future__ import annotations
 from typing import Any, Dict, List
-from collectors.base import BaseCollector, JobPosting
 from collectors.registry import register
 
 @register
-class WorkdayCollector(BaseCollector):
-    name = "workday"
+class WorkdayATSCollector:
+    name = "workday_ats"
+    source = "career_portal"
     family = "enterprise_ats"
-
-    def fetch(self, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
-        # TODO: implementar
+    def collect(self, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
