@@ -130,3 +130,4 @@ outputs:
   companies_csv: "data/processed/companies_scored.csv"
   enrichment_input_csv: "data/processed/enrichment_input.csv"
   leads_csv: "data/processed/leads.csv"
+  spreadsheets_dir: "spreadsheets"

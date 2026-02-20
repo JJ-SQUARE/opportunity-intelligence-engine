@@ -20,6 +20,10 @@ from export.to_company_csv import export_companies_csv
 from export.to_leads_csv import export_leads_csv
 
 from enrichment.router import enrich_company
+from export.spreadsheet_store import append_run_to_spreadsheets
+
+from urllib.parse import urlparse
+import requests
 
 from domain_resolution.google_serpapi import resolve_company_domain_serpapi, is_blocked_domain
 from domain_resolution.cache import get_cached_domain, set_cached_domain
@@ -60,18 +64,75 @@ def company_signals(company_obj: Dict[str, Any]) -> Dict[str, Any]:
         "country_focus": country_focus,
     }
 
-
-def _norm_domain(domain: str | None) -> str | None:
-    if not domain:
+def _norm_domain(d: str | None) -> str | None:
+    if not d:
         return None
-    d = domain.strip().lower()
-    if d.startswith("http://"):
-        d = d[len("http://") :]
-    if d.startswith("https://"):
-        d = d[len("https://") :]
-    d = d.replace("www.", "")
+    d = d.strip().lower()
+    d = d.replace("http://", "").replace("https://", "")
     d = d.split("/")[0]
+    d = d.replace("www.", "")
     return d or None
+
+def _domain_from_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    try:
+        u = urlparse(url)
+        host = (u.netloc or "").lower().replace("www.", "")
+        return host or None
+    except Exception:
+        return None
+
+def _guess_domain_from_company_jobs(company_obj: Dict[str, Any]) -> str | None:
+    """
+    Try to infer a REAL company domain from job URLs/apply URLs.
+    Avoid known blocked/job-board domains using is_blocked_domain().
+    Picks the most frequent non-blocked domain found.
+    """
+    jobs = company_obj.get("jobs") or []
+    counts: Dict[str, int] = {}
+
+    for j in jobs:
+        # Prefer apply_url, then job_url
+        cand = _domain_from_url(j.get("apply_url")) or _domain_from_url(j.get("job_url")) or _domain_from_url(j.get("url"))
+        cand = _norm_domain(cand)
+        if not cand:
+            continue
+        if is_blocked_domain(cand):
+            continue
+        counts[cand] = counts.get(cand, 0) + 1
+
+    if not counts:
+        return None
+
+    # Most common wins
+    return sorted(counts.items(), key=lambda x: x[1], reverse=True)[0][0]
+
+
+def _safe_resolve_domain_serpapi(company_name: str, enabled: bool, serpapi_state: Dict[str, Any]) -> str | None:
+    """
+    Calls resolve_company_domain_serpapi() but never raises.
+    If we hit 429, we mark serpapi_state['disabled']=True for the rest of the run.
+    """
+    if not enabled or serpapi_state.get("disabled"):
+        return None
+
+    try:
+        d = resolve_company_domain_serpapi(company_name)
+        return _norm_domain(d)
+    except requests.exceptions.HTTPError as e:
+        # If 429, disable further attempts for this run
+        resp = getattr(e, "response", None)
+        status = getattr(resp, "status_code", None)
+        if status == 429:
+            print("[domain_resolution][WARN] 429 Too Many Requests -> disabling SerpAPI domain resolution for this run")
+            serpapi_state["disabled"] = True
+            return None
+        print(f"[domain_resolution][WARN] HTTPError status={status} company='{company_name}' -> {e}")
+        return None
+    except Exception as e:
+        print(f"[domain_resolution][WARN] resolve failed company='{company_name}' -> {type(e).__name__}: {e}")
+        return None
 
 
 def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -151,28 +212,43 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     # 6) Domain resolution (top N)
     domain_cfg = cfg.get("domain_resolution", {}) or {}
+    domain_enabled = bool(domain_cfg.get("enabled", True))
+    # Nuevo: puedes poner mode: "cache_only" para no gastar SerpAPI
+    domain_mode = (domain_cfg.get("mode", "serpapi") or "serpapi").strip().lower()
+    serpapi_allowed = domain_enabled and domain_mode == "serpapi"
+    serpapi_state = {"disabled": False}
+
     if bool(domain_cfg.get("enabled", True)):
         domain_top_n = int(domain_cfg.get("top_n", 50))
 
         for c in scored[:domain_top_n]:
-            if c.get("resolved_domain"):
-                continue
+            domain = _norm_domain(c.get("resolved_domain"))
 
-            domain = _norm_domain(c.get("domain_guess"))
-            if domain and is_blocked_domain(domain):
-                domain = None
-
+            # 2) intenta inferirlo desde URLs de jobs (apply_url/job_url) evitando job boards
             if not domain:
-                cached = _norm_domain(get_cached_domain(c.get("company", "")))
+                domain = _guess_domain_from_company_jobs(c)
+
+            # 3) intenta cache (por company real)
+            if not domain:
+                cached = get_cached_domain(c.get("company", ""))
+                cached = _norm_domain(cached)
                 if cached and not is_blocked_domain(cached):
                     domain = cached
-                else:
-                    resolved = _norm_domain(resolve_company_domain_serpapi(c.get("company", "")))
-                    if resolved and not is_blocked_domain(resolved):
-                        domain = resolved
-                        set_cached_domain(c.get("company", ""), domain)
 
+            # 4) intenta SerpAPI SOLO si está permitido
+            if not domain:
+                resolved = _safe_resolve_domain_serpapi(c.get("company", ""), enabled=serpapi_allowed,
+                                                        serpapi_state=serpapi_state)
+                if resolved and not is_blocked_domain(resolved):
+                    domain = resolved
+                    set_cached_domain(c.get("company", ""), domain)
+
+            # Guardar dominio final
             c["resolved_domain"] = domain
+
+            # Si no hay dominio real, no hay forma de hacer Hunter bien -> skip
+            if not domain:
+                continue
 
     out_companies = export_companies_csv(scored, companies_csv) or companies_csv
 
@@ -282,6 +358,15 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
         leads_count=len(all_leads) if enrichment_cfg.get("enabled", False) else 0,
     )
     print(f"Run summary written to: {summary_path}")
+
+    spreadsheets_dir = (cfg.get("outputs", {}) or {}).get("spreadsheets_dir", "spreadsheets")
+    masters = append_run_to_spreadsheets(
+        spreadsheets_dir=spreadsheets_dir,
+        jobs_csv=jobs_csv,
+        companies_csv=out_companies,
+        leads_csv=out_leads or leads_csv,
+    )
+    print(f"[spreadsheets] masters updated -> {masters}")
 
     return {
         "jobs_count": len(jobs),
