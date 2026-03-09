@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Tuple
 
 from oie.orchestration.run_context import RunContext
 from oie.services.collection_service import CollectionService
+from oie.services.collector_contribution_export_service import CollectorContributionExportService
+from oie.services.collector_contribution_service import CollectorContributionService
 from oie.services.collector_metrics_export_service import CollectorMetricsExportService
 from oie.services.collector_metrics_service import CollectorMetricsService
 from oie.services.company_classification_service import CompanyClassificationService
@@ -58,6 +60,8 @@ class PipelineOrchestrator:
         self.market_trends_export_service = MarketTrendsExportService(ctx)
         self.collector_metrics_service = CollectorMetricsService(ctx)
         self.collector_metrics_export_service = CollectorMetricsExportService(ctx)
+        self.collector_contribution_service = CollectorContributionService(ctx)
+        self.collector_contribution_export_service = CollectorContributionExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
             ctx,
             self.provider_control_service,
@@ -212,6 +216,14 @@ class PipelineOrchestrator:
         collector_metrics = self.collector_metrics_service.build_metrics(unique_jobs, companies)
         self.collector_metrics_export_service.export_json(collector_metrics)
 
+        collector_contribution = self.collector_contribution_service.build_contribution_metrics(
+            unique_jobs,
+            companies,
+            best_leads,
+        )
+        self.collector_contribution_export_service.export_csv(collector_contribution)
+        self.collector_contribution_export_service.export_json(collector_contribution)
+
         return {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
@@ -240,4 +252,6 @@ class PipelineOrchestrator:
             "market_trends_by_location_csv": self.ctx.paths.get("market_trends_by_location_csv"),
             "market_new_companies_by_source_csv": self.ctx.paths.get("market_new_companies_by_source_csv"),
             "market_trends_summary_json": self.ctx.paths.get("market_trends_summary_json"),
+            "collector_contribution_metrics_csv": self.ctx.paths.get("collector_contribution_metrics_csv"),
+            "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
         }
