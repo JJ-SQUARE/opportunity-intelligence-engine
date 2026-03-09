@@ -1,3 +1,0 @@
-priority_band,score,company,resolved_domain,company_type,industry,total_openings,contractor_signal,remote_friendly_signal,us_only_signal,country_focus,sample_titles
-HIGH,19.5,FreelanceJobs,ca.bebee.com,staffing_agency,SaaS,5,True,False,False,,Part Time Full-Stack Mobile Engineer (React Native & AI Integration) (15_01_26RCH) | Looking for an experienced React Developer for a short term contract | React .Net Azure DevOps Developer Needed | Senior Firebase/ React Developer for Healthcare Web App Contract | Frontend JavaScript Engineer
-MEDIUM,11.0,"Georgia IT, Inc.",jobgether.com,staffing_agency,SaaS,2,True,True,False,,Senior Frontend (Angular) Developer – 100% remote | Node Js Developer- Remote
