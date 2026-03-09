@@ -56,6 +56,13 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 resolved_domain TEXT,
                 domain_source TEXT,
                 domain_confidence REAL,
+                industry TEXT,
+                employee_range TEXT,
+                linkedin_company_url TEXT,
+                company_description TEXT,
+                company_size TEXT,
+                enriched_at TEXT,
+                enrichment_source TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -185,6 +192,28 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
             ON company_scores (company_key);
             """
         )
+
+        # Migraciones simples para bases ya existentes
+        existing_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(companies)").fetchall()
+        }
+        required_columns = {
+            "industry": "TEXT",
+            "employee_range": "TEXT",
+            "linkedin_company_url": "TEXT",
+            "company_description": "TEXT",
+            "company_size": "TEXT",
+            "enriched_at": "TEXT",
+            "enrichment_source": "TEXT",
+        }
+
+        for column_name, column_type in required_columns.items():
+            if column_name not in existing_columns:
+                conn.execute(
+                    f"ALTER TABLE companies ADD COLUMN {column_name} {column_type}"
+                )
+
         conn.commit()
     finally:
         conn.close()

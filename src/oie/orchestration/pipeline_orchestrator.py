@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Tuple
 from oie.orchestration.run_context import RunContext
 from oie.services.collection_service import CollectionService
 from oie.services.company_classification_service import CompanyClassificationService
+from oie.services.company_enrichment_service import CompanyEnrichmentService
 from oie.services.company_identity_service import CompanyIdentityService
 from oie.services.db_export_service import DBExportService
 from oie.services.domain_resolution_service import DomainResolutionService
@@ -42,6 +43,10 @@ class PipelineOrchestrator:
         self.opportunity_dataset_service = OpportunityDatasetService(ctx)
         self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
+            ctx,
+            self.provider_control_service,
+        )
+        self.company_enrichment_service = CompanyEnrichmentService(
             ctx,
             self.provider_control_service,
         )
@@ -122,6 +127,7 @@ class PipelineOrchestrator:
         companies = self.hiring_signals_service.aggregate_by_company(unique_jobs)
         companies = self.domain_resolution_service.resolve_domains(companies)
         companies = self.company_identity_service.enrich_company_identity(companies)
+        companies = self.company_enrichment_service.enrich_companies(companies)
         companies = self.company_classification_service.classify_companies(companies)
         companies = self.opportunity_scoring_service.score_companies(companies)
 

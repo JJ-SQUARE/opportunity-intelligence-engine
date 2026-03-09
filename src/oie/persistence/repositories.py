@@ -95,15 +95,29 @@ class CompanyRepository:
                     resolved_domain,
                     domain_source,
                     domain_confidence,
+                    industry,
+                    employee_range,
+                    linkedin_company_url,
+                    company_description,
+                    company_size,
+                    enriched_at,
+                    enrichment_source,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(company_key) DO UPDATE SET
                     company_display = excluded.company_display,
                     company_normalized = excluded.company_normalized,
                     resolved_domain = excluded.resolved_domain,
                     domain_source = excluded.domain_source,
                     domain_confidence = excluded.domain_confidence,
+                    industry = COALESCE(excluded.industry, companies.industry),
+                    employee_range = COALESCE(excluded.employee_range, companies.employee_range),
+                    linkedin_company_url = COALESCE(excluded.linkedin_company_url, companies.linkedin_company_url),
+                    company_description = COALESCE(excluded.company_description, companies.company_description),
+                    company_size = COALESCE(excluded.company_size, companies.company_size),
+                    enriched_at = COALESCE(excluded.enriched_at, companies.enriched_at),
+                    enrichment_source = COALESCE(excluded.enrichment_source, companies.enrichment_source),
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 [
@@ -114,6 +128,13 @@ class CompanyRepository:
                         company.get("resolved_domain"),
                         company.get("domain_source"),
                         company.get("domain_confidence"),
+                        company.get("industry"),
+                        company.get("employee_range"),
+                        company.get("linkedin_company_url"),
+                        company.get("company_description"),
+                        company.get("company_size"),
+                        company.get("enriched_at"),
+                        company.get("enrichment_source"),
                     )
                     for company in companies
                 ],

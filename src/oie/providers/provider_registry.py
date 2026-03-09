@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from oie.providers.adapters.apollo_adapter import ApolloAdapter
 from oie.providers.adapters.openai_adapter import OpenAIAdapter
 from oie.providers.adapters.serpapi_adapter import SerpAPIAdapter
 from oie.providers.policies.budget_guard import BudgetGuard
@@ -21,6 +22,7 @@ class ProviderRegistry:
         config = config or {}
         self.register_client("openai", OpenAIAdapter(config=config.get("openai", {})))
         self.register_client("serpapi", SerpAPIAdapter(config=config.get("serpapi", {})))
+        self.register_client("apollo", ApolloAdapter(config=config.get("apollo", {})))
 
     def register_budget(self, provider_name: str, max_calls: int) -> None:
         self.budgets[provider_name] = BudgetGuard(provider=provider_name, max_calls=max_calls)
