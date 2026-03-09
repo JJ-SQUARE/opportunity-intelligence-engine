@@ -1,0 +1,51 @@
+from __future__ import annotations
+
+from typing import Any, Dict, Optional
+
+from oie.orchestration.run_context import RunContext
+from oie.services.provider_control_service import ProviderControlService
+from oie.services.provider_execution_service import (
+    ProviderExecutionBlockedError,
+    ProviderExecutionService,
+)
+
+
+class SerpAPISearchService:
+    def __init__(
+        self,
+        ctx: RunContext,
+        provider_control_service: ProviderControlService,
+    ) -> None:
+        self.ctx = ctx
+        self.provider_control_service = provider_control_service
+        self.provider_execution_service = ProviderExecutionService(ctx, provider_control_service)
+
+    def search_google_jobs(
+        self,
+        query: str,
+        location: Optional[str] = None,
+        num: int = 10,
+    ) -> Dict[str, Any]:
+        client = self.provider_control_service.registry.get_client("serpapi")
+        if client is None:
+            self.ctx.metrics["serpapi_search_skipped_no_client"] = True
+            return {}
+
+        try:
+            result = self.provider_execution_service.execute(
+                "serpapi",
+                "search_google_jobs",
+                client.search_google_jobs,
+                query,
+                location=location,
+                num=num,
+                cost=1,
+            )
+        except ProviderExecutionBlockedError:
+            self.ctx.metrics["serpapi_search_skipped_blocked"] = True
+            return {}
+
+        self.ctx.metrics["serpapi_search_requests"] = (
+            int(self.ctx.metrics.get("serpapi_search_requests", 0)) + 1
+        )
+        return result

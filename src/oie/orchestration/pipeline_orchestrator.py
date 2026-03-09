@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
 from oie.services.collection_service import CollectionService
+from oie.services.company_classification_service import CompanyClassificationService
 from oie.services.company_identity_service import CompanyIdentityService
 from oie.services.domain_resolution_service import DomainResolutionService
 from oie.services.hiring_signals_service import HiringSignalsService
@@ -26,6 +27,10 @@ class PipelineOrchestrator:
         self.opportunity_scoring_service = OpportunityScoringService(ctx)
         self.persistence_service = PersistenceService(ctx)
         self.provider_control_service = ProviderControlService(ctx)
+        self.company_classification_service = CompanyClassificationService(
+            ctx,
+            self.provider_control_service,
+        )
 
     def run_initial_stages(self) -> List[Dict[str, Any]]:
         jobs = self.collection_service.collect()
@@ -38,6 +43,7 @@ class PipelineOrchestrator:
         companies = self.hiring_signals_service.aggregate_by_company(jobs)
         companies = self.company_identity_service.enrich_company_identity(companies)
         companies = self.domain_resolution_service.resolve_domains(companies)
+        companies = self.company_classification_service.classify_companies(companies)
         companies = self.opportunity_scoring_service.score_companies(companies)
         return companies
 
@@ -58,5 +64,6 @@ class PipelineOrchestrator:
             "top_companies": companies[:5],
             "metrics": self.ctx.metrics,
             "budgets": self.ctx.budgets,
+            "provider_events_count": len(self.ctx.provider_events),
             "db_path": self.ctx.paths.get("db_path"),
         }

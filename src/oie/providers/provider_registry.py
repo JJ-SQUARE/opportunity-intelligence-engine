@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from oie.providers.adapters.openai_adapter import OpenAIAdapter
+from oie.providers.adapters.serpapi_adapter import SerpAPIAdapter
 from oie.providers.policies.budget_guard import BudgetGuard
 from oie.providers.policies.circuit_breaker import CircuitBreaker
 
@@ -14,6 +16,11 @@ class ProviderRegistry:
 
     def register_client(self, provider_name: str, client: Any) -> None:
         self.clients[provider_name] = client
+
+    def register_default_clients(self, config: Dict[str, Any] | None = None) -> None:
+        config = config or {}
+        self.register_client("openai", OpenAIAdapter(config=config.get("openai", {})))
+        self.register_client("serpapi", SerpAPIAdapter(config=config.get("serpapi", {})))
 
     def register_budget(self, provider_name: str, max_calls: int) -> None:
         self.budgets[provider_name] = BudgetGuard(provider=provider_name, max_calls=max_calls)

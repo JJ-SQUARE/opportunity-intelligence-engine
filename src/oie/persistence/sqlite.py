@@ -38,8 +38,22 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 FOREIGN KEY (run_id) REFERENCES runs (run_id)
             );
 
+            CREATE TABLE IF NOT EXISTS provider_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                message TEXT,
+                metadata_json TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (run_id) REFERENCES runs (run_id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_run_metrics_run_id
             ON run_metrics (run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_provider_events_run_id
+            ON provider_events (run_id);
             """
         )
         conn.commit()
