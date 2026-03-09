@@ -114,3 +114,57 @@ def test_collection_service_collects_from_enabled_greenhouse(monkeypatch):
     assert len(jobs) == 1
     assert jobs[0]["source"] == "greenhouse"
     assert jobs[0]["title"] == "Data Platform Engineer"
+
+
+def test_collection_service_collects_from_enabled_lever(monkeypatch):
+    ctx = RunContext.create(
+        config={
+            "run": {
+                "num_pages": 3,
+                "sleep_s": 1.0,
+            },
+            "sources": {
+                "ats": {
+                    "lever": {
+                        "enabled": True,
+                    }
+                }
+            },
+            "queries": [
+                {"name": "SE", "q": "python developer"},
+            ],
+        },
+        flags={},
+    )
+
+    service = CollectionService(ctx)
+    service._build_collectors()
+
+    lever_collector = None
+    for collector in service.collector_runner.registry.all():
+        if collector.collector_name == "lever":
+            lever_collector = collector
+            break
+
+    assert lever_collector is not None
+
+    def fake_load_legacy():
+        def fake_collect(**kwargs):
+            return [
+                {
+                    "title": "Site Reliability Engineer",
+                    "company": "Delta",
+                    "location": "Remote",
+                    "url": "https://jobs.lever.co/delta/1",
+                    "description": "Infra role",
+                }
+            ]
+        return fake_collect
+
+    monkeypatch.setattr(lever_collector, "_load_legacy_collector", fake_load_legacy)
+
+    jobs = service.collect()
+
+    assert len(jobs) == 1
+    assert jobs[0]["source"] == "lever"
+    assert jobs[0]["title"] == "Site Reliability Engineer"

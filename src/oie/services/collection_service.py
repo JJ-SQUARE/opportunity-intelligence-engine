@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 
 from oie.collectors.google_jobs_collector import GoogleJobsCollector
 from oie.collectors.greenhouse_ats_collector import GreenhouseATSCollector
+from oie.collectors.lever_ats_collector import LeverATSCollector
 from oie.collectors.linkedin_serpapi_collector import LinkedInSerpAPICollector
 from oie.collectors.static_jobs_collector import StaticJobsCollector
 from oie.orchestration.run_context import RunContext
@@ -30,6 +31,8 @@ class CollectionService:
         ats = sources.get("ats", {}) or {}
         if (ats.get("greenhouse", {}) or {}).get("enabled", False):
             enabled.append("greenhouse")
+        if (ats.get("lever", {}) or {}).get("enabled", False):
+            enabled.append("lever")
 
         return enabled
 
@@ -67,12 +70,21 @@ class CollectionService:
             ),
         }
 
+        lever_config = {
+            "queries": queries,
+            "run": run_config,
+            "source_config": (
+                sources.get("ats", {}).get("lever", {})
+            ),
+        }
+
         self.collector_runner.register_collectors(
             [
                 StaticJobsCollector(config=static_jobs_config),
                 GoogleJobsCollector(config=google_jobs_config),
                 LinkedInSerpAPICollector(config=linkedin_config),
                 GreenhouseATSCollector(config=greenhouse_config),
+                LeverATSCollector(config=lever_config),
             ]
         )
 
