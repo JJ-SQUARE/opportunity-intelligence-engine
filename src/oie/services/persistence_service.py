@@ -1,7 +1,17 @@
 from __future__ import annotations
 
+from typing import Any, Dict, List
+
 from oie.orchestration.run_context import RunContext
-from oie.persistence.repositories import ProviderEventRepository, RunMetricsRepository, RunRepository
+from oie.persistence.repositories import (
+    CompanyAliasRepository,
+    CompanyMergeCandidateRepository,
+    CompanyRepository,
+    DomainRepository,
+    ProviderEventRepository,
+    RunMetricsRepository,
+    RunRepository,
+)
 from oie.persistence.sqlite import initialize_database
 
 
@@ -12,6 +22,10 @@ class PersistenceService:
         self.run_repository = RunRepository(self.db_path)
         self.run_metrics_repository = RunMetricsRepository(self.db_path)
         self.provider_event_repository = ProviderEventRepository(self.db_path)
+        self.company_repository = CompanyRepository(self.db_path)
+        self.company_alias_repository = CompanyAliasRepository(self.db_path)
+        self.domain_repository = DomainRepository(self.db_path)
+        self.company_merge_candidate_repository = CompanyMergeCandidateRepository(self.db_path)
 
     def initialize(self) -> None:
         initialize_database(self.db_path)
@@ -36,8 +50,21 @@ class PersistenceService:
             provider_events=self.ctx.provider_events,
         )
 
-    def persist_run_snapshot(self, status: str) -> None:
+    def persist_companies(self, companies: List[Dict[str, Any]]) -> None:
+        self.company_repository.upsert_companies(companies)
+        self.company_alias_repository.replace_aliases(companies)
+        self.domain_repository.replace_domains(companies)
+
+        merge_candidates = self.ctx.provider_state.get("company_merge_candidates", []) or []
+        self.company_merge_candidate_repository.replace_merge_candidates(
+            run_id=self.ctx.run_id,
+            candidates=merge_candidates,
+        )
+
+    def persist_run_snapshot(self, status: str, companies: List[Dict[str, Any]] | None = None) -> None:
         self.initialize()
         self.persist_run(status=status)
         self.persist_metrics()
         self.persist_provider_events()
+        if companies is not None:
+            self.persist_companies(companies)

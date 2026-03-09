@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from oie.persistence.sqlite import get_connection
 
@@ -73,6 +73,235 @@ class ProviderEventRepository:
                     for event in provider_events
                 ],
             )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+class CompanyRepository:
+    def __init__(self, db_path: str = "data/oie.db") -> None:
+        self.db_path = db_path
+
+    def upsert_companies(self, companies: List[Dict[str, Any]]) -> None:
+        conn = get_connection(self.db_path)
+        try:
+            conn.executemany(
+                """
+                INSERT INTO companies (
+                    company_key,
+                    company_display,
+                    company_normalized,
+                    resolved_domain,
+                    domain_source,
+                    domain_confidence,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(company_key) DO UPDATE SET
+                    company_display = excluded.company_display,
+                    company_normalized = excluded.company_normalized,
+                    resolved_domain = excluded.resolved_domain,
+                    domain_source = excluded.domain_source,
+                    domain_confidence = excluded.domain_confidence,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                [
+                    (
+                        company.get("company_key"),
+                        company.get("company_display"),
+                        company.get("company_normalized"),
+                        company.get("resolved_domain"),
+                        company.get("domain_source"),
+                        company.get("domain_confidence"),
+                    )
+                    for company in companies
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def find_by_normalized_and_domain(
+        self,
+        company_normalized: str,
+        resolved_domain: str | None,
+    ) -> Optional[Dict[str, Any]]:
+        conn = get_connection(self.db_path)
+        try:
+            row = conn.execute(
+                """
+                SELECT company_key, company_display, company_normalized, resolved_domain
+                FROM companies
+                WHERE company_normalized = ?
+                  AND COALESCE(resolved_domain, '') = COALESCE(?, '')
+                LIMIT 1
+                """,
+                (company_normalized, resolved_domain),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def find_by_domain(self, resolved_domain: str) -> Optional[Dict[str, Any]]:
+        conn = get_connection(self.db_path)
+        try:
+            row = conn.execute(
+                """
+                SELECT company_key, company_display, company_normalized, resolved_domain
+                FROM companies
+                WHERE resolved_domain = ?
+                LIMIT 1
+                """,
+                (resolved_domain,),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+
+class CompanyAliasRepository:
+    def __init__(self, db_path: str = "data/oie.db") -> None:
+        self.db_path = db_path
+
+    def replace_aliases(self, companies: List[Dict[str, Any]]) -> None:
+        conn = get_connection(self.db_path)
+        try:
+            company_keys = [c.get("company_key") for c in companies if c.get("company_key")]
+            if company_keys:
+                placeholders = ",".join("?" for _ in company_keys)
+                conn.execute(
+                    f"DELETE FROM company_aliases WHERE company_key IN ({placeholders})",
+                    company_keys,
+                )
+
+            rows = []
+            for company in companies:
+                company_key = company.get("company_key")
+                aliases = company.get("aliases", []) or []
+                alias_type_map = company.get("alias_type_map", {}) or {}
+                for alias in aliases:
+                    rows.append(
+                        (
+                            company_key,
+                            alias,
+                            alias_type_map.get(alias, company.get("company_normalized")),
+                            alias_type_map.get(f"{alias}__type", "observed_name"),
+                        )
+                    )
+
+            if rows:
+                conn.executemany(
+                    """
+                    INSERT INTO company_aliases (
+                        company_key,
+                        alias_value,
+                        alias_normalized,
+                        alias_type
+                    )
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    rows,
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def find_company_by_alias_normalized(self, alias_normalized: str) -> Optional[Dict[str, Any]]:
+        conn = get_connection(self.db_path)
+        try:
+            row = conn.execute(
+                """
+                SELECT c.company_key, c.company_display, c.company_normalized, c.resolved_domain
+                FROM company_aliases a
+                JOIN companies c ON c.company_key = a.company_key
+                WHERE a.alias_normalized = ?
+                LIMIT 1
+                """,
+                (alias_normalized,),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+
+class DomainRepository:
+    def __init__(self, db_path: str = "data/oie.db") -> None:
+        self.db_path = db_path
+
+    def replace_domains(self, companies: List[Dict[str, Any]]) -> None:
+        conn = get_connection(self.db_path)
+        try:
+            company_keys = [c.get("company_key") for c in companies if c.get("company_key")]
+            if company_keys:
+                placeholders = ",".join("?" for _ in company_keys)
+                conn.execute(
+                    f"DELETE FROM domains WHERE company_key IN ({placeholders})",
+                    company_keys,
+                )
+
+            rows = []
+            for company in companies:
+                if company.get("resolved_domain"):
+                    rows.append(
+                        (
+                            company.get("company_key"),
+                            company.get("resolved_domain"),
+                            company.get("domain_source"),
+                            company.get("domain_confidence"),
+                            1,
+                        )
+                    )
+
+            if rows:
+                conn.executemany(
+                    """
+                    INSERT INTO domains (
+                        company_key,
+                        domain,
+                        source,
+                        confidence,
+                        is_primary
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    rows,
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+class CompanyMergeCandidateRepository:
+    def __init__(self, db_path: str = "data/oie.db") -> None:
+        self.db_path = db_path
+
+    def replace_merge_candidates(self, run_id: str, candidates: List[Dict[str, Any]]) -> None:
+        conn = get_connection(self.db_path)
+        try:
+            conn.execute("DELETE FROM company_merge_candidates WHERE run_id = ?", (run_id,))
+            if candidates:
+                conn.executemany(
+                    """
+                    INSERT INTO company_merge_candidates (
+                        run_id,
+                        company_key_left,
+                        company_key_right,
+                        reason,
+                        confidence
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            run_id,
+                            candidate.get("company_key_left"),
+                            candidate.get("company_key_right"),
+                            candidate.get("reason"),
+                            candidate.get("confidence"),
+                        )
+                        for candidate in candidates
+                    ],
+                )
             conn.commit()
         finally:
             conn.close()

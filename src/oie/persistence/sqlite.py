@@ -49,11 +49,72 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 FOREIGN KEY (run_id) REFERENCES runs (run_id)
             );
 
+            CREATE TABLE IF NOT EXISTS companies (
+                company_key TEXT PRIMARY KEY,
+                company_display TEXT NOT NULL,
+                company_normalized TEXT NOT NULL,
+                resolved_domain TEXT,
+                domain_source TEXT,
+                domain_confidence REAL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS company_aliases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_key TEXT NOT NULL,
+                alias_value TEXT NOT NULL,
+                alias_normalized TEXT NOT NULL,
+                alias_type TEXT DEFAULT 'observed_name',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (company_key) REFERENCES companies (company_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS domains (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_key TEXT NOT NULL,
+                domain TEXT NOT NULL,
+                source TEXT,
+                confidence REAL,
+                is_primary INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (company_key) REFERENCES companies (company_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS company_merge_candidates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                company_key_left TEXT NOT NULL,
+                company_key_right TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                confidence REAL DEFAULT 0.0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (run_id) REFERENCES runs (run_id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_run_metrics_run_id
             ON run_metrics (run_id);
 
             CREATE INDEX IF NOT EXISTS idx_provider_events_run_id
             ON provider_events (run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_companies_normalized
+            ON companies (company_normalized);
+
+            CREATE INDEX IF NOT EXISTS idx_company_aliases_company_key
+            ON company_aliases (company_key);
+
+            CREATE INDEX IF NOT EXISTS idx_company_aliases_alias_normalized
+            ON company_aliases (alias_normalized);
+
+            CREATE INDEX IF NOT EXISTS idx_domains_company_key
+            ON domains (company_key);
+
+            CREATE INDEX IF NOT EXISTS idx_domains_domain
+            ON domains (domain);
+
+            CREATE INDEX IF NOT EXISTS idx_merge_candidates_run_id
+            ON company_merge_candidates (run_id);
             """
         )
         conn.commit()

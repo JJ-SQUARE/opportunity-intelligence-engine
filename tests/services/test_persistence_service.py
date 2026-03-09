@@ -6,7 +6,7 @@ from oie.orchestration.run_context import RunContext
 from oie.services.persistence_service import PersistenceService
 
 
-def test_persistence_service_writes_run_metrics_and_provider_events(tmp_path):
+def test_persistence_service_writes_run_metrics_provider_events_and_companies(tmp_path):
     db_path = tmp_path / "oie_test.db"
 
     ctx = RunContext.create(
@@ -21,9 +21,29 @@ def test_persistence_service_writes_run_metrics_and_provider_events(tmp_path):
         message="Starting operation=classify_company",
         metadata={"attempt": 1},
     )
+    ctx.provider_state["company_merge_candidates"] = [
+        {
+            "company_key_left": "cmp_a",
+            "company_key_right": "cmp_b",
+            "reason": "same_domain",
+            "confidence": 0.9,
+        }
+    ]
+
+    companies = [
+        {
+            "company_key": "cmp_a",
+            "company_display": "Acme Inc.",
+            "company_normalized": "acme",
+            "resolved_domain": "acme.com",
+            "domain_source": "apply_url",
+            "domain_confidence": 0.9,
+            "aliases": ["Acme Inc."],
+        }
+    ]
 
     service = PersistenceService(ctx)
-    service.persist_run_snapshot(status="ok")
+    service.persist_run_snapshot(status="ok", companies=companies)
 
     conn = sqlite3.connect(db_path)
     try:
@@ -34,6 +54,18 @@ def test_persistence_service_writes_run_metrics_and_provider_events(tmp_path):
         provider_event_rows = conn.execute(
             "SELECT provider, event_type, message FROM provider_events"
         ).fetchall()
+        company_rows = conn.execute(
+            "SELECT company_key, company_display, company_normalized, resolved_domain FROM companies"
+        ).fetchall()
+        alias_rows = conn.execute(
+            "SELECT company_key, alias_value, alias_normalized FROM company_aliases"
+        ).fetchall()
+        domain_rows = conn.execute(
+            "SELECT company_key, domain, source, confidence FROM domains"
+        ).fetchall()
+        merge_rows = conn.execute(
+            "SELECT company_key_left, company_key_right, reason, confidence FROM company_merge_candidates"
+        ).fetchall()
     finally:
         conn.close()
 
@@ -43,3 +75,14 @@ def test_persistence_service_writes_run_metrics_and_provider_events(tmp_path):
     assert ("jobs_collected_raw", "10") in metric_rows
     assert provider_event_rows[0][0] == "openai"
     assert provider_event_rows[0][1] == "request_started"
+    assert company_rows[0][0] == "cmp_a"
+    assert company_rows[0][1] == "Acme Inc."
+    assert company_rows[0][2] == "acme"
+    assert company_rows[0][3] == "acme.com"
+    assert alias_rows[0][0] == "cmp_a"
+    assert alias_rows[0][1] == "Acme Inc."
+    assert alias_rows[0][2] == "acme"
+    assert domain_rows[0][0] == "cmp_a"
+    assert domain_rows[0][1] == "acme.com"
+    assert merge_rows[0][0] == "cmp_a"
+    assert merge_rows[0][1] == "cmp_b"

@@ -41,8 +41,8 @@ class PipelineOrchestrator:
     def run_company_pipeline(self) -> List[Dict[str, Any]]:
         jobs = self.run_initial_stages()
         companies = self.hiring_signals_service.aggregate_by_company(jobs)
-        companies = self.company_identity_service.enrich_company_identity(companies)
         companies = self.domain_resolution_service.resolve_domains(companies)
+        companies = self.company_identity_service.enrich_company_identity(companies)
         companies = self.company_classification_service.classify_companies(companies)
         companies = self.opportunity_scoring_service.score_companies(companies)
         return companies
@@ -54,7 +54,10 @@ class PipelineOrchestrator:
         companies = self.run_company_pipeline()
         status = "company_pipeline_completed"
 
-        self.persistence_service.persist_run_snapshot(status=status)
+        self.persistence_service.persist_run_snapshot(
+            status=status,
+            companies=companies,
+        )
 
         return {
             "run_id": self.ctx.run_id,
