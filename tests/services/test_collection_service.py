@@ -26,13 +26,10 @@ def test_collection_service_collects_from_enabled_google_jobs(monkeypatch):
     service = CollectionService(ctx)
     service._build_collectors()
 
-    google_collector = None
-    for collector in service.collector_runner.registry.all():
-        if collector.collector_name == "google_jobs":
-            google_collector = collector
-            break
-
-    assert google_collector is not None
+    google_collector = next(
+        c for c in service.collector_runner.registry.all()
+        if c.collector_name == "google_jobs"
+    )
 
     def fake_load_legacy():
         def fake_collect(payload):
@@ -65,20 +62,9 @@ def test_collection_service_collects_from_enabled_google_jobs(monkeypatch):
 def test_collection_service_collects_from_enabled_greenhouse(monkeypatch):
     ctx = RunContext.create(
         config={
-            "run": {
-                "num_pages": 3,
-                "sleep_s": 1.0,
-            },
-            "sources": {
-                "ats": {
-                    "greenhouse": {
-                        "enabled": True,
-                    }
-                }
-            },
-            "queries": [
-                {"name": "SE", "q": "python developer"},
-            ],
+            "run": {"num_pages": 3, "sleep_s": 1.0},
+            "sources": {"ats": {"greenhouse": {"enabled": True}}},
+            "queries": [{"name": "SE", "q": "python developer"}],
         },
         flags={},
     )
@@ -86,13 +72,10 @@ def test_collection_service_collects_from_enabled_greenhouse(monkeypatch):
     service = CollectionService(ctx)
     service._build_collectors()
 
-    greenhouse_collector = None
-    for collector in service.collector_runner.registry.all():
-        if collector.collector_name == "greenhouse":
-            greenhouse_collector = collector
-            break
-
-    assert greenhouse_collector is not None
+    collector = next(
+        c for c in service.collector_runner.registry.all()
+        if c.collector_name == "greenhouse"
+    )
 
     def fake_load_legacy():
         def fake_collect(**kwargs):
@@ -107,7 +90,7 @@ def test_collection_service_collects_from_enabled_greenhouse(monkeypatch):
             ]
         return fake_collect
 
-    monkeypatch.setattr(greenhouse_collector, "_load_legacy_collector", fake_load_legacy)
+    monkeypatch.setattr(collector, "_load_legacy_collector", fake_load_legacy)
 
     jobs = service.collect()
 
@@ -119,20 +102,9 @@ def test_collection_service_collects_from_enabled_greenhouse(monkeypatch):
 def test_collection_service_collects_from_enabled_lever(monkeypatch):
     ctx = RunContext.create(
         config={
-            "run": {
-                "num_pages": 3,
-                "sleep_s": 1.0,
-            },
-            "sources": {
-                "ats": {
-                    "lever": {
-                        "enabled": True,
-                    }
-                }
-            },
-            "queries": [
-                {"name": "SE", "q": "python developer"},
-            ],
+            "run": {"num_pages": 3, "sleep_s": 1.0},
+            "sources": {"ats": {"lever": {"enabled": True}}},
+            "queries": [{"name": "SE", "q": "python developer"}],
         },
         flags={},
     )
@@ -140,13 +112,10 @@ def test_collection_service_collects_from_enabled_lever(monkeypatch):
     service = CollectionService(ctx)
     service._build_collectors()
 
-    lever_collector = None
-    for collector in service.collector_runner.registry.all():
-        if collector.collector_name == "lever":
-            lever_collector = collector
-            break
-
-    assert lever_collector is not None
+    collector = next(
+        c for c in service.collector_runner.registry.all()
+        if c.collector_name == "lever"
+    )
 
     def fake_load_legacy():
         def fake_collect(**kwargs):
@@ -161,7 +130,7 @@ def test_collection_service_collects_from_enabled_lever(monkeypatch):
             ]
         return fake_collect
 
-    monkeypatch.setattr(lever_collector, "_load_legacy_collector", fake_load_legacy)
+    monkeypatch.setattr(collector, "_load_legacy_collector", fake_load_legacy)
 
     jobs = service.collect()
 
@@ -173,20 +142,9 @@ def test_collection_service_collects_from_enabled_lever(monkeypatch):
 def test_collection_service_collects_from_enabled_workable(monkeypatch):
     ctx = RunContext.create(
         config={
-            "run": {
-                "num_pages": 3,
-                "sleep_s": 1.0,
-            },
-            "sources": {
-                "ats": {
-                    "workable": {
-                        "enabled": True,
-                    }
-                }
-            },
-            "queries": [
-                {"name": "SE", "q": "python developer"},
-            ],
+            "run": {"num_pages": 3, "sleep_s": 1.0},
+            "sources": {"ats": {"workable": {"enabled": True}}},
+            "queries": [{"name": "SE", "q": "python developer"}],
         },
         flags={},
     )
@@ -194,13 +152,10 @@ def test_collection_service_collects_from_enabled_workable(monkeypatch):
     service = CollectionService(ctx)
     service._build_collectors()
 
-    workable_collector = None
-    for collector in service.collector_runner.registry.all():
-        if collector.collector_name == "workable":
-            workable_collector = collector
-            break
-
-    assert workable_collector is not None
+    collector = next(
+        c for c in service.collector_runner.registry.all()
+        if c.collector_name == "workable"
+    )
 
     def fake_load_legacy():
         def fake_collect(**kwargs):
@@ -215,7 +170,7 @@ def test_collection_service_collects_from_enabled_workable(monkeypatch):
             ]
         return fake_collect
 
-    monkeypatch.setattr(workable_collector, "_load_legacy_collector", fake_load_legacy)
+    monkeypatch.setattr(collector, "_load_legacy_collector", fake_load_legacy)
 
     jobs = service.collect()
 
@@ -227,20 +182,9 @@ def test_collection_service_collects_from_enabled_workable(monkeypatch):
 def test_collection_service_collects_from_enabled_teamtailor(monkeypatch):
     ctx = RunContext.create(
         config={
-            "run": {
-                "num_pages": 3,
-                "sleep_s": 1.0,
-            },
-            "sources": {
-                "ats": {
-                    "teamtailor": {
-                        "enabled": True,
-                    }
-                }
-            },
-            "queries": [
-                {"name": "SE", "q": "python developer"},
-            ],
+            "run": {"num_pages": 3, "sleep_s": 1.0},
+            "sources": {"ats": {"teamtailor": {"enabled": True}}},
+            "queries": [{"name": "SE", "q": "python developer"}],
         },
         flags={},
     )
@@ -248,13 +192,10 @@ def test_collection_service_collects_from_enabled_teamtailor(monkeypatch):
     service = CollectionService(ctx)
     service._build_collectors()
 
-    teamtailor_collector = None
-    for collector in service.collector_runner.registry.all():
-        if collector.collector_name == "teamtailor":
-            teamtailor_collector = collector
-            break
-
-    assert teamtailor_collector is not None
+    collector = next(
+        c for c in service.collector_runner.registry.all()
+        if c.collector_name == "teamtailor"
+    )
 
     def fake_load_legacy():
         def fake_collect(**kwargs):
@@ -269,10 +210,50 @@ def test_collection_service_collects_from_enabled_teamtailor(monkeypatch):
             ]
         return fake_collect
 
-    monkeypatch.setattr(teamtailor_collector, "_load_legacy_collector", fake_load_legacy)
+    monkeypatch.setattr(collector, "_load_legacy_collector", fake_load_legacy)
 
     jobs = service.collect()
 
     assert len(jobs) == 1
     assert jobs[0]["source"] == "teamtailor"
     assert jobs[0]["title"] == "Full Stack Engineer"
+
+
+def test_collection_service_collects_from_enabled_breezy(monkeypatch):
+    ctx = RunContext.create(
+        config={
+            "run": {"num_pages": 3, "sleep_s": 1.0},
+            "sources": {"ats": {"breezy": {"enabled": True}}},
+            "queries": [{"name": "SE", "q": "python developer"}],
+        },
+        flags={},
+    )
+
+    service = CollectionService(ctx)
+    service._build_collectors()
+
+    collector = next(
+        c for c in service.collector_runner.registry.all()
+        if c.collector_name == "breezy"
+    )
+
+    def fake_load_legacy():
+        def fake_collect(**kwargs):
+            return [
+                {
+                    "title": "QA Engineer",
+                    "company": "Lambda",
+                    "location": "Remote",
+                    "url": "https://lambda.breezy.hr/p/123",
+                    "description": "QA role",
+                }
+            ]
+        return fake_collect
+
+    monkeypatch.setattr(collector, "_load_legacy_collector", fake_load_legacy)
+
+    jobs = service.collect()
+
+    assert len(jobs) == 1
+    assert jobs[0]["source"] == "breezy"
+    assert jobs[0]["title"] == "QA Engineer"

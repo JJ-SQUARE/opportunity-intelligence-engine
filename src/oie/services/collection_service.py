@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from oie.collectors.breezy_ats_collector import BreezyATSCollector
 from oie.collectors.google_jobs_collector import GoogleJobsCollector
 from oie.collectors.greenhouse_ats_collector import GreenhouseATSCollector
 from oie.collectors.lever_ats_collector import LeverATSCollector
@@ -39,6 +40,8 @@ class CollectionService:
             enabled.append("workable")
         if (ats.get("teamtailor", {}) or {}).get("enabled", False):
             enabled.append("teamtailor")
+        if (ats.get("breezy", {}) or {}).get("enabled", False):
+            enabled.append("breezy")
 
         return enabled
 
@@ -100,6 +103,14 @@ class CollectionService:
             ),
         }
 
+        breezy_config = {
+            "queries": queries,
+            "run": run_config,
+            "source_config": (
+                sources.get("ats", {}).get("breezy", {})
+            ),
+        }
+
         self.collector_runner.register_collectors(
             [
                 StaticJobsCollector(config=static_jobs_config),
@@ -109,6 +120,7 @@ class CollectionService:
                 LeverATSCollector(config=lever_config),
                 WorkableATSCollector(config=workable_config),
                 TeamtailorATSCollector(config=teamtailor_config),
+                BreezyATSCollector(config=breezy_config),
             ]
         )
 
