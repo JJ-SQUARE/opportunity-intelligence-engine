@@ -1,39 +1,60 @@
+from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from collectors.run_collectors import run_collectors as run_enabled_collectors
+from oie.collectors.google_jobs_collector import GoogleJobsCollector
+from oie.collectors.static_jobs_collector import StaticJobsCollector
 from oie.orchestration.run_context import RunContext
-from oie.models.job_record import JobRecord
+from oie.services.collector_runner_service import CollectorRunnerService
 
 
 class CollectionService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
+        self.collector_runner = CollectorRunnerService(ctx)
+        self._collectors_built = False
+
+    def _extract_enabled_collectors_from_yaml(self) -> List[str]:
+        enabled: List[str] = []
+        sources = self.ctx.config.get("sources", {}) or {}
+
+        if (sources.get("google_jobs", {}) or {}).get("enabled", False):
+            enabled.append("google_jobs")
+
+        return enabled
+
+    def _build_collectors(self) -> None:
+        if self._collectors_built:
+            return
+
+        sources = self.ctx.config.get("sources", {}) or {}
+        run_config = self.ctx.config.get("run", {}) or {}
+        queries = self.ctx.config.get("queries", []) or []
+
+        static_jobs_config = (
+            (self.ctx.config.get("collectors", {}) or {}).get("static_jobs", {}) or {}
+        )
+
+        google_jobs_config = {
+            "queries": queries,
+            "run": run_config,
+            "source_config": sources.get("google_jobs", {}) or {},
+        }
+
+        self.collector_runner.register_collectors(
+            [
+                StaticJobsCollector(config=static_jobs_config),
+                GoogleJobsCollector(config=google_jobs_config),
+            ]
+        )
+        self._collectors_built = True
 
     def collect(self) -> List[Dict[str, Any]]:
-        jobs = run_enabled_collectors(self.ctx.config)
+        self._build_collectors()
+
+        enabled_names = self._extract_enabled_collectors_from_yaml()
+        jobs = self.collector_runner.run_enabled_collectors(enabled_names=enabled_names)
 
         self.ctx.metrics["jobs_collected_raw"] = len(jobs)
         self.ctx.metrics["collect_completed"] = True
-
         return jobs
-
-    def collect_as_records(self) -> List[JobRecord]:
-        jobs = self.collect()
-        records: List[JobRecord] = []
-
-        for job in jobs:
-            records.append(
-                JobRecord(
-                    title=job.get("title") or "",
-                    company=job.get("company") or "",
-                    location=job.get("location"),
-                    job_url=job.get("job_url"),
-                    apply_url=job.get("apply_url"),
-                    description=job.get("description"),
-                    source=job.get("source"),
-                    detected_at=job.get("detected_at"),
-                )
-            )
-
-        return records
