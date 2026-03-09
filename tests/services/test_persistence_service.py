@@ -6,7 +6,7 @@ from oie.orchestration.run_context import RunContext
 from oie.services.persistence_service import PersistenceService
 
 
-def test_persistence_service_writes_run_metrics_provider_events_and_companies(tmp_path):
+def test_persistence_service_writes_run_metrics_provider_events_companies_jobs_and_leads(tmp_path):
     db_path = tmp_path / "oie_test.db"
 
     ctx = RunContext.create(
@@ -39,11 +39,39 @@ def test_persistence_service_writes_run_metrics_provider_events_and_companies(tm
             "domain_source": "apply_url",
             "domain_confidence": 0.9,
             "aliases": ["Acme Inc."],
+            "alias_type_map": {
+                "Acme Inc.": "acme",
+                "Acme Inc.__type": "observed_name",
+            },
+        }
+    ]
+
+    jobs = [
+        {
+            "title": "Backend Engineer",
+            "company": "Acme Inc.",
+            "company_key": "cmp_a",
+            "location": "Remote",
+            "job_url": "https://acme.com/jobs/1",
+            "apply_url": "https://acme.com/apply/1",
+            "description": "Python role",
+            "source": "google_jobs",
+            "detected_at": "2026-03-09",
+        }
+    ]
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Jane Doe",
+            "contact_title": "CTO",
+            "email": "jane@acme.com",
+            "linkedin_url": "https://linkedin.com/in/janedoe",
         }
     ]
 
     service = PersistenceService(ctx)
-    service.persist_run_snapshot(status="ok", companies=companies)
+    service.persist_run_snapshot(status="ok", companies=companies, jobs=jobs, leads=leads)
 
     conn = sqlite3.connect(db_path)
     try:
@@ -66,6 +94,12 @@ def test_persistence_service_writes_run_metrics_provider_events_and_companies(tm
         merge_rows = conn.execute(
             "SELECT company_key_left, company_key_right, reason, confidence FROM company_merge_candidates"
         ).fetchall()
+        job_rows = conn.execute(
+            "SELECT company_key, title, company, job_url FROM jobs"
+        ).fetchall()
+        lead_rows = conn.execute(
+            "SELECT company_key, contact_name, email FROM leads"
+        ).fetchall()
     finally:
         conn.close()
 
@@ -76,13 +110,10 @@ def test_persistence_service_writes_run_metrics_provider_events_and_companies(tm
     assert provider_event_rows[0][0] == "openai"
     assert provider_event_rows[0][1] == "request_started"
     assert company_rows[0][0] == "cmp_a"
-    assert company_rows[0][1] == "Acme Inc."
-    assert company_rows[0][2] == "acme"
-    assert company_rows[0][3] == "acme.com"
-    assert alias_rows[0][0] == "cmp_a"
     assert alias_rows[0][1] == "Acme Inc."
-    assert alias_rows[0][2] == "acme"
-    assert domain_rows[0][0] == "cmp_a"
     assert domain_rows[0][1] == "acme.com"
     assert merge_rows[0][0] == "cmp_a"
-    assert merge_rows[0][1] == "cmp_b"
+    assert job_rows[0][0] == "cmp_a"
+    assert job_rows[0][1] == "Backend Engineer"
+    assert lead_rows[0][0] == "cmp_a"
+    assert lead_rows[0][2] == "jane@acme.com"

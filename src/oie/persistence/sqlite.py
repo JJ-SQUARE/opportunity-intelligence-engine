@@ -92,6 +92,38 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 FOREIGN KEY (run_id) REFERENCES runs (run_id)
             );
 
+            CREATE TABLE IF NOT EXISTS jobs (
+                job_key TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                run_date TEXT NOT NULL,
+                title TEXT,
+                company TEXT,
+                company_key TEXT,
+                location TEXT,
+                job_url TEXT,
+                apply_url TEXT,
+                description TEXT,
+                source TEXT,
+                detected_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (run_id) REFERENCES runs (run_id),
+                FOREIGN KEY (company_key) REFERENCES companies (company_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS leads (
+                lead_key TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                run_date TEXT NOT NULL,
+                company_key TEXT,
+                contact_name TEXT,
+                contact_title TEXT,
+                email TEXT,
+                linkedin_url TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (run_id) REFERENCES runs (run_id),
+                FOREIGN KEY (company_key) REFERENCES companies (company_key)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_run_metrics_run_id
             ON run_metrics (run_id);
 
@@ -115,6 +147,21 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_merge_candidates_run_id
             ON company_merge_candidates (run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_jobs_run_id
+            ON jobs (run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_jobs_job_url
+            ON jobs (job_url);
+
+            CREATE INDEX IF NOT EXISTS idx_jobs_apply_url
+            ON jobs (apply_url);
+
+            CREATE INDEX IF NOT EXISTS idx_leads_run_id
+            ON leads (run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_leads_email
+            ON leads (email);
             """
         )
         conn.commit()

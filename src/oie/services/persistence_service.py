@@ -8,6 +8,8 @@ from oie.persistence.repositories import (
     CompanyMergeCandidateRepository,
     CompanyRepository,
     DomainRepository,
+    JobRepository,
+    LeadRepository,
     ProviderEventRepository,
     RunMetricsRepository,
     RunRepository,
@@ -26,6 +28,8 @@ class PersistenceService:
         self.company_alias_repository = CompanyAliasRepository(self.db_path)
         self.domain_repository = DomainRepository(self.db_path)
         self.company_merge_candidate_repository = CompanyMergeCandidateRepository(self.db_path)
+        self.job_repository = JobRepository(self.db_path)
+        self.lead_repository = LeadRepository(self.db_path)
 
     def initialize(self) -> None:
         initialize_database(self.db_path)
@@ -61,10 +65,35 @@ class PersistenceService:
             candidates=merge_candidates,
         )
 
-    def persist_run_snapshot(self, status: str, companies: List[Dict[str, Any]] | None = None) -> None:
+    def persist_jobs(self, jobs: List[Dict[str, Any]]) -> None:
+        self.job_repository.replace_jobs(
+            run_id=self.ctx.run_id,
+            run_date=self.ctx.run_date,
+            jobs=jobs,
+        )
+
+    def persist_leads(self, leads: List[Dict[str, Any]]) -> None:
+        self.lead_repository.replace_leads(
+            run_id=self.ctx.run_id,
+            run_date=self.ctx.run_date,
+            leads=leads,
+        )
+
+    def persist_run_snapshot(
+        self,
+        status: str,
+        companies: List[Dict[str, Any]] | None = None,
+        jobs: List[Dict[str, Any]] | None = None,
+        leads: List[Dict[str, Any]] | None = None,
+    ) -> None:
         self.initialize()
         self.persist_run(status=status)
         self.persist_metrics()
         self.persist_provider_events()
+
         if companies is not None:
             self.persist_companies(companies)
+        if jobs is not None:
+            self.persist_jobs(jobs)
+        if leads is not None:
+            self.persist_leads(leads)

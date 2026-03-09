@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any, Dict, List, Optional
 
@@ -301,6 +302,132 @@ class CompanyMergeCandidateRepository:
                         )
                         for candidate in candidates
                     ],
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+class JobRepository:
+    def __init__(self, db_path: str = "data/oie.db") -> None:
+        self.db_path = db_path
+
+    def _build_job_key(self, job: Dict[str, Any], run_id: str) -> str:
+        job_url = (job.get("job_url") or "").strip()
+        apply_url = (job.get("apply_url") or "").strip()
+        if job_url:
+            raw = f"job_url|{job_url}"
+        elif apply_url:
+            raw = f"apply_url|{apply_url}"
+        else:
+            raw = "|".join(
+                [
+                    run_id,
+                    (job.get("title") or "").strip().lower(),
+                    (job.get("company") or "").strip().lower(),
+                    (job.get("description") or "").strip().lower(),
+                ]
+            )
+        return f"job_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
+
+    def replace_jobs(self, run_id: str, run_date: str, jobs: List[Dict[str, Any]]) -> None:
+        conn = get_connection(self.db_path)
+        try:
+            conn.execute("DELETE FROM jobs WHERE run_id = ?", (run_id,))
+            rows = [
+                (
+                    self._build_job_key(job, run_id),
+                    run_id,
+                    run_date,
+                    job.get("title"),
+                    job.get("company"),
+                    job.get("company_key"),
+                    job.get("location"),
+                    job.get("job_url"),
+                    job.get("apply_url"),
+                    job.get("description"),
+                    job.get("source"),
+                    job.get("detected_at"),
+                )
+                for job in jobs
+            ]
+            if rows:
+                conn.executemany(
+                    """
+                    INSERT INTO jobs (
+                        job_key,
+                        run_id,
+                        run_date,
+                        title,
+                        company,
+                        company_key,
+                        location,
+                        job_url,
+                        apply_url,
+                        description,
+                        source,
+                        detected_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    rows,
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+class LeadRepository:
+    def __init__(self, db_path: str = "data/oie.db") -> None:
+        self.db_path = db_path
+
+    def _build_lead_key(self, lead: Dict[str, Any], run_id: str) -> str:
+        email = (lead.get("email") or "").strip().lower()
+        if email:
+            raw = f"email|{email}"
+        else:
+            raw = "|".join(
+                [
+                    run_id,
+                    (lead.get("company_key") or "").strip(),
+                    (lead.get("contact_name") or "").strip().lower(),
+                ]
+            )
+        return f"lead_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
+
+    def replace_leads(self, run_id: str, run_date: str, leads: List[Dict[str, Any]]) -> None:
+        conn = get_connection(self.db_path)
+        try:
+            conn.execute("DELETE FROM leads WHERE run_id = ?", (run_id,))
+            rows = [
+                (
+                    self._build_lead_key(lead, run_id),
+                    run_id,
+                    run_date,
+                    lead.get("company_key"),
+                    lead.get("contact_name"),
+                    lead.get("contact_title"),
+                    lead.get("email"),
+                    lead.get("linkedin_url"),
+                )
+                for lead in leads
+            ]
+            if rows:
+                conn.executemany(
+                    """
+                    INSERT INTO leads (
+                        lead_key,
+                        run_id,
+                        run_date,
+                        company_key,
+                        contact_name,
+                        contact_title,
+                        email,
+                        linkedin_url
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    rows,
                 )
             conn.commit()
         finally:
