@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+from collections import defaultdict
+from typing import Dict, List, Any
+
+from oie.orchestration.run_context import RunContext
+
+
+class CollectorMetricsService:
+    """
+    Computes coverage metrics per collector source.
+    """
+
+    def __init__(self, ctx: RunContext) -> None:
+        self.ctx = ctx
+
+    def build_metrics(
+        self,
+        jobs: List[Dict[str, Any]],
+        companies: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+
+        source_job_counts = defaultdict(int)
+        source_company_sets = defaultdict(set)
+
+        for job in jobs:
+            source = job.get("source", "unknown")
+            source_job_counts[source] += 1
+
+            company_key = job.get("company_key")
+            if company_key:
+                source_company_sets[source].add(company_key)
+
+        metrics = []
+
+        for source in source_job_counts:
+
+            jobs_count = source_job_counts[source]
+            companies_count = len(source_company_sets[source])
+
+            metrics.append(
+                {
+                    "source": source,
+                    "jobs_collected": jobs_count,
+                    "unique_companies": companies_count,
+                    "jobs_per_company": round(
+                        jobs_count / companies_count, 2
+                    )
+                    if companies_count
+                    else 0,
+                }
+            )
+
+        metrics.sort(
+            key=lambda x: x["jobs_collected"],
+            reverse=True,
+        )
+
+        return metrics

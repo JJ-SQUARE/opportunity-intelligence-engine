@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Tuple
 
 from oie.orchestration.run_context import RunContext
 from oie.services.collection_service import CollectionService
+from oie.services.collector_metrics_export_service import CollectorMetricsExportService
+from oie.services.collector_metrics_service import CollectorMetricsService
 from oie.services.company_classification_service import CompanyClassificationService
 from oie.services.company_enrichment_service import CompanyEnrichmentService
 from oie.services.company_identity_service import CompanyIdentityService
@@ -54,6 +56,8 @@ class PipelineOrchestrator:
         self.historical_export_service = HistoricalExportService(ctx)
         self.market_trends_service = MarketTrendsService(ctx)
         self.market_trends_export_service = MarketTrendsExportService(ctx)
+        self.collector_metrics_service = CollectorMetricsService(ctx)
+        self.collector_metrics_export_service = CollectorMetricsExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
             ctx,
             self.provider_control_service,
@@ -204,6 +208,9 @@ class PipelineOrchestrator:
         self.market_trends_export_service.export_country_trends(country_trends)
         self.market_trends_export_service.export_new_companies_by_source(new_companies_trends)
         self.market_trends_export_service.export_summary_json(market_summary)
+
+        collector_metrics = self.collector_metrics_service.build_metrics(unique_jobs, companies)
+        self.collector_metrics_export_service.export_json(collector_metrics)
 
         return {
             "run_id": self.ctx.run_id,
