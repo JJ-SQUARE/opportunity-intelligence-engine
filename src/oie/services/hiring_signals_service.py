@@ -53,9 +53,17 @@ class HiringSignalsService:
 
         companies = []
         for company_data in grouped.values():
+            total_openings = int(company_data["total_openings"] or 0)
+            remote_jobs = int(company_data["remote_jobs"] or 0)
+            contractor_jobs = int(company_data["contractor_jobs"] or 0)
+
             company_data["sources"] = sorted(company_data["sources"])
-            company_data["remote_friendly"] = company_data["remote_jobs"] > 0
-            company_data["contractor_signal"] = company_data["contractor_jobs"] > 0
+            company_data["remote_friendly"] = remote_jobs > 0
+            company_data["contractor_signal"] = contractor_jobs > 0
+            company_data["remote_ratio"] = (remote_jobs / total_openings) if total_openings else 0.0
+            company_data["contractor_ratio"] = (contractor_jobs / total_openings) if total_openings else 0.0
+            company_data["multi_source_signal"] = len(company_data["sources"]) > 1
+
             companies.append(company_data)
 
         self.ctx.metrics["companies_detected"] = len(companies)

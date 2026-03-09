@@ -34,6 +34,12 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
                     "Acme Inc.": "acme",
                     "Acme Inc.__type": "observed_name",
                 },
+                "opportunity_score": 42,
+                "score_openings": 16,
+                "score_remote": 8,
+                "score_contractor": 6,
+                "score_multi_source": 10,
+                "score_company_type": 2,
             }
         ],
         jobs=[
@@ -73,5 +79,7 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
     assert dataset[0]["company_key"] == "cmp_a"
     assert dataset[0]["jobs_count"] == 1
     assert dataset[0]["email"] == "jane@acme.com"
+    assert dataset[0]["opportunity_score"] == 42
+    assert dataset[0]["score_openings"] == 16
     assert Path(ctx.paths["opportunities_export"]).exists()
     assert Path(ctx.paths["top_opportunities_export"]).exists()

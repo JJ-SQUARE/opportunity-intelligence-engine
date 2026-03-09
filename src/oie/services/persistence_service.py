@@ -7,6 +7,7 @@ from oie.persistence.repositories import (
     CompanyAliasRepository,
     CompanyMergeCandidateRepository,
     CompanyRepository,
+    CompanyScoreRepository,
     DomainRepository,
     JobRepository,
     LeadRepository,
@@ -30,6 +31,7 @@ class PersistenceService:
         self.company_merge_candidate_repository = CompanyMergeCandidateRepository(self.db_path)
         self.job_repository = JobRepository(self.db_path)
         self.lead_repository = LeadRepository(self.db_path)
+        self.company_score_repository = CompanyScoreRepository(self.db_path)
 
     def initialize(self) -> None:
         initialize_database(self.db_path)
@@ -58,6 +60,7 @@ class PersistenceService:
         self.company_repository.upsert_companies(companies)
         self.company_alias_repository.replace_aliases(companies)
         self.domain_repository.replace_domains(companies)
+        self.company_score_repository.replace_company_scores(self.ctx.run_id, companies)
 
         merge_candidates = self.ctx.provider_state.get("company_merge_candidates", []) or []
         self.company_merge_candidate_repository.replace_merge_candidates(

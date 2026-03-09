@@ -25,6 +25,12 @@ class OpportunityDatasetService:
                     c.resolved_domain,
                     COALESCE(MAX(j.title), '') AS sample_job_title,
                     COUNT(DISTINCT j.job_key) AS jobs_count,
+                    COALESCE(MAX(cs.opportunity_score), 0) AS opportunity_score,
+                    COALESCE(MAX(cs.score_openings), 0) AS score_openings,
+                    COALESCE(MAX(cs.score_remote), 0) AS score_remote,
+                    COALESCE(MAX(cs.score_contractor), 0) AS score_contractor,
+                    COALESCE(MAX(cs.score_multi_source), 0) AS score_multi_source,
+                    COALESCE(MAX(cs.score_company_type), 0) AS score_company_type,
                     COALESCE(MAX(l.contact_name), '') AS contact_name,
                     COALESCE(MAX(l.contact_title), '') AS contact_title,
                     COALESCE(MAX(l.email), '') AS email,
@@ -34,12 +40,14 @@ class OpportunityDatasetService:
                     ON j.company_key = c.company_key
                 LEFT JOIN leads l
                     ON l.company_key = c.company_key
+                LEFT JOIN company_scores cs
+                    ON cs.company_key = c.company_key
                 GROUP BY
                     c.company_key,
                     c.company_display,
                     c.company_normalized,
                     c.resolved_domain
-                ORDER BY jobs_count DESC, c.company_display ASC
+                ORDER BY opportunity_score DESC, jobs_count DESC, c.company_display ASC
                 """
             ).fetchall()
         finally:

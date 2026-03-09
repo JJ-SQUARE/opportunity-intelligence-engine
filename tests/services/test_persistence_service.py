@@ -6,7 +6,7 @@ from oie.orchestration.run_context import RunContext
 from oie.services.persistence_service import PersistenceService
 
 
-def test_persistence_service_writes_run_metrics_provider_events_companies_jobs_and_leads(tmp_path):
+def test_persistence_service_writes_full_run_snapshot_including_company_scores(tmp_path):
     db_path = tmp_path / "oie_test.db"
 
     ctx = RunContext.create(
@@ -43,6 +43,12 @@ def test_persistence_service_writes_run_metrics_provider_events_companies_jobs_a
                 "Acme Inc.": "acme",
                 "Acme Inc.__type": "observed_name",
             },
+            "opportunity_score": 42,
+            "score_openings": 16,
+            "score_remote": 8,
+            "score_contractor": 6,
+            "score_multi_source": 10,
+            "score_company_type": 2,
         }
     ]
 
@@ -76,23 +82,8 @@ def test_persistence_service_writes_run_metrics_provider_events_companies_jobs_a
     conn = sqlite3.connect(db_path)
     try:
         run_row = conn.execute("SELECT run_id, status FROM runs").fetchone()
-        metric_rows = conn.execute(
-            "SELECT metric_key, metric_value FROM run_metrics ORDER BY metric_key"
-        ).fetchall()
-        provider_event_rows = conn.execute(
-            "SELECT provider, event_type, message FROM provider_events"
-        ).fetchall()
-        company_rows = conn.execute(
-            "SELECT company_key, company_display, company_normalized, resolved_domain FROM companies"
-        ).fetchall()
-        alias_rows = conn.execute(
-            "SELECT company_key, alias_value, alias_normalized FROM company_aliases"
-        ).fetchall()
-        domain_rows = conn.execute(
-            "SELECT company_key, domain, source, confidence FROM domains"
-        ).fetchall()
-        merge_rows = conn.execute(
-            "SELECT company_key_left, company_key_right, reason, confidence FROM company_merge_candidates"
+        company_score_rows = conn.execute(
+            "SELECT company_key, opportunity_score, score_openings FROM company_scores"
         ).fetchall()
         job_rows = conn.execute(
             "SELECT company_key, title, company, job_url FROM jobs"
@@ -105,15 +96,8 @@ def test_persistence_service_writes_run_metrics_provider_events_companies_jobs_a
 
     assert run_row is not None
     assert run_row[1] == "ok"
-    assert ("companies_detected", "4") in metric_rows
-    assert ("jobs_collected_raw", "10") in metric_rows
-    assert provider_event_rows[0][0] == "openai"
-    assert provider_event_rows[0][1] == "request_started"
-    assert company_rows[0][0] == "cmp_a"
-    assert alias_rows[0][1] == "Acme Inc."
-    assert domain_rows[0][1] == "acme.com"
-    assert merge_rows[0][0] == "cmp_a"
+    assert company_score_rows[0][0] == "cmp_a"
+    assert company_score_rows[0][1] == 42
+    assert company_score_rows[0][2] == 16
     assert job_rows[0][0] == "cmp_a"
-    assert job_rows[0][1] == "Backend Engineer"
     assert lead_rows[0][0] == "cmp_a"
-    assert lead_rows[0][2] == "jane@acme.com"

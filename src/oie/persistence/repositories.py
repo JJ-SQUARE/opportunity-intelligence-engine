@@ -432,3 +432,47 @@ class LeadRepository:
             conn.commit()
         finally:
             conn.close()
+
+
+class CompanyScoreRepository:
+    def __init__(self, db_path: str = "data/oie.db") -> None:
+        self.db_path = db_path
+
+    def replace_company_scores(self, run_id: str, companies: List[Dict[str, Any]]) -> None:
+        conn = get_connection(self.db_path)
+        try:
+            conn.execute("DELETE FROM company_scores WHERE run_id = ?", (run_id,))
+            rows = [
+                (
+                    run_id,
+                    company.get("company_key"),
+                    company.get("opportunity_score"),
+                    company.get("score_openings"),
+                    company.get("score_remote"),
+                    company.get("score_contractor"),
+                    company.get("score_multi_source"),
+                    company.get("score_company_type"),
+                )
+                for company in companies
+                if company.get("company_key")
+            ]
+            if rows:
+                conn.executemany(
+                    """
+                    INSERT INTO company_scores (
+                        run_id,
+                        company_key,
+                        opportunity_score,
+                        score_openings,
+                        score_remote,
+                        score_contractor,
+                        score_multi_source,
+                        score_company_type
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    rows,
+                )
+            conn.commit()
+        finally:
+            conn.close()

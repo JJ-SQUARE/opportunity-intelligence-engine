@@ -124,6 +124,21 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 FOREIGN KEY (company_key) REFERENCES companies (company_key)
             );
 
+            CREATE TABLE IF NOT EXISTS company_scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                company_key TEXT NOT NULL,
+                opportunity_score REAL,
+                score_openings REAL,
+                score_remote REAL,
+                score_contractor REAL,
+                score_multi_source REAL,
+                score_company_type REAL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (run_id) REFERENCES runs (run_id),
+                FOREIGN KEY (company_key) REFERENCES companies (company_key)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_run_metrics_run_id
             ON run_metrics (run_id);
 
@@ -162,6 +177,12 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_leads_email
             ON leads (email);
+
+            CREATE INDEX IF NOT EXISTS idx_company_scores_run_id
+            ON company_scores (run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_company_scores_company_key
+            ON company_scores (company_key);
             """
         )
         conn.commit()
