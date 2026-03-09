@@ -17,6 +17,8 @@ from oie.services.hiring_signals_service import HiringSignalsService
 from oie.services.job_dedup_service import JobDedupService
 from oie.services.lead_generation_service import LeadGenerationService
 from oie.services.lead_ranking_service import LeadRankingService
+from oie.services.market_trends_export_service import MarketTrendsExportService
+from oie.services.market_trends_service import MarketTrendsService
 from oie.services.master_data_service import MasterDataService
 from oie.services.master_dedup_service import MasterDedupService
 from oie.services.normalization_service import NormalizationService
@@ -50,6 +52,8 @@ class PipelineOrchestrator:
         self.executive_summary_service = ExecutiveSummaryService(ctx)
         self.historical_intelligence_service = HistoricalIntelligenceService(ctx)
         self.historical_export_service = HistoricalExportService(ctx)
+        self.market_trends_service = MarketTrendsService(ctx)
+        self.market_trends_export_service = MarketTrendsExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
             ctx,
             self.provider_control_service,
@@ -191,6 +195,16 @@ class PipelineOrchestrator:
         self.historical_export_service.export_growth_summary(growth_rows)
         self.historical_export_service.export_summary_json(growth_rows)
 
+        source_trends = self.market_trends_service.build_source_trends()
+        country_trends = self.market_trends_service.build_country_trends()
+        new_companies_trends = self.market_trends_service.build_new_companies_by_source()
+        market_summary = self.market_trends_service.build_summary()
+
+        self.market_trends_export_service.export_source_trends(source_trends)
+        self.market_trends_export_service.export_country_trends(country_trends)
+        self.market_trends_export_service.export_new_companies_by_source(new_companies_trends)
+        self.market_trends_export_service.export_summary_json(market_summary)
+
         return {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
@@ -215,4 +229,8 @@ class PipelineOrchestrator:
             "historical_company_hiring_csv": self.ctx.paths.get("historical_company_hiring_csv"),
             "historical_growth_summary_csv": self.ctx.paths.get("historical_growth_summary_csv"),
             "historical_summary_json": self.ctx.paths.get("historical_summary_json"),
+            "market_trends_by_source_csv": self.ctx.paths.get("market_trends_by_source_csv"),
+            "market_trends_by_location_csv": self.ctx.paths.get("market_trends_by_location_csv"),
+            "market_new_companies_by_source_csv": self.ctx.paths.get("market_new_companies_by_source_csv"),
+            "market_trends_summary_json": self.ctx.paths.get("market_trends_summary_json"),
         }
