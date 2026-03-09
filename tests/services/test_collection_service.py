@@ -168,3 +168,57 @@ def test_collection_service_collects_from_enabled_lever(monkeypatch):
     assert len(jobs) == 1
     assert jobs[0]["source"] == "lever"
     assert jobs[0]["title"] == "Site Reliability Engineer"
+
+
+def test_collection_service_collects_from_enabled_workable(monkeypatch):
+    ctx = RunContext.create(
+        config={
+            "run": {
+                "num_pages": 3,
+                "sleep_s": 1.0,
+            },
+            "sources": {
+                "ats": {
+                    "workable": {
+                        "enabled": True,
+                    }
+                }
+            },
+            "queries": [
+                {"name": "SE", "q": "python developer"},
+            ],
+        },
+        flags={},
+    )
+
+    service = CollectionService(ctx)
+    service._build_collectors()
+
+    workable_collector = None
+    for collector in service.collector_runner.registry.all():
+        if collector.collector_name == "workable":
+            workable_collector = collector
+            break
+
+    assert workable_collector is not None
+
+    def fake_load_legacy():
+        def fake_collect(**kwargs):
+            return [
+                {
+                    "title": "Backend Developer",
+                    "company": "Omega",
+                    "location": "Remote",
+                    "url": "https://apply.workable.com/omega/j/123",
+                    "description": "Backend role",
+                }
+            ]
+        return fake_collect
+
+    monkeypatch.setattr(workable_collector, "_load_legacy_collector", fake_load_legacy)
+
+    jobs = service.collect()
+
+    assert len(jobs) == 1
+    assert jobs[0]["source"] == "workable"
+    assert jobs[0]["title"] == "Backend Developer"
