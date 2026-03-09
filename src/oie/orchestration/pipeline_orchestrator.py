@@ -13,12 +13,14 @@ from oie.services.duplicate_report_service import DuplicateReportService
 from oie.services.hiring_signals_service import HiringSignalsService
 from oie.services.job_dedup_service import JobDedupService
 from oie.services.lead_generation_service import LeadGenerationService
+from oie.services.lead_ranking_service import LeadRankingService
 from oie.services.master_data_service import MasterDataService
 from oie.services.master_dedup_service import MasterDedupService
 from oie.services.normalization_service import NormalizationService
 from oie.services.opportunity_dataset_export_service import OpportunityDatasetExportService
 from oie.services.opportunity_dataset_service import OpportunityDatasetService
 from oie.services.opportunity_scoring_service import OpportunityScoringService
+from oie.services.outbound_export_service import OutboundExportService
 from oie.services.persistence_service import PersistenceService
 from oie.services.provider_control_service import ProviderControlService
 
@@ -41,6 +43,7 @@ class PipelineOrchestrator:
         self.db_export_service = DBExportService(ctx)
         self.opportunity_dataset_service = OpportunityDatasetService(ctx)
         self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
+        self.outbound_export_service = OutboundExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
             ctx,
             self.provider_control_service,
@@ -53,6 +56,7 @@ class PipelineOrchestrator:
             ctx,
             self.provider_control_service,
         )
+        self.lead_ranking_service = LeadRankingService(ctx)
 
     def run_initial_stages(self) -> List[Dict[str, Any]]:
         jobs = self.collection_service.collect()
@@ -143,18 +147,21 @@ class PipelineOrchestrator:
 
         unique_jobs, companies, duplicate_jobs = self.run_company_pipeline()
         leads = self.lead_generation_service.generate_leads(companies)
+        ranked_leads = self.lead_ranking_service.rank_leads(leads)
+        best_leads = self.lead_ranking_service.select_best_lead_per_company(ranked_leads)
+
         status = "company_pipeline_completed"
 
         self.persistence_service.persist_run_snapshot(
             status=status,
             companies=companies,
             jobs=unique_jobs,
-            leads=leads,
+            leads=best_leads,
         )
 
         self.master_data_service.append_jobs(unique_jobs)
         self.master_data_service.append_companies(companies)
-        self.master_data_service.append_leads(leads)
+        self.master_data_service.append_leads(best_leads)
 
         duplicate_report_rows = self.master_dedup_service.build_suspected_duplicates_report(
             jobs_duplicates=duplicate_jobs,
@@ -167,6 +174,7 @@ class PipelineOrchestrator:
         top_dataset = self.opportunity_dataset_service.build_top_opportunities(limit=25)
         self.opportunity_dataset_export_service.export_dataset(dataset)
         self.opportunity_dataset_export_service.export_top_dataset(top_dataset)
+        self.outbound_export_service.export_all()
 
         return {
             "run_id": self.ctx.run_id,
@@ -174,7 +182,7 @@ class PipelineOrchestrator:
             "status": status,
             "jobs_count": len(unique_jobs),
             "companies_count": len(companies),
-            "leads_count": len(leads),
+            "leads_count": len(best_leads),
             "top_companies": companies[:5],
             "metrics": self.ctx.metrics,
             "budgets": self.ctx.budgets,
@@ -186,4 +194,6 @@ class PipelineOrchestrator:
             "leads_export": self.ctx.paths.get("leads_export"),
             "opportunities_export": self.ctx.paths.get("opportunities_export"),
             "top_opportunities_export": self.ctx.paths.get("top_opportunities_export"),
+            "apollo_import_csv": self.ctx.paths.get("apollo_import_csv"),
+            "top_opportunities_csv": self.ctx.paths.get("top_opportunities_csv"),
         }
