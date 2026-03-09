@@ -126,6 +126,8 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 contact_title TEXT,
                 email TEXT,
                 linkedin_url TEXT,
+                lead_source TEXT,
+                lead_confidence REAL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (run_id) REFERENCES runs (run_id),
                 FOREIGN KEY (company_key) REFERENCES companies (company_key)
@@ -193,12 +195,11 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
             """
         )
 
-        # Migraciones simples para bases ya existentes
-        existing_columns = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(companies)").fetchall()
-        }
-        required_columns = {
+        for row in conn.execute("PRAGMA table_info(companies)").fetchall():
+            pass
+
+        company_columns = {row["name"] for row in conn.execute("PRAGMA table_info(companies)").fetchall()}
+        required_company_columns = {
             "industry": "TEXT",
             "employee_range": "TEXT",
             "linkedin_company_url": "TEXT",
@@ -207,12 +208,18 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
             "enriched_at": "TEXT",
             "enrichment_source": "TEXT",
         }
+        for column_name, column_type in required_company_columns.items():
+            if column_name not in company_columns:
+                conn.execute(f"ALTER TABLE companies ADD COLUMN {column_name} {column_type}")
 
-        for column_name, column_type in required_columns.items():
-            if column_name not in existing_columns:
-                conn.execute(
-                    f"ALTER TABLE companies ADD COLUMN {column_name} {column_type}"
-                )
+        lead_columns = {row["name"] for row in conn.execute("PRAGMA table_info(leads)").fetchall()}
+        required_lead_columns = {
+            "lead_source": "TEXT",
+            "lead_confidence": "REAL",
+        }
+        for column_name, column_type in required_lead_columns.items():
+            if column_name not in lead_columns:
+                conn.execute(f"ALTER TABLE leads ADD COLUMN {column_name} {column_type}")
 
         conn.commit()
     finally:

@@ -29,6 +29,9 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
                 "resolved_domain": "acme.com",
                 "domain_source": "apply_url",
                 "domain_confidence": 0.9,
+                "industry": "Software",
+                "employee_range": "51-200",
+                "linkedin_company_url": "https://linkedin.com/company/acme",
                 "aliases": ["Acme Inc."],
                 "alias_type_map": {
                     "Acme Inc.": "acme",
@@ -62,6 +65,8 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
                 "contact_title": "CTO",
                 "email": "jane@acme.com",
                 "linkedin_url": "https://linkedin.com/in/janedoe",
+                "lead_source": "apollo_people",
+                "lead_confidence": 0.9,
             }
         ],
     )
@@ -80,6 +85,7 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
     assert dataset[0]["jobs_count"] == 1
     assert dataset[0]["email"] == "jane@acme.com"
     assert dataset[0]["opportunity_score"] == 42
-    assert dataset[0]["score_openings"] == 16
+    assert dataset[0]["industry"] == "Software"
+    assert dataset[0]["lead_source"] == "apollo_people"
     assert Path(ctx.paths["opportunities_export"]).exists()
     assert Path(ctx.paths["top_opportunities_export"]).exists()

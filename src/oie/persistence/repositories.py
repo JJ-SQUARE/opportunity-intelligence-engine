@@ -143,11 +143,7 @@ class CompanyRepository:
         finally:
             conn.close()
 
-    def find_by_normalized_and_domain(
-        self,
-        company_normalized: str,
-        resolved_domain: str | None,
-    ) -> Optional[Dict[str, Any]]:
+    def find_by_normalized_and_domain(self, company_normalized: str, resolved_domain: str | None) -> Optional[Dict[str, Any]]:
         conn = get_connection(self.db_path)
         try:
             row = conn.execute(
@@ -412,6 +408,7 @@ class LeadRepository:
                     run_id,
                     (lead.get("company_key") or "").strip(),
                     (lead.get("contact_name") or "").strip().lower(),
+                    (lead.get("contact_title") or "").strip().lower(),
                 ]
             )
         return f"lead_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
@@ -430,6 +427,8 @@ class LeadRepository:
                     lead.get("contact_title"),
                     lead.get("email"),
                     lead.get("linkedin_url"),
+                    lead.get("lead_source"),
+                    lead.get("lead_confidence"),
                 )
                 for lead in leads
             ]
@@ -444,9 +443,11 @@ class LeadRepository:
                         contact_name,
                         contact_title,
                         email,
-                        linkedin_url
+                        linkedin_url,
+                        lead_source,
+                        lead_confidence
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     rows,
                 )

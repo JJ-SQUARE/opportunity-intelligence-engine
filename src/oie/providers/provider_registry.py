@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from oie.providers.adapters.apollo_adapter import ApolloAdapter
+from oie.providers.adapters.hunter_adapter import HunterAdapter
 from oie.providers.adapters.openai_adapter import OpenAIAdapter
 from oie.providers.adapters.serpapi_adapter import SerpAPIAdapter
 from oie.providers.policies.budget_guard import BudgetGuard
@@ -23,6 +24,7 @@ class ProviderRegistry:
         self.register_client("openai", OpenAIAdapter(config=config.get("openai", {})))
         self.register_client("serpapi", SerpAPIAdapter(config=config.get("serpapi", {})))
         self.register_client("apollo", ApolloAdapter(config=config.get("apollo", {})))
+        self.register_client("hunter", HunterAdapter(config=config.get("hunter", {})))
 
     def register_budget(self, provider_name: str, max_calls: int) -> None:
         self.budgets[provider_name] = BudgetGuard(provider=provider_name, max_calls=max_calls)
@@ -36,8 +38,8 @@ class ProviderRegistry:
     def get_client(self, provider_name: str) -> Any:
         return self.clients.get(provider_name)
 
-    def get_budget(self, provider_name: str) -> BudgetGuard | None:
+    def get_budget(self, provider_name: str) -> Any:
         return self.budgets.get(provider_name)
 
-    def get_circuit_breaker(self, provider_name: str) -> CircuitBreaker | None:
+    def get_circuit_breaker(self, provider_name: str) -> Any:
         return self.circuit_breakers.get(provider_name)

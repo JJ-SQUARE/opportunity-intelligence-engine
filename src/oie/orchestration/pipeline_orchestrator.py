@@ -39,7 +39,6 @@ class PipelineOrchestrator:
         self.master_dedup_service = MasterDedupService(ctx)
         self.duplicate_report_service = DuplicateReportService(ctx)
         self.db_export_service = DBExportService(ctx)
-        self.lead_generation_service = LeadGenerationService(ctx)
         self.opportunity_dataset_service = OpportunityDatasetService(ctx)
         self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
@@ -47,6 +46,10 @@ class PipelineOrchestrator:
             self.provider_control_service,
         )
         self.company_enrichment_service = CompanyEnrichmentService(
+            ctx,
+            self.provider_control_service,
+        )
+        self.lead_generation_service = LeadGenerationService(
             ctx,
             self.provider_control_service,
         )

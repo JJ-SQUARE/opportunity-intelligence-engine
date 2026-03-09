@@ -23,6 +23,9 @@ class OpportunityDatasetService:
                     c.company_display,
                     c.company_normalized,
                     c.resolved_domain,
+                    c.industry,
+                    c.employee_range,
+                    c.linkedin_company_url,
                     COALESCE(MAX(j.title), '') AS sample_job_title,
                     COUNT(DISTINCT j.job_key) AS jobs_count,
                     COALESCE(MAX(cs.opportunity_score), 0) AS opportunity_score,
@@ -34,7 +37,9 @@ class OpportunityDatasetService:
                     COALESCE(MAX(l.contact_name), '') AS contact_name,
                     COALESCE(MAX(l.contact_title), '') AS contact_title,
                     COALESCE(MAX(l.email), '') AS email,
-                    COALESCE(MAX(l.linkedin_url), '') AS linkedin_url
+                    COALESCE(MAX(l.linkedin_url), '') AS linkedin_url,
+                    COALESCE(MAX(l.lead_source), '') AS lead_source,
+                    COALESCE(MAX(l.lead_confidence), 0) AS lead_confidence
                 FROM companies c
                 LEFT JOIN jobs j
                     ON j.company_key = c.company_key
@@ -46,7 +51,10 @@ class OpportunityDatasetService:
                     c.company_key,
                     c.company_display,
                     c.company_normalized,
-                    c.resolved_domain
+                    c.resolved_domain,
+                    c.industry,
+                    c.employee_range,
+                    c.linkedin_company_url
                 ORDER BY opportunity_score DESC, jobs_count DESC, c.company_display ASC
                 """
             ).fetchall()
