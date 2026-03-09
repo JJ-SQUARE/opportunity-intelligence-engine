@@ -222,3 +222,57 @@ def test_collection_service_collects_from_enabled_workable(monkeypatch):
     assert len(jobs) == 1
     assert jobs[0]["source"] == "workable"
     assert jobs[0]["title"] == "Backend Developer"
+
+
+def test_collection_service_collects_from_enabled_teamtailor(monkeypatch):
+    ctx = RunContext.create(
+        config={
+            "run": {
+                "num_pages": 3,
+                "sleep_s": 1.0,
+            },
+            "sources": {
+                "ats": {
+                    "teamtailor": {
+                        "enabled": True,
+                    }
+                }
+            },
+            "queries": [
+                {"name": "SE", "q": "python developer"},
+            ],
+        },
+        flags={},
+    )
+
+    service = CollectionService(ctx)
+    service._build_collectors()
+
+    teamtailor_collector = None
+    for collector in service.collector_runner.registry.all():
+        if collector.collector_name == "teamtailor":
+            teamtailor_collector = collector
+            break
+
+    assert teamtailor_collector is not None
+
+    def fake_load_legacy():
+        def fake_collect(**kwargs):
+            return [
+                {
+                    "title": "Full Stack Engineer",
+                    "company": "Sigma",
+                    "location": "Remote",
+                    "url": "https://sigma.teamtailor.com/jobs/123",
+                    "description": "Full stack role",
+                }
+            ]
+        return fake_collect
+
+    monkeypatch.setattr(teamtailor_collector, "_load_legacy_collector", fake_load_legacy)
+
+    jobs = service.collect()
+
+    assert len(jobs) == 1
+    assert jobs[0]["source"] == "teamtailor"
+    assert jobs[0]["title"] == "Full Stack Engineer"

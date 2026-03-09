@@ -7,6 +7,7 @@ from oie.collectors.greenhouse_ats_collector import GreenhouseATSCollector
 from oie.collectors.lever_ats_collector import LeverATSCollector
 from oie.collectors.linkedin_serpapi_collector import LinkedInSerpAPICollector
 from oie.collectors.static_jobs_collector import StaticJobsCollector
+from oie.collectors.teamtailor_ats_collector import TeamtailorATSCollector
 from oie.collectors.workable_ats_collector import WorkableATSCollector
 from oie.orchestration.run_context import RunContext
 from oie.services.collector_runner_service import CollectorRunnerService
@@ -36,6 +37,8 @@ class CollectionService:
             enabled.append("lever")
         if (ats.get("workable", {}) or {}).get("enabled", False):
             enabled.append("workable")
+        if (ats.get("teamtailor", {}) or {}).get("enabled", False):
+            enabled.append("teamtailor")
 
         return enabled
 
@@ -89,6 +92,14 @@ class CollectionService:
             ),
         }
 
+        teamtailor_config = {
+            "queries": queries,
+            "run": run_config,
+            "source_config": (
+                sources.get("ats", {}).get("teamtailor", {})
+            ),
+        }
+
         self.collector_runner.register_collectors(
             [
                 StaticJobsCollector(config=static_jobs_config),
@@ -97,6 +108,7 @@ class CollectionService:
                 GreenhouseATSCollector(config=greenhouse_config),
                 LeverATSCollector(config=lever_config),
                 WorkableATSCollector(config=workable_config),
+                TeamtailorATSCollector(config=teamtailor_config),
             ]
         )
 
