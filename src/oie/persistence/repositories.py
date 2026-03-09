@@ -342,9 +342,9 @@ class JobRepository:
         job_url = (job.get("job_url") or "").strip()
         apply_url = (job.get("apply_url") or "").strip()
         if job_url:
-            raw = f"job_url|{job_url}"
+            raw = f"{run_id}|job_url|{job_url}"
         elif apply_url:
-            raw = f"apply_url|{apply_url}"
+            raw = f"{run_id}|apply_url|{apply_url}"
         else:
             raw = "|".join(
                 [
@@ -410,7 +410,7 @@ class LeadRepository:
     def _build_lead_key(self, lead: Dict[str, Any], run_id: str) -> str:
         email = (lead.get("email") or "").strip().lower()
         if email:
-            raw = f"email|{email}"
+            raw = f"{run_id}|email|{email}"
         else:
             raw = "|".join(
                 [

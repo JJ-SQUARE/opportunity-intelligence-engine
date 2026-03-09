@@ -11,6 +11,8 @@ from oie.services.db_export_service import DBExportService
 from oie.services.domain_resolution_service import DomainResolutionService
 from oie.services.duplicate_report_service import DuplicateReportService
 from oie.services.executive_summary_service import ExecutiveSummaryService
+from oie.services.historical_export_service import HistoricalExportService
+from oie.services.historical_intelligence_service import HistoricalIntelligenceService
 from oie.services.hiring_signals_service import HiringSignalsService
 from oie.services.job_dedup_service import JobDedupService
 from oie.services.lead_generation_service import LeadGenerationService
@@ -46,6 +48,8 @@ class PipelineOrchestrator:
         self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
         self.outbound_export_service = OutboundExportService(ctx)
         self.executive_summary_service = ExecutiveSummaryService(ctx)
+        self.historical_intelligence_service = HistoricalIntelligenceService(ctx)
+        self.historical_export_service = HistoricalExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
             ctx,
             self.provider_control_service,
@@ -181,6 +185,12 @@ class PipelineOrchestrator:
         summary = self.executive_summary_service.build_summary(companies, best_leads)
         self.executive_summary_service.write_summary(summary)
 
+        historical_rows = self.historical_intelligence_service.build_company_hiring_history()
+        growth_rows = self.historical_intelligence_service.build_company_growth_summary()
+        self.historical_export_service.export_company_history(historical_rows)
+        self.historical_export_service.export_growth_summary(growth_rows)
+        self.historical_export_service.export_summary_json(growth_rows)
+
         return {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
@@ -202,4 +212,7 @@ class PipelineOrchestrator:
             "apollo_import_csv": self.ctx.paths.get("apollo_import_csv"),
             "top_opportunities_csv": self.ctx.paths.get("top_opportunities_csv"),
             "executive_summary_json": self.ctx.paths.get("executive_summary_json"),
+            "historical_company_hiring_csv": self.ctx.paths.get("historical_company_hiring_csv"),
+            "historical_growth_summary_csv": self.ctx.paths.get("historical_growth_summary_csv"),
+            "historical_summary_json": self.ctx.paths.get("historical_summary_json"),
         }
