@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
 from oie.persistence.sqlite import initialize_database
+from oie.services.cached_provider_service import CachedProviderService
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.provider_execution_service import (
     ProviderExecutionBlockedError,
@@ -23,6 +24,7 @@ class CompanyEnrichmentService:
         self.ctx = ctx
         self.provider_control_service = provider_control_service
         self.provider_execution_service = ProviderExecutionService(ctx, provider_control_service)
+        self.cached_provider_service = CachedProviderService(ctx)
         self.db_path = self.ctx.config.get("database", {}).get("path", "data/oie.db")
         self.ttl_days = int(
             self.ctx.config.get("enrichment", {}).get("apollo_company_ttl_days", 30)
@@ -104,16 +106,21 @@ class CompanyEnrichmentService:
                 continue
 
             try:
-                payload = self.provider_execution_service.execute(
-                    "apollo",
-                    "enrich_company_by_domain",
-                    client.enrich_company_by_domain,
-                    domain,
-                    cost=1,
+                payload = self.cached_provider_service.execute_cached(
+                    namespace="apollo_company_enrichment",
+                    cache_payload={"domain": domain},
+                    fn=lambda: self.provider_execution_service.execute(
+                        "apollo",
+                        "enrich_company_by_domain",
+                        client.enrich_company_by_domain,
+                        domain,
+                        cost=1,
+                    ),
                 )
-                mapped = self._map_apollo_payload(payload)
-                record.update(mapped)
-                enriched_count += 1
+                if payload:
+                    mapped = self._map_apollo_payload(payload)
+                    record.update(mapped)
+                    enriched_count += 1
             except (ProviderExecutionBlockedError, ProviderExecutionError, ValueError):
                 pass
 

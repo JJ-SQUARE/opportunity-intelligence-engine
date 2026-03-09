@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.services.cached_provider_service import CachedProviderService
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.provider_execution_service import (
     ProviderExecutionBlockedError,
@@ -37,6 +38,7 @@ class LeadGenerationService:
         self.ctx = ctx
         self.provider_control_service = provider_control_service
         self.provider_execution_service = ProviderExecutionService(ctx, provider_control_service)
+        self.cached_provider_service = CachedProviderService(ctx)
 
     def _is_relevant_title(self, title: str) -> bool:
         value = (title or "").strip().lower()
@@ -107,13 +109,17 @@ class LeadGenerationService:
             return []
 
         try:
-            payload = self.provider_execution_service.execute(
-                "apollo",
-                "search_people_by_domain_and_titles",
-                client.search_people_by_domain_and_titles,
-                domain,
-                TARGET_TITLES,
-                cost=1,
+            payload = self.cached_provider_service.execute_cached(
+                namespace="apollo_people_search",
+                cache_payload={"domain": domain, "titles": TARGET_TITLES},
+                fn=lambda: self.provider_execution_service.execute(
+                    "apollo",
+                    "search_people_by_domain_and_titles",
+                    client.search_people_by_domain_and_titles,
+                    domain,
+                    TARGET_TITLES,
+                    cost=1,
+                ),
             )
         except (ProviderExecutionBlockedError, ProviderExecutionError, ValueError):
             return []
@@ -131,12 +137,16 @@ class LeadGenerationService:
             return []
 
         try:
-            payload = self.provider_execution_service.execute(
-                "hunter",
-                "search_domain_contacts",
-                client.search_domain_contacts,
-                domain,
-                cost=1,
+            payload = self.cached_provider_service.execute_cached(
+                namespace="hunter_domain_search",
+                cache_payload={"domain": domain},
+                fn=lambda: self.provider_execution_service.execute(
+                    "hunter",
+                    "search_domain_contacts",
+                    client.search_domain_contacts,
+                    domain,
+                    cost=1,
+                ),
             )
         except (ProviderExecutionBlockedError, ProviderExecutionError, ValueError):
             return []

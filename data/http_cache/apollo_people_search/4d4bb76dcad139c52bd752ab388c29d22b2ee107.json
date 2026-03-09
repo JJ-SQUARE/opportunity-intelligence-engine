@@ -1,0 +1,10 @@
+{
+  "people": [
+    {
+      "name": "Jane Doe",
+      "title": "CTO",
+      "email": "jane@acme.com",
+      "linkedin_url": "https://linkedin.com/in/janedoe"
+    }
+  ]
+}

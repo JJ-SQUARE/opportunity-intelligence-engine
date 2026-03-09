@@ -3,9 +3,10 @@ from oie.services.lead_generation_service import LeadGenerationService
 from oie.services.provider_control_service import ProviderControlService
 
 
-def test_lead_generation_service_uses_apollo_people_search():
+def test_lead_generation_service_uses_apollo_people_search(tmp_path):
     ctx = RunContext.create(
         config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
             "providers": {
                 "limits": {"apollo": 5, "hunter": 5},
                 "clients": {
@@ -47,9 +48,10 @@ def test_lead_generation_service_uses_apollo_people_search():
     assert ctx.metrics["leads_generated"] == 1
 
 
-def test_lead_generation_service_falls_back_to_hunter():
+def test_lead_generation_service_falls_back_to_hunter(tmp_path):
     ctx = RunContext.create(
         config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
             "providers": {
                 "limits": {"apollo": 5, "hunter": 5},
                 "clients": {
@@ -95,8 +97,11 @@ def test_lead_generation_service_falls_back_to_hunter():
     assert leads[0]["email"] == "vp@acme.com"
 
 
-def test_lead_generation_service_respects_no_enrichment():
-    ctx = RunContext.create(config={}, flags={"no_enrichment": True})
+def test_lead_generation_service_respects_no_enrichment(tmp_path):
+    ctx = RunContext.create(
+        config={"cache": {"base_dir": str(tmp_path / "http_cache")}},
+        flags={"no_enrichment": True},
+    )
     control = ProviderControlService(ctx)
     control.initialize()
 
