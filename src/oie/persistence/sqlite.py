@@ -63,6 +63,9 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 company_size TEXT,
                 enriched_at TEXT,
                 enrichment_source TEXT,
+                company_type_ai TEXT,
+                classification_confidence_ai REAL,
+                classification_provider TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -195,9 +198,6 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
             """
         )
 
-        for row in conn.execute("PRAGMA table_info(companies)").fetchall():
-            pass
-
         company_columns = {row["name"] for row in conn.execute("PRAGMA table_info(companies)").fetchall()}
         required_company_columns = {
             "industry": "TEXT",
@@ -207,6 +207,9 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
             "company_size": "TEXT",
             "enriched_at": "TEXT",
             "enrichment_source": "TEXT",
+            "company_type_ai": "TEXT",
+            "classification_confidence_ai": "REAL",
+            "classification_provider": "TEXT",
         }
         for column_name, column_type in required_company_columns.items():
             if column_name not in company_columns:

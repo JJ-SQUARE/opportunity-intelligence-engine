@@ -31,12 +31,11 @@ class OutboundExportService:
 
         return str(output_path)
 
-    def _load_dataset(self) -> List[Dict[str, object]]:
+    def _load_dataset(self, company_types: List[str] | None = None) -> List[Dict[str, object]]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         try:
-            rows = conn.execute(
-                """
+            sql = """
                 SELECT
                     c.company_key,
                     c.company_display,
@@ -44,6 +43,9 @@ class OutboundExportService:
                     c.industry,
                     c.employee_range,
                     c.linkedin_company_url,
+                    c.company_description,
+                    c.company_type_ai,
+                    c.classification_confidence_ai,
                     COALESCE(MAX(cs.opportunity_score), 0) AS opportunity_score,
                     COALESCE(MAX(l.contact_name), '') AS contact_name,
                     COALESCE(MAX(l.contact_title), '') AS contact_title,
@@ -51,20 +53,7 @@ class OutboundExportService:
                     COALESCE(MAX(l.linkedin_url), '') AS linkedin_url,
                     COALESCE(MAX(l.lead_source), '') AS lead_source,
                     COALESCE(MAX(l.lead_confidence), 0) AS lead_confidence,
-                    COALESCE(MAX(c.company_description), '') AS company_description,
-                    COALESCE(MAX(j.title), '') AS sample_job_title,
-                    COALESCE(MAX(c.enrichment_source), '') AS enrichment_source,
-                    COALESCE(MAX(c.company_size), '') AS company_size,
-                    COALESCE(MAX(c.employee_range), '') AS employee_range_dup,
-                    COALESCE(MAX(c.company_normalized), '') AS company_normalized,
-                    COALESCE(MAX(c.company_display), '') AS company_display_dup,
-                    COALESCE(MAX(c.resolved_domain), '') AS resolved_domain_dup,
-                    COALESCE(MAX(c.industry), '') AS industry_dup,
-                    COALESCE(MAX(c.linkedin_company_url), '') AS linkedin_company_url_dup,
-                    COALESCE(MAX(c.company_description), '') AS company_description_dup,
-                    COALESCE(MAX(c.company_size), '') AS company_size_dup,
-                    COALESCE(MAX(c.employee_range), '') AS employee_range_dup2,
-                    COALESCE(MAX(j.company), '') AS company_label
+                    COALESCE(MAX(j.title), '') AS sample_job_title
                 FROM companies c
                 LEFT JOIN company_scores cs
                     ON cs.company_key = c.company_key
@@ -72,21 +61,33 @@ class OutboundExportService:
                     ON l.company_key = c.company_key
                 LEFT JOIN jobs j
                     ON j.company_key = c.company_key
+            """
+            params: tuple = ()
+
+            if company_types:
+                placeholders = ",".join("?" for _ in company_types)
+                sql += f" WHERE c.company_type_ai IN ({placeholders}) "
+                params = tuple(company_types)
+
+            sql += """
                 GROUP BY
                     c.company_key,
                     c.company_display,
                     c.resolved_domain,
                     c.industry,
                     c.employee_range,
-                    c.linkedin_company_url
+                    c.linkedin_company_url,
+                    c.company_description,
+                    c.company_type_ai,
+                    c.classification_confidence_ai
                 ORDER BY opportunity_score DESC, c.company_display ASC
-                """
-            ).fetchall()
+            """
+
+            rows = conn.execute(sql, params).fetchall()
         finally:
             conn.close()
 
-        dataset = [dict(row) for row in rows]
-        return dataset
+        return [dict(row) for row in rows]
 
     def export_top_opportunities(self, limit: int = 50) -> str:
         rows = self._load_dataset()[:limit]
@@ -95,56 +96,8 @@ class OutboundExportService:
         return path
 
     def export_company_segment(self, segment_name: str, company_types: List[str]) -> str:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            placeholders = ",".join("?" for _ in company_types)
-            rows = conn.execute(
-                f"""
-                SELECT
-                    c.company_key,
-                    c.company_display,
-                    c.resolved_domain,
-                    c.industry,
-                    c.employee_range,
-                    c.linkedin_company_url,
-                    COALESCE(MAX(cs.opportunity_score), 0) AS opportunity_score,
-                    COALESCE(MAX(l.contact_name), '') AS contact_name,
-                    COALESCE(MAX(l.contact_title), '') AS contact_title,
-                    COALESCE(MAX(l.email), '') AS email,
-                    COALESCE(MAX(l.linkedin_url), '') AS linkedin_url,
-                    COALESCE(MAX(l.lead_source), '') AS lead_source,
-                    COALESCE(MAX(l.lead_confidence), 0) AS lead_confidence,
-                    COALESCE(MAX(j.title), '') AS sample_job_title,
-                    COALESCE(MAX(c.company_description), '') AS company_description
-                FROM companies c
-                LEFT JOIN company_scores cs
-                    ON cs.company_key = c.company_key
-                LEFT JOIN leads l
-                    ON l.company_key = c.company_key
-                LEFT JOIN jobs j
-                    ON j.company_key = c.company_key
-                WHERE EXISTS (
-                    SELECT 1
-                    FROM jobs j2
-                    WHERE j2.company_key = c.company_key
-                )
-                GROUP BY
-                    c.company_key,
-                    c.company_display,
-                    c.resolved_domain,
-                    c.industry,
-                    c.employee_range,
-                    c.linkedin_company_url
-                ORDER BY opportunity_score DESC, c.company_display ASC
-                """,
-                tuple(),
-            ).fetchall()
-        finally:
-            conn.close()
-
-        # Filtrado por company_type_ai en dataset no persistido aún; usaremos heurística por score_company_type después.
-        path = self._write_csv(f"{segment_name}.csv", [dict(row) for row in rows])
+        rows = self._load_dataset(company_types=company_types)
+        path = self._write_csv(f"{segment_name}.csv", rows)
         self.ctx.paths[f"{segment_name}_csv"] = path
         return path
 

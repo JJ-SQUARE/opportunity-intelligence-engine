@@ -30,6 +30,9 @@ def test_outbound_export_service_writes_files(tmp_path):
                 "employee_range": "51-200",
                 "linkedin_company_url": "https://linkedin.com/company/acme",
                 "company_description": "Builds software",
+                "company_type_ai": "end_client",
+                "classification_confidence_ai": 0.9,
+                "classification_provider": "rules",
                 "aliases": ["Acme Inc."],
                 "alias_type_map": {
                     "Acme Inc.": "acme",

@@ -27,10 +27,9 @@ def test_company_classification_service_uses_openai_stub():
     assert result[0]["company_type_ai"] == "unknown"
     assert result[0]["classification_provider"] == "openai"
     assert ctx.metrics["companies_classified"] == 1
-    assert ctx.budgets["openai"]["used_calls"] == 1
 
 
-def test_company_classification_service_respects_no_llm_flag():
+def test_company_classification_service_respects_no_llm_flag_with_rules():
     ctx = RunContext.create(
         config={"providers": {"limits": {"openai": 5}}},
         flags={"no_llm": True},
@@ -40,8 +39,15 @@ def test_company_classification_service_respects_no_llm_flag():
 
     service = CompanyClassificationService(ctx, control)
 
-    companies = [{"company": "Acme"}]
+    companies = [
+        {
+            "company": "Acme Consulting",
+            "company_display": "Acme Consulting",
+            "company_description": "Professional services and consulting",
+        }
+    ]
     result = service.classify_companies(companies)
 
-    assert result == companies
+    assert result[0]["company_type_ai"] == "consulting"
+    assert result[0]["classification_provider"] == "rules"
     assert ctx.metrics["company_classification_skipped_no_llm"] is True

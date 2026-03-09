@@ -102,9 +102,12 @@ class CompanyRepository:
                     company_size,
                     enriched_at,
                     enrichment_source,
+                    company_type_ai,
+                    classification_confidence_ai,
+                    classification_provider,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(company_key) DO UPDATE SET
                     company_display = excluded.company_display,
                     company_normalized = excluded.company_normalized,
@@ -118,6 +121,9 @@ class CompanyRepository:
                     company_size = COALESCE(excluded.company_size, companies.company_size),
                     enriched_at = COALESCE(excluded.enriched_at, companies.enriched_at),
                     enrichment_source = COALESCE(excluded.enrichment_source, companies.enrichment_source),
+                    company_type_ai = COALESCE(excluded.company_type_ai, companies.company_type_ai),
+                    classification_confidence_ai = COALESCE(excluded.classification_confidence_ai, companies.classification_confidence_ai),
+                    classification_provider = COALESCE(excluded.classification_provider, companies.classification_provider),
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 [
@@ -135,6 +141,9 @@ class CompanyRepository:
                         company.get("company_size"),
                         company.get("enriched_at"),
                         company.get("enrichment_source"),
+                        company.get("company_type_ai"),
+                        company.get("classification_confidence_ai"),
+                        company.get("classification_provider"),
                     )
                     for company in companies
                 ],
