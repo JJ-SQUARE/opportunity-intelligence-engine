@@ -13,3 +13,5 @@ def test_orchestrator_has_initial_stages():
     assert orchestrator.company_identity_service is not None
     assert orchestrator.domain_resolution_service is not None
     assert orchestrator.opportunity_scoring_service is not None
+    assert orchestrator.persistence_service is not None
+    assert orchestrator.provider_control_service is not None

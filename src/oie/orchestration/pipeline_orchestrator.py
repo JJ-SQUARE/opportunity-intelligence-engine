@@ -11,6 +11,7 @@ from oie.services.job_dedup_service import JobDedupService
 from oie.services.normalization_service import NormalizationService
 from oie.services.opportunity_scoring_service import OpportunityScoringService
 from oie.services.persistence_service import PersistenceService
+from oie.services.provider_control_service import ProviderControlService
 
 
 class PipelineOrchestrator:
@@ -24,6 +25,7 @@ class PipelineOrchestrator:
         self.domain_resolution_service = DomainResolutionService(ctx)
         self.opportunity_scoring_service = OpportunityScoringService(ctx)
         self.persistence_service = PersistenceService(ctx)
+        self.provider_control_service = ProviderControlService(ctx)
 
     def run_initial_stages(self) -> List[Dict[str, Any]]:
         jobs = self.collection_service.collect()
@@ -40,6 +42,9 @@ class PipelineOrchestrator:
         return companies
 
     def run(self) -> Dict[str, Any]:
+        self.provider_control_service.initialize()
+        self.provider_control_service.sync_budget_metrics()
+
         companies = self.run_company_pipeline()
         status = "company_pipeline_completed"
 
@@ -52,5 +57,6 @@ class PipelineOrchestrator:
             "companies_count": len(companies),
             "top_companies": companies[:5],
             "metrics": self.ctx.metrics,
+            "budgets": self.ctx.budgets,
             "db_path": self.ctx.paths.get("db_path"),
         }

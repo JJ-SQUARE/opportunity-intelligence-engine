@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -14,6 +14,7 @@ class RunContext:
     budgets: Dict[str, Any] = field(default_factory=dict)
     metrics: Dict[str, Any] = field(default_factory=dict)
     provider_state: Dict[str, Any] = field(default_factory=dict)
+    provider_events: List[Dict[str, Any]] = field(default_factory=list)
     paths: Dict[str, str] = field(default_factory=dict)
     mode: str = "normal"
 
@@ -40,4 +41,20 @@ class RunContext:
             flags=flags,
             paths=paths,
             mode=mode,
+        )
+
+    def add_provider_event(
+        self,
+        provider: str,
+        event_type: str,
+        message: str,
+        metadata: Dict[str, Any] | None = None,
+    ) -> None:
+        self.provider_events.append(
+            {
+                "provider": provider,
+                "event_type": event_type,
+                "message": message,
+                "metadata": metadata or {},
+            }
         )
