@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from oie.collectors.google_jobs_collector import GoogleJobsCollector
+from oie.collectors.linkedin_serpapi_collector import LinkedInSerpAPICollector
 from oie.collectors.static_jobs_collector import StaticJobsCollector
 from oie.orchestration.run_context import RunContext
 from oie.services.collector_runner_service import CollectorRunnerService
@@ -20,6 +21,11 @@ class CollectionService:
 
         if (sources.get("google_jobs", {}) or {}).get("enabled", False):
             enabled.append("google_jobs")
+
+        discovery = sources.get("discovery", {}) or {}
+
+        if (discovery.get("linkedin_serpapi", {}) or {}).get("enabled", False):
+            enabled.append("linkedin_serpapi")
 
         return enabled
 
@@ -41,12 +47,22 @@ class CollectionService:
             "source_config": sources.get("google_jobs", {}) or {},
         }
 
+        linkedin_config = {
+            "queries": queries,
+            "run": run_config,
+            "source_config": (
+                sources.get("discovery", {}).get("linkedin_serpapi", {})
+            ),
+        }
+
         self.collector_runner.register_collectors(
             [
                 StaticJobsCollector(config=static_jobs_config),
                 GoogleJobsCollector(config=google_jobs_config),
+                LinkedInSerpAPICollector(config=linkedin_config),
             ]
         )
+
         self._collectors_built = True
 
     def collect(self) -> List[Dict[str, Any]]:
@@ -57,4 +73,5 @@ class CollectionService:
 
         self.ctx.metrics["jobs_collected_raw"] = len(jobs)
         self.ctx.metrics["collect_completed"] = True
+
         return jobs
