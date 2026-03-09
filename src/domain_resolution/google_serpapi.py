@@ -13,8 +13,7 @@ BLOCKLIST = {
     "facebook.com", "twitter.com", "x.com", "instagram.com",
     "wikipedia.org", "crunchbase.com", "bloomberg.com",
     "dice.com", "nofluffjobs.com", "workable.com",
-    "greenhouse.io", "lever.co", "ashbyhq.com",
-    "myworkdayjobs.com", "taleo.net", "icims.com",
+    "greenhouse.io", "lever.co", "ashbyhq.com", "crossover.com",
 }
 
 COMMON_SUBDOMAINS = {"jobs", "careers", "boards", "apply", "join"}

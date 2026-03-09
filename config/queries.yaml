@@ -12,9 +12,7 @@ sources:
     enabled: true
     location_mode: "matrix"   # matrix = queries x locations
     locations:
-      - "Canada"
-      - "United States"
-      - "Mexico"
+      - "Ecuador"
 
   discovery:
     linkedin_serpapi:
@@ -64,10 +62,14 @@ llm:
 
 queries:
   - name: "SE"
-    q: "software engineer contract remote"
+    q: "desarrollador remoto"
+
+  - name: "Angular"
+    q: "angular frontend remoto"
 
 domain_resolution:
   enabled: true
+  mode: "serpapi"   # <- importante
   top_n: 50
 
 sales_intel:
@@ -115,8 +117,8 @@ enrichment:
 
   # Solo enriquecer empresas que pasen este filtro
   filters:
-    min_score: 8
-    vendor_prob_min: 70
+    min_score: 0
+    vendor_prob_min: 0
     require_not_us_only: true
 
   # Cuántas empresas máximo enriquecer por corrida

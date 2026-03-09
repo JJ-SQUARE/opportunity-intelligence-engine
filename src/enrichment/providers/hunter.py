@@ -1,16 +1,8 @@
-import os
-import time
-from typing import Any, Dict, List, Optional
-
-import requests
-
-
-HUNTER_DOMAIN_SEARCH_URL = "https://api.hunter.io/v2/domain-search"
-
+# src/enrichment/providers/hunter.py
 
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import List, Any, Dict, Optional
 
 import requests
 

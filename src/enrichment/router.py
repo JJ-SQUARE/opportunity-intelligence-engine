@@ -1,6 +1,8 @@
+# src/enrichment/router.py
 from typing import Any, Dict, List
 
 from enrichment.providers.hunter import hunter_domain_search, extract_leads_from_hunter_response
+from domain_resolution.google_serpapi import is_blocked_domain
 
 
 def enrich_company(company_obj: Dict[str, Any], enrichment_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -9,8 +11,9 @@ def enrich_company(company_obj: Dict[str, Any], enrichment_cfg: Dict[str, Any]) 
     leads: List[Dict[str, Any]] = []
 
     domain = company_obj.get("resolved_domain") or company_obj.get("domain_guess")
-    if not domain:
-        return leads
+    domain = domain.strip().lower() if domain else None
+    if domain and is_blocked_domain(domain):
+        return []
 
     if hunter_cfg.get("enabled", False):
         try:
