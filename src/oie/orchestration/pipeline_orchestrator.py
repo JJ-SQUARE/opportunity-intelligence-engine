@@ -34,6 +34,8 @@ from oie.services.opportunity_scoring_service import OpportunityScoringService
 from oie.services.outbound_export_service import OutboundExportService
 from oie.services.persistence_service import PersistenceService
 from oie.services.provider_control_service import ProviderControlService
+from oie.services.run_readiness_export_service import RunReadinessExportService
+from oie.services.run_readiness_service import RunReadinessService
 
 
 class PipelineOrchestrator:
@@ -66,6 +68,8 @@ class PipelineOrchestrator:
         self.collector_contribution_export_service = CollectorContributionExportService(ctx)
         self.collector_roi_service = CollectorROIService(ctx)
         self.collector_roi_export_service = CollectorROIExportService(ctx)
+        self.run_readiness_service = RunReadinessService(ctx)
+        self.run_readiness_export_service = RunReadinessExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
             ctx,
             self.provider_control_service,
@@ -237,6 +241,13 @@ class PipelineOrchestrator:
         self.collector_roi_export_service.export_csv(collector_roi)
         self.collector_roi_export_service.export_json(collector_roi)
 
+        readiness_report = self.run_readiness_service.build_report(
+            jobs=unique_jobs,
+            companies=companies,
+            leads=best_leads,
+        )
+        self.run_readiness_export_service.export_json(readiness_report)
+
         return {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
@@ -269,4 +280,5 @@ class PipelineOrchestrator:
             "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
             "collector_roi_metrics_csv": self.ctx.paths.get("collector_roi_metrics_csv"),
             "collector_roi_metrics_json": self.ctx.paths.get("collector_roi_metrics_json"),
+            "run_readiness_report_json": self.ctx.paths.get("run_readiness_report_json"),
         }
