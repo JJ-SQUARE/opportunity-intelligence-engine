@@ -8,6 +8,8 @@ from oie.services.collector_contribution_export_service import CollectorContribu
 from oie.services.collector_contribution_service import CollectorContributionService
 from oie.services.collector_metrics_export_service import CollectorMetricsExportService
 from oie.services.collector_metrics_service import CollectorMetricsService
+from oie.services.collector_roi_export_service import CollectorROIExportService
+from oie.services.collector_roi_service import CollectorROIService
 from oie.services.company_classification_service import CompanyClassificationService
 from oie.services.company_enrichment_service import CompanyEnrichmentService
 from oie.services.company_identity_service import CompanyIdentityService
@@ -62,6 +64,8 @@ class PipelineOrchestrator:
         self.collector_metrics_export_service = CollectorMetricsExportService(ctx)
         self.collector_contribution_service = CollectorContributionService(ctx)
         self.collector_contribution_export_service = CollectorContributionExportService(ctx)
+        self.collector_roi_service = CollectorROIService(ctx)
+        self.collector_roi_export_service = CollectorROIExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
             ctx,
             self.provider_control_service,
@@ -224,6 +228,15 @@ class PipelineOrchestrator:
         self.collector_contribution_export_service.export_csv(collector_contribution)
         self.collector_contribution_export_service.export_json(collector_contribution)
 
+        collector_roi = self.collector_roi_service.build_roi_metrics(
+            unique_jobs=unique_jobs,
+            duplicate_jobs=duplicate_jobs,
+            companies=companies,
+            leads=best_leads,
+        )
+        self.collector_roi_export_service.export_csv(collector_roi)
+        self.collector_roi_export_service.export_json(collector_roi)
+
         return {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
@@ -254,4 +267,6 @@ class PipelineOrchestrator:
             "market_trends_summary_json": self.ctx.paths.get("market_trends_summary_json"),
             "collector_contribution_metrics_csv": self.ctx.paths.get("collector_contribution_metrics_csv"),
             "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
+            "collector_roi_metrics_csv": self.ctx.paths.get("collector_roi_metrics_csv"),
+            "collector_roi_metrics_json": self.ctx.paths.get("collector_roi_metrics_json"),
         }
