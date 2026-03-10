@@ -7,12 +7,18 @@ runs:
   base_dir: "runs"
   run_id_format: "%Y-%m-%d_%H%M"
 
+database:
+  path: "data/oie.db"
+
+cache:
+  base_dir: "data/http_cache"
+
 sources:
   google_jobs:
     enabled: true
-    location_mode: "matrix"   # matrix = queries x locations
+    location_mode: "matrix"
     locations:
-      - "Ecuador"
+      - "United States"
 
   discovery:
     linkedin_serpapi:
@@ -21,55 +27,83 @@ sources:
       sleep_s: 1.0
       gl: "us"
       hl: "en"
+
     indeed_serpapi:
       enabled: false
       num_pages: 5
       sleep_s: 1.0
 
-    career_pages_serpapi: { enabled: false }
+    career_pages_serpapi:
+      enabled: false
+      num_pages: 5
+      sleep_s: 1.0
 
   ats:
-    greenhouse: { enabled: false }
-    lever: { enabled: false }
-    smartrecruiters: { enabled: false }
-    workable: { enabled: false }
-    ashby: { enabled: false }
-    teamtailor: { enabled: false }
-    recruitee: { enabled: false }
+    greenhouse:
+      enabled: false
+
+    lever:
+      enabled: false
+
+    smartrecruiters:
+      enabled: false
+
+    workable:
+      enabled: false
+
+    ashby:
+      enabled: false
+
+    teamtailor:
+      enabled: false
+
+    recruitee:
+      enabled: false
+
+    breezy:
+      enabled: false
 
   enterprise_ats:
-    workday: { enabled: false }
-    icims: { enabled: false }
-    taleo: { enabled: false }
-    successfactors: { enabled: false }
-    brassring: { enabled: false }
-    oracle: { enabled: false }
-    jobvite: { enabled: false }
-    phenom: { enabled: false }
-    eightfold: { enabled: false }
-    ukg: { enabled: false }
-    adp: { enabled: false }
-    cornerstone: { enabled: false }
-
+    workday:
+      enabled: false
+    icims:
+      enabled: false
+    taleo:
+      enabled: false
+    successfactors:
+      enabled: false
+    brassring:
+      enabled: false
+    oracle:
+      enabled: false
+    jobvite:
+      enabled: false
+    phenom:
+      enabled: false
+    eightfold:
+      enabled: false
+    ukg:
+      enabled: false
+    adp:
+      enabled: false
+    cornerstone:
+      enabled: false
 
 llm:
   enabled: true
-  provider: "openai"          # openai | gemini
+  provider: "openai"
   model: "gpt-4.1-mini"
   temperature: 0.2
   top_n: 20
   cache_path: "data/processed/company_ai_cache.json"
 
 queries:
-  - name: "SE"
-    q: "desarrollador remoto"
-
-  - name: "Angular"
-    q: "angular frontend remoto"
+  - name: "General"
+    q: "remote"
 
 domain_resolution:
   enabled: true
-  mode: "serpapi"   # <- importante
+  mode: "serpapi"
   top_n: 50
 
 sales_intel:
@@ -90,10 +124,9 @@ sales_intel:
     min_openings: 2
 
   segmentation:
-    mode: "split"   # split | exclude | include_all
-    partner_types: [ "consulting", "staffing_agency" ]
-    competitive_types: [ "staffing_agency" ]
-
+    mode: "split"
+    partner_types: ["consulting", "staffing_agency"]
+    competitive_types: ["staffing_agency"]
     allow_unknown_end_clients: true
     unknown_min_score: 16
     unknown_min_vendor_prob: 70
@@ -105,29 +138,28 @@ sales_intel:
 
 enrichment:
   enabled: true
+
   providers:
     hunter:
       enabled: true
       api_key_env: "HUNTER_API_KEY"
       rate_limit_sleep_s: 1.0
+
     apollo:
       enabled: false
       api_key_env: "APOLLO_API_KEY"
       rate_limit_sleep_s: 1.0
 
-  # Solo enriquecer empresas que pasen este filtro
   filters:
     min_score: 0
     vendor_prob_min: 0
     require_not_us_only: true
 
-  # Cuántas empresas máximo enriquecer por corrida
   limits:
     max_companies: 25
 
-
-
 outputs:
+  path: "data/outputs"
   jobs_csv: "data/processed/jobs_enriched.csv"
   companies_csv: "data/processed/companies_scored.csv"
   enrichment_input_csv: "data/processed/enrichment_input.csv"

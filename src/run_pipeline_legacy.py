@@ -328,12 +328,16 @@ def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         eligible = eligible[:max_companies]
         print(f"Enrichment: eligible companies = {len(eligible)}")
-        print(
-            f"[enrichment] company='{c.get('company')}' domain='{c.get('resolved_domain')}' score={c.get('score')} vendor_prob={c.get('vendor_acceptance_probability_ai')}")
-
-        for c in eligible:
-            leads = enrich_company(c, enrichment_cfg)
-            all_leads.extend(leads)
+        if eligible:
+            for c in eligible:
+                print(
+                    f"[enrichment] company='{c.get('company')}' domain='{c.get('resolved_domain')}' "
+                    f"score={c.get('score')} vendor_prob={c.get('vendor_acceptance_probability_ai')}"
+                )
+                leads = enrich_company(c, enrichment_cfg)
+                all_leads.extend(leads)
+        else:
+            print("[enrichment] no companies eligible for enrichment")
 
         out_leads = export_leads_csv(all_leads, leads_csv)
         print(f"Saved leads to {out_leads}")
