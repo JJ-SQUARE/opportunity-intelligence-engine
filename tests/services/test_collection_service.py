@@ -316,3 +316,39 @@ def test_collection_service_collects_from_enabled_breezy(monkeypatch):
     assert len(jobs) == 1
     assert jobs[0]["source"] == "breezy"
     assert jobs[0]["title"] == "QA Engineer"
+
+
+def test_collection_service_collects_from_enabled_smartrecruiters(monkeypatch):
+    ctx = RunContext.create(
+        config={
+            "run": {"num_pages": 3, "sleep_s": 1.0},
+            "sources": {"ats": {"smartrecruiters": {"enabled": True}}},
+            "queries": [{"name": "SE", "q": "python developer"}],
+        },
+        flags={},
+    )
+
+    service = CollectionService(ctx)
+    service._build_collectors()
+
+    collector = next(c for c in service.collector_runner.registry.all() if c.collector_name == "smartrecruiters")
+
+    def fake_load_legacy():
+        def fake_collect(**kwargs):
+            return [
+                {
+                    "title": "Platform Engineer",
+                    "company": "Theta",
+                    "location": "Remote",
+                    "url": "https://jobs.smartrecruiters.com/Theta/123",
+                    "description": "Platform role",
+                }
+            ]
+        return fake_collect
+
+    monkeypatch.setattr(collector, "_load_legacy_collector", fake_load_legacy)
+    jobs = service.collect()
+
+    assert len(jobs) == 1
+    assert jobs[0]["source"] == "smartrecruiters"
+    assert jobs[0]["title"] == "Platform Engineer"
