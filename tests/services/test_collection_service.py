@@ -94,6 +94,50 @@ def test_collection_service_collects_from_enabled_indeed(monkeypatch):
     assert jobs[0]["title"] == "Data Analyst"
 
 
+def test_collection_service_collects_from_enabled_career_pages(monkeypatch):
+    ctx = RunContext.create(
+        config={
+            "run": {"num_pages": 3, "sleep_s": 1.0},
+            "sources": {
+                "discovery": {
+                    "career_pages_serpapi": {
+                        "enabled": True,
+                        "num_pages": 5,
+                        "sleep_s": 1.0,
+                    }
+                }
+            },
+            "queries": [{"name": "SE", "q": "python developer"}],
+        },
+        flags={},
+    )
+
+    service = CollectionService(ctx)
+    service._build_collectors()
+
+    collector = next(c for c in service.collector_runner.registry.all() if c.collector_name == "career_pages_serpapi")
+
+    def fake_load_legacy():
+        def fake_collect(**kwargs):
+            return [
+                {
+                    "title": "Machine Learning Engineer",
+                    "company": "Eta",
+                    "location": "Remote",
+                    "url": "https://careers.eta.com/jobs/123",
+                    "description": "ML role",
+                }
+            ]
+        return fake_collect
+
+    monkeypatch.setattr(collector, "_load_legacy_collector", fake_load_legacy)
+    jobs = service.collect()
+
+    assert len(jobs) == 1
+    assert jobs[0]["source"] == "career_pages_serpapi"
+    assert jobs[0]["title"] == "Machine Learning Engineer"
+
+
 def test_collection_service_collects_from_enabled_greenhouse(monkeypatch):
     ctx = RunContext.create(
         config={

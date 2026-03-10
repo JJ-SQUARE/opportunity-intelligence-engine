@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from oie.collectors.breezy_ats_collector import BreezyATSCollector
+from oie.collectors.career_pages_serpapi_collector import CareerPagesSerpAPICollector
 from oie.collectors.google_jobs_collector import GoogleJobsCollector
 from oie.collectors.greenhouse_ats_collector import GreenhouseATSCollector
 from oie.collectors.indeed_serpapi_collector import IndeedSerpAPICollector
@@ -33,6 +34,8 @@ class CollectionService:
             enabled.append("linkedin_serpapi")
         if (discovery.get("indeed_serpapi", {}) or {}).get("enabled", False):
             enabled.append("indeed_serpapi")
+        if (discovery.get("career_pages_serpapi", {}) or {}).get("enabled", False):
+            enabled.append("career_pages_serpapi")
 
         ats = sources.get("ats", {}) or {}
         if (ats.get("greenhouse", {}) or {}).get("enabled", False):
@@ -78,6 +81,12 @@ class CollectionService:
             "source_config": (sources.get("discovery", {}).get("indeed_serpapi", {})),
         }
 
+        career_pages_config = {
+            "queries": queries,
+            "run": run_config,
+            "source_config": (sources.get("discovery", {}).get("career_pages_serpapi", {})),
+        }
+
         greenhouse_config = {
             "queries": queries,
             "run": run_config,
@@ -114,6 +123,7 @@ class CollectionService:
                 GoogleJobsCollector(config=google_jobs_config),
                 LinkedInSerpAPICollector(config=linkedin_config),
                 IndeedSerpAPICollector(config=indeed_config),
+                CareerPagesSerpAPICollector(config=career_pages_config),
                 GreenhouseATSCollector(config=greenhouse_config),
                 LeverATSCollector(config=lever_config),
                 WorkableATSCollector(config=workable_config),
