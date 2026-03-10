@@ -352,3 +352,39 @@ def test_collection_service_collects_from_enabled_smartrecruiters(monkeypatch):
     assert len(jobs) == 1
     assert jobs[0]["source"] == "smartrecruiters"
     assert jobs[0]["title"] == "Platform Engineer"
+
+
+def test_collection_service_collects_from_enabled_ashby(monkeypatch):
+    ctx = RunContext.create(
+        config={
+            "run": {"num_pages": 3, "sleep_s": 1.0},
+            "sources": {"ats": {"ashby": {"enabled": True}}},
+            "queries": [{"name": "SE", "q": "python developer"}],
+        },
+        flags={},
+    )
+
+    service = CollectionService(ctx)
+    service._build_collectors()
+
+    collector = next(c for c in service.collector_runner.registry.all() if c.collector_name == "ashby")
+
+    def fake_load_legacy():
+        def fake_collect(**kwargs):
+            return [
+                {
+                    "title": "Security Engineer",
+                    "company": "Iota",
+                    "location": "Remote",
+                    "url": "https://jobs.ashbyhq.com/iota/123",
+                    "description": "Security role",
+                }
+            ]
+        return fake_collect
+
+    monkeypatch.setattr(collector, "_load_legacy_collector", fake_load_legacy)
+    jobs = service.collect()
+
+    assert len(jobs) == 1
+    assert jobs[0]["source"] == "ashby"
+    assert jobs[0]["title"] == "Security Engineer"

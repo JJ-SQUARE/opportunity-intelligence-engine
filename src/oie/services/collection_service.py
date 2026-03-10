@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from oie.collectors.ashby_ats_collector import AshbyATSCollector
 from oie.collectors.breezy_ats_collector import BreezyATSCollector
 from oie.collectors.career_pages_serpapi_collector import CareerPagesSerpAPICollector
 from oie.collectors.google_jobs_collector import GoogleJobsCollector
@@ -51,6 +52,8 @@ class CollectionService:
             enabled.append("breezy")
         if (ats.get("smartrecruiters", {}) or {}).get("enabled", False):
             enabled.append("smartrecruiters")
+        if (ats.get("ashby", {}) or {}).get("enabled", False):
+            enabled.append("ashby")
 
         return enabled
 
@@ -126,6 +129,12 @@ class CollectionService:
             "source_config": (sources.get("ats", {}).get("smartrecruiters", {})),
         }
 
+        ashby_config = {
+            "queries": queries,
+            "run": run_config,
+            "source_config": (sources.get("ats", {}).get("ashby", {})),
+        }
+
         self.collector_runner.register_collectors(
             [
                 StaticJobsCollector(config=static_jobs_config),
@@ -139,6 +148,7 @@ class CollectionService:
                 TeamtailorATSCollector(config=teamtailor_config),
                 BreezyATSCollector(config=breezy_config),
                 SmartRecruitersATSCollector(config=smartrecruiters_config),
+                AshbyATSCollector(config=ashby_config),
             ]
         )
 
