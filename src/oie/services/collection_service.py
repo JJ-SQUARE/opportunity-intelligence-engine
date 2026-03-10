@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 from oie.collectors.breezy_ats_collector import BreezyATSCollector
 from oie.collectors.google_jobs_collector import GoogleJobsCollector
 from oie.collectors.greenhouse_ats_collector import GreenhouseATSCollector
+from oie.collectors.indeed_serpapi_collector import IndeedSerpAPICollector
 from oie.collectors.lever_ats_collector import LeverATSCollector
 from oie.collectors.linkedin_serpapi_collector import LinkedInSerpAPICollector
 from oie.collectors.static_jobs_collector import StaticJobsCollector
@@ -30,6 +31,8 @@ class CollectionService:
         discovery = sources.get("discovery", {}) or {}
         if (discovery.get("linkedin_serpapi", {}) or {}).get("enabled", False):
             enabled.append("linkedin_serpapi")
+        if (discovery.get("indeed_serpapi", {}) or {}).get("enabled", False):
+            enabled.append("indeed_serpapi")
 
         ats = sources.get("ats", {}) or {}
         if (ats.get("greenhouse", {}) or {}).get("enabled", False):
@@ -66,49 +69,43 @@ class CollectionService:
         linkedin_config = {
             "queries": queries,
             "run": run_config,
-            "source_config": (
-                sources.get("discovery", {}).get("linkedin_serpapi", {})
-            ),
+            "source_config": (sources.get("discovery", {}).get("linkedin_serpapi", {})),
+        }
+
+        indeed_config = {
+            "queries": queries,
+            "run": run_config,
+            "source_config": (sources.get("discovery", {}).get("indeed_serpapi", {})),
         }
 
         greenhouse_config = {
             "queries": queries,
             "run": run_config,
-            "source_config": (
-                sources.get("ats", {}).get("greenhouse", {})
-            ),
+            "source_config": (sources.get("ats", {}).get("greenhouse", {})),
         }
 
         lever_config = {
             "queries": queries,
             "run": run_config,
-            "source_config": (
-                sources.get("ats", {}).get("lever", {})
-            ),
+            "source_config": (sources.get("ats", {}).get("lever", {})),
         }
 
         workable_config = {
             "queries": queries,
             "run": run_config,
-            "source_config": (
-                sources.get("ats", {}).get("workable", {})
-            ),
+            "source_config": (sources.get("ats", {}).get("workable", {})),
         }
 
         teamtailor_config = {
             "queries": queries,
             "run": run_config,
-            "source_config": (
-                sources.get("ats", {}).get("teamtailor", {})
-            ),
+            "source_config": (sources.get("ats", {}).get("teamtailor", {})),
         }
 
         breezy_config = {
             "queries": queries,
             "run": run_config,
-            "source_config": (
-                sources.get("ats", {}).get("breezy", {})
-            ),
+            "source_config": (sources.get("ats", {}).get("breezy", {})),
         }
 
         self.collector_runner.register_collectors(
@@ -116,6 +113,7 @@ class CollectionService:
                 StaticJobsCollector(config=static_jobs_config),
                 GoogleJobsCollector(config=google_jobs_config),
                 LinkedInSerpAPICollector(config=linkedin_config),
+                IndeedSerpAPICollector(config=indeed_config),
                 GreenhouseATSCollector(config=greenhouse_config),
                 LeverATSCollector(config=lever_config),
                 WorkableATSCollector(config=workable_config),
@@ -128,11 +126,8 @@ class CollectionService:
 
     def collect(self) -> List[Dict[str, Any]]:
         self._build_collectors()
-
         enabled_names = self._extract_enabled_collectors_from_yaml()
         jobs = self.collector_runner.run_enabled_collectors(enabled_names=enabled_names)
-
         self.ctx.metrics["jobs_collected_raw"] = len(jobs)
         self.ctx.metrics["collect_completed"] = True
-
         return jobs
