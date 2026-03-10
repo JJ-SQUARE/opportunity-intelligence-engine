@@ -10,6 +10,7 @@ from oie.collectors.greenhouse_ats_collector import GreenhouseATSCollector
 from oie.collectors.indeed_serpapi_collector import IndeedSerpAPICollector
 from oie.collectors.lever_ats_collector import LeverATSCollector
 from oie.collectors.linkedin_serpapi_collector import LinkedInSerpAPICollector
+from oie.collectors.recruitee_ats_collector import RecruiteeATSCollector
 from oie.collectors.smartrecruiters_ats_collector import SmartRecruitersATSCollector
 from oie.collectors.static_jobs_collector import StaticJobsCollector
 from oie.collectors.teamtailor_ats_collector import TeamtailorATSCollector
@@ -54,6 +55,8 @@ class CollectionService:
             enabled.append("smartrecruiters")
         if (ats.get("ashby", {}) or {}).get("enabled", False):
             enabled.append("ashby")
+        if (ats.get("recruitee", {}) or {}).get("enabled", False):
+            enabled.append("recruitee")
 
         return enabled
 
@@ -135,6 +138,12 @@ class CollectionService:
             "source_config": (sources.get("ats", {}).get("ashby", {})),
         }
 
+        recruitee_config = {
+            "queries": queries,
+            "run": run_config,
+            "source_config": (sources.get("ats", {}).get("recruitee", {})),
+        }
+
         self.collector_runner.register_collectors(
             [
                 StaticJobsCollector(config=static_jobs_config),
@@ -149,6 +158,7 @@ class CollectionService:
                 BreezyATSCollector(config=breezy_config),
                 SmartRecruitersATSCollector(config=smartrecruiters_config),
                 AshbyATSCollector(config=ashby_config),
+                RecruiteeATSCollector(config=recruitee_config),
             ]
         )
 

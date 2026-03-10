@@ -388,3 +388,39 @@ def test_collection_service_collects_from_enabled_ashby(monkeypatch):
     assert len(jobs) == 1
     assert jobs[0]["source"] == "ashby"
     assert jobs[0]["title"] == "Security Engineer"
+
+
+def test_collection_service_collects_from_enabled_recruitee(monkeypatch):
+    ctx = RunContext.create(
+        config={
+            "run": {"num_pages": 3, "sleep_s": 1.0},
+            "sources": {"ats": {"recruitee": {"enabled": True}}},
+            "queries": [{"name": "SE", "q": "python developer"}],
+        },
+        flags={},
+    )
+
+    service = CollectionService(ctx)
+    service._build_collectors()
+
+    collector = next(c for c in service.collector_runner.registry.all() if c.collector_name == "recruitee")
+
+    def fake_load_legacy():
+        def fake_collect(**kwargs):
+            return [
+                {
+                    "title": "DevOps Engineer",
+                    "company": "Kappa",
+                    "location": "Remote",
+                    "url": "https://kappa.recruitee.com/o/devops-engineer",
+                    "description": "DevOps role",
+                }
+            ]
+        return fake_collect
+
+    monkeypatch.setattr(collector, "_load_legacy_collector", fake_load_legacy)
+    jobs = service.collect()
+
+    assert len(jobs) == 1
+    assert jobs[0]["source"] == "recruitee"
+    assert jobs[0]["title"] == "DevOps Engineer"
