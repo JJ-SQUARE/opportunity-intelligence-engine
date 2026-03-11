@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from typing import Any, Dict, List
 
 from oie.collectors.base import BaseJobCollector
@@ -8,24 +9,53 @@ from oie.collectors.base import BaseJobCollector
 class GoogleJobsCollector(BaseJobCollector):
     collector_name = "google_jobs"
 
-    def _load_legacy_collector(self):
-        candidates = [
+    def _load_legacy_callable(self):
+        function_candidates = [
             ("collectors.google_jobs.google_jobs_collector", "collect_jobs"),
             ("collectors.google_jobs.collector", "collect_jobs"),
             ("collectors.google_jobs", "collect_jobs"),
             ("pipeline.google_jobs", "collect_jobs"),
         ]
 
-        for module_name, function_name in candidates:
+        for module_name, function_name in function_candidates:
             try:
-                module = __import__(module_name, fromlist=[function_name])
+                module = importlib.import_module(module_name)
                 fn = getattr(module, function_name, None)
-                if fn:
-                    return fn
+                if callable(fn):
+                    return ("function", fn)
+            except Exception:
+                continue
+
+        class_candidates = [
+            ("collectors.google_jobs.google_jobs_serpapi_collector", "GoogleJobsSerpApiCollector"),
+        ]
+
+        for module_name, class_name in class_candidates:
+            try:
+                module = importlib.import_module(module_name)
+                cls = getattr(module, class_name, None)
+                if cls is not None:
+                    instance = cls()
+                    collect_method = getattr(instance, "collect", None)
+                    if callable(collect_method):
+                        return ("method", collect_method)
             except Exception:
                 continue
 
         return None
+
+    # Compatibilidad con tests antiguos que monkeypatchean este nombre.
+    def _load_legacy_collector(self):
+        legacy_target = self._load_legacy_callable()
+        if legacy_target is None:
+            return None
+
+        target_type, target = legacy_target
+
+        if target_type == "method":
+            return lambda payload: target(payload)
+
+        return target
 
     def _normalize_job(self, raw_job: Dict[str, Any]) -> Dict[str, Any]:
         return {
@@ -40,6 +70,7 @@ class GoogleJobsCollector(BaseJobCollector):
             "remote_flag": raw_job.get("remote_flag", False),
             "contractor_flag": raw_job.get("contractor_flag", False),
             "url": raw_job.get("url", ""),
+            "source_meta": raw_job.get("source_meta", {}) or {},
         }
 
     def collect(self) -> List[Dict[str, Any]]:
@@ -63,6 +94,7 @@ class GoogleJobsCollector(BaseJobCollector):
             "num_pages": num_pages,
             "sleep_s": sleep_s,
             "source_config": source_config,
+            "collector_cfg": source_config,
             "run": run_config,
         }
 

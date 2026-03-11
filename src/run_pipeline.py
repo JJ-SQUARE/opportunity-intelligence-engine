@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
-from typing import Any, Dict, Sequence
+from typing import Any, Dict
 
 import yaml
 
@@ -10,31 +11,34 @@ from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
 from oie.orchestration.run_context import RunContext
 
 
-def load_config(config_path: str | None) -> Dict[str, Any]:
-    if not config_path:
+def load_yaml_config(path: str | None) -> Dict[str, Any]:
+    if not path:
         return {}
 
-    path = Path(config_path)
-    if not path.exists():
+    config_path = Path(path)
+    if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
-    with path.open("r", encoding="utf-8") as fh:
+    with config_path.open("r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
 
     if not isinstance(data, dict):
-        raise ValueError("Config file must contain a YAML object at root level")
-
+        raise ValueError("YAML config must load into a dictionary.")
     return data
 
 
-def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+
+def load_config(path: str | None) -> Dict[str, Any]:
+    return load_yaml_config(path)
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Opportunity Intelligence Engine pipeline runner")
-    parser.add_argument("--config", dest="config_path", default=None)
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--no-enrichment", action="store_true")
-    parser.add_argument("--no-llm", action="store_true")
-    parser.add_argument("--cache-only", action="store_true")
-    parser.add_argument("--orchestrator-preview", action="store_true")
+    parser.add_argument("--config", dest="config_path", default=None, help="Path to YAML config file")
+    parser.add_argument("--dry-run", action="store_true", help="Skip provider-backed executions")
+    parser.add_argument("--no-llm", action="store_true", help="Disable LLM-backed classification/enrichment steps")
+    parser.add_argument("--cache-only", action="store_true", help="Only use cache, skip external provider execution")
+    parser.add_argument("--orchestrator-preview", action="store_true", help="Reserved compatibility flag")
     parser.add_argument("--stage", default=None)
     parser.add_argument("--stop-after", default=None)
     parser.add_argument("--resume-from", default=None)
@@ -44,7 +48,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def build_runtime_flags(args: argparse.Namespace) -> Dict[str, Any]:
     return {
         "dry_run": bool(args.dry_run),
-        "no_enrichment": bool(args.no_enrichment),
+        "no_enrichment": False,
         "no_llm": bool(args.no_llm),
         "cache_only": bool(args.cache_only),
         "orchestrator_preview": bool(args.orchestrator_preview),
@@ -55,27 +59,19 @@ def build_runtime_flags(args: argparse.Namespace) -> Dict[str, Any]:
     }
 
 
-def run(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    flags = cfg.get("runtime_flags", {}) or {}
-    ctx = RunContext.create(config=cfg, flags=flags)
+def run(config: Dict[str, Any], flags: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    ctx = RunContext.create(config=config, flags=flags or {})
     orchestrator = PipelineOrchestrator(ctx)
-
-    if flags.get("orchestrator_preview", False):
-        return orchestrator.run()
-
-    # Lazy import para no arrastrar dependencias legacy durante tests de CLI
-    from run_pipeline_legacy import run as legacy_run
-
-    return legacy_run(cfg)
+    return orchestrator.run()
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    config = load_config(args.config_path)
-    config["runtime_flags"] = build_runtime_flags(args)
+    flags = build_runtime_flags(args)
+    config = load_yaml_config(args.config_path)
 
-    result = run(config)
-    print(result)
+    result = run(config, flags=flags)
+    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
     return 0
 
 
