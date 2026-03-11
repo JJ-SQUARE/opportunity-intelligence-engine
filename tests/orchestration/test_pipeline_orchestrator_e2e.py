@@ -7,11 +7,15 @@ from oie.orchestration.run_context import RunContext
 def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
     outputs_path = tmp_path / "outputs"
     db_path = tmp_path / "oie_test.db"
+    masters_path = tmp_path / "masters"
+    cache_path = tmp_path / "http_cache"
 
     ctx = RunContext.create(
         config={
             "database": {"path": str(db_path)},
             "outputs": {"path": str(outputs_path)},
+            "masters": {"path": str(masters_path)},
+            "cache": {"base_dir": str(cache_path)},
             "sources": {
                 "google_jobs": {"enabled": True},
             },
