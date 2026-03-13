@@ -23,6 +23,8 @@ from oie.services.hiring_signals_service import HiringSignalsService
 from oie.services.job_dedup_service import JobDedupService
 from oie.services.lead_generation_service import LeadGenerationService
 from oie.services.lead_ranking_service import LeadRankingService
+from oie.services.market_segmentation_export_service import MarketSegmentationExportService
+from oie.services.market_segmentation_service import MarketSegmentationService
 from oie.services.market_trends_export_service import MarketTrendsExportService
 from oie.services.market_trends_service import MarketTrendsService
 from oie.services.master_data_service import MasterDataService
@@ -62,6 +64,8 @@ class PipelineOrchestrator:
         self.historical_export_service = HistoricalExportService(ctx)
         self.market_trends_service = MarketTrendsService(ctx)
         self.market_trends_export_service = MarketTrendsExportService(ctx)
+        self.market_segmentation_service = MarketSegmentationService(ctx)
+        self.market_segmentation_export_service = MarketSegmentationExportService(ctx)
         self.collector_metrics_service = CollectorMetricsService(ctx)
         self.collector_metrics_export_service = CollectorMetricsExportService(ctx)
         self.collector_contribution_service = CollectorContributionService(ctx)
@@ -221,6 +225,12 @@ class PipelineOrchestrator:
         self.market_trends_export_service.export_new_companies_by_source(new_companies_trends)
         self.market_trends_export_service.export_summary_json(market_summary)
 
+        segmented_companies = self.market_segmentation_service.segment_companies(companies)
+        market_segment_summary = self.market_segmentation_service.build_segment_summary(companies)
+        self.market_segmentation_export_service.export_segmented_companies(segmented_companies)
+        self.market_segmentation_export_service.export_segment_summary(market_segment_summary)
+        self.market_segmentation_export_service.export_segment_summary_json(market_segment_summary)
+
         collector_metrics = self.collector_metrics_service.build_metrics(unique_jobs, companies)
         self.collector_metrics_export_service.export_json(collector_metrics)
 
@@ -276,6 +286,9 @@ class PipelineOrchestrator:
             "market_trends_by_location_csv": self.ctx.paths.get("market_trends_by_location_csv"),
             "market_new_companies_by_source_csv": self.ctx.paths.get("market_new_companies_by_source_csv"),
             "market_trends_summary_json": self.ctx.paths.get("market_trends_summary_json"),
+            "market_segmented_companies_csv": self.ctx.paths.get("market_segmented_companies_csv"),
+            "market_segment_summary_csv": self.ctx.paths.get("market_segment_summary_csv"),
+            "market_segment_summary_json": self.ctx.paths.get("market_segment_summary_json"),
             "collector_contribution_metrics_csv": self.ctx.paths.get("collector_contribution_metrics_csv"),
             "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
             "collector_roi_metrics_csv": self.ctx.paths.get("collector_roi_metrics_csv"),

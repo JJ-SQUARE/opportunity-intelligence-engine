@@ -1,0 +1,154 @@
+run:
+  num_pages: 3
+  sleep_s: 1.0
+
+runs:
+  enabled: true
+  base_dir: "runs"
+  run_id_format: "%Y-%m-%d_%H%M"
+
+database:
+  path: "data/oie.db"
+
+cache:
+  base_dir: "data/http_cache"
+
+sources:
+  google_jobs:
+    enabled: true
+    location_mode: "matrix"
+    locations:
+      - "Ecuador"
+      - "Mexico"
+      - "Colombia"
+
+  discovery:
+    linkedin_serpapi:
+      enabled: false
+      num_pages: 3
+      sleep_s: 1.0
+      gl: "us"
+      hl: "en"
+
+    indeed_serpapi:
+      enabled: false
+      num_pages: 3
+      sleep_s: 1.0
+
+    career_pages_serpapi:
+      enabled: false
+      num_pages: 3
+      sleep_s: 1.0
+
+  ats:
+    greenhouse: { enabled: false }
+    lever: { enabled: false }
+    smartrecruiters: { enabled: false }
+    workable: { enabled: false }
+    ashby: { enabled: false }
+    teamtailor: { enabled: false }
+    recruitee: { enabled: false }
+    breezy: { enabled: false }
+
+  enterprise_ats:
+    workday: { enabled: false }
+    icims: { enabled: false }
+    taleo: { enabled: false }
+    successfactors: { enabled: false }
+    brassring: { enabled: false }
+    oracle: { enabled: false }
+    jobvite: { enabled: false }
+    phenom: { enabled: false }
+    eightfold: { enabled: false }
+    ukg: { enabled: false }
+    adp: { enabled: false }
+    cornerstone: { enabled: false }
+
+llm:
+  enabled: true
+  provider: "openai"
+  model: "gpt-4.1-mini"
+  temperature: 0.2
+  top_n: 20
+  cache_path: "data/processed/company_ai_cache.json"
+
+queries:
+  - name: "Backend Python"
+    q: "python backend remote"
+
+  - name: "Fullstack React"
+    q: "react full stack remote"
+
+  - name: "Data Engineering"
+    q: "data engineer remote"
+
+  - name: "DevOps Cloud"
+    q: "devops cloud remote"
+
+  - name: "QA Automation"
+    q: "qa automation remote"
+
+domain_resolution:
+  enabled: true
+  mode: "serpapi"
+  top_n: 50
+
+sales_intel:
+  enabled: true
+
+  sales:
+    high_min_score: 12
+    medium_min_score: 9
+    vendor_prob_min: 55
+    exclude_company_types: []
+    require_not_us_only: true
+    max_medium: 25
+
+  competitive:
+    enabled: true
+    include_company_types:
+      - "staffing_agency"
+    min_openings: 2
+
+  segmentation:
+    mode: "split"
+    partner_types: ["consulting", "staffing_agency"]
+    competitive_types: ["staffing_agency"]
+    allow_unknown_end_clients: true
+    unknown_min_score: 14
+    unknown_min_vendor_prob: 60
+
+  outputs:
+    sales_opportunities_csv: "data/processed/sales_opportunities.csv"
+    partner_opportunities_csv: "data/processed/partner_opportunities.csv"
+    competitive_watchlist_csv: "data/processed/competitive_watchlist.csv"
+
+enrichment:
+  enabled: false
+
+  providers:
+    hunter:
+      enabled: true
+      api_key_env: "HUNTER_API_KEY"
+      rate_limit_sleep_s: 1.0
+
+    apollo:
+      enabled: false
+      api_key_env: "APOLLO_API_KEY"
+      rate_limit_sleep_s: 1.0
+
+  filters:
+    min_score: 10
+    vendor_prob_min: 55
+    require_not_us_only: true
+
+  limits:
+    max_companies: 5
+
+outputs:
+  path: "data/outputs"
+  jobs_csv: "data/processed/jobs_enriched.csv"
+  companies_csv: "data/processed/companies_scored.csv"
+  enrichment_input_csv: "data/processed/enrichment_input.csv"
+  leads_csv: "data/processed/leads.csv"
+  spreadsheets_dir: "spreadsheets"

@@ -408,18 +408,40 @@ class LeadRepository:
         self.db_path = db_path
 
     def _build_lead_key(self, lead: Dict[str, Any], run_id: str) -> str:
+        company_key = (lead.get("company_key") or "").strip()
         email = (lead.get("email") or "").strip().lower()
+        linkedin_url = (lead.get("linkedin_url") or "").strip().lower()
+        contact_name = (lead.get("contact_name") or "").strip().lower()
+        contact_title = (lead.get("contact_title") or "").strip().lower()
+
         if email:
-            raw = f"{run_id}|email|{email}"
+            raw = "|".join(
+                [
+                    run_id,
+                    company_key,
+                    "email",
+                    email,
+                ]
+            )
+        elif linkedin_url:
+            raw = "|".join(
+                [
+                    run_id,
+                    company_key,
+                    "linkedin",
+                    linkedin_url,
+                ]
+            )
         else:
             raw = "|".join(
                 [
                     run_id,
-                    (lead.get("company_key") or "").strip(),
-                    (lead.get("contact_name") or "").strip().lower(),
-                    (lead.get("contact_title") or "").strip().lower(),
+                    company_key,
+                    contact_name,
+                    contact_title,
                 ]
             )
+
         return f"lead_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
 
     def replace_leads(self, run_id: str, run_date: str, leads: List[Dict[str, Any]]) -> None:

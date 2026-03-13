@@ -10,6 +10,7 @@ from oie.services.provider_execution_service import (
     ProviderExecutionError,
     ProviderExecutionService,
 )
+from oie.utils.domain_filters import is_job_board_domain
 
 
 TARGET_TITLES = [
@@ -173,13 +174,13 @@ class LeadGenerationService:
 
             company_key = company.get("company_key")
             domain = company.get("resolved_domain") or ""
-            if company_key and domain:
+            if company_key and domain and not is_job_board_domain(domain):
                 leads.append(
                     {
                         "company_key": company_key,
                         "contact_name": "",
                         "contact_title": "Engineering Leadership",
-                        "email": f"engineering@{domain}",
+                        "email": f"engineering",
                         "linkedin_url": "",
                         "lead_source": "stub_generation",
                         "lead_confidence": 0.2,

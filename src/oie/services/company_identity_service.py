@@ -5,6 +5,7 @@ import re
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.utils.domain_filters import is_job_board_domain
 from oie.persistence.repositories import CompanyAliasRepository, CompanyRepository
 from oie.persistence.sqlite import initialize_database
 

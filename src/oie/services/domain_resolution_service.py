@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from oie.orchestration.run_context import RunContext
+from oie.utils.domain_filters import is_job_board_domain, normalize_domain
 
 
 BLOCKED_DOMAINS = {
