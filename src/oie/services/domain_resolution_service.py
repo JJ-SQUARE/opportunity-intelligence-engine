@@ -50,9 +50,7 @@ class DomainResolutionService:
 
         try:
             parsed = urlparse(value)
-            domain = (parsed.netloc or "").lower().strip()
-            if domain.startswith("www."):
-                domain = domain[4:]
+            domain = normalize_domain(parsed.netloc or "")
             return domain or None
         except Exception:
             return None
@@ -61,6 +59,8 @@ class DomainResolutionService:
         if not domain:
             return True
         if domain in BLOCKED_DOMAINS:
+            return True
+        if is_job_board_domain(domain):
             return True
         return False
 

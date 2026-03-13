@@ -137,7 +137,7 @@ class CompanyIdentityService:
             )
             return existing["company_key"]
 
-        if resolved_domain:
+        if resolved_domain and not is_job_board_domain(resolved_domain):
             existing = self.company_repository.find_by_domain(resolved_domain)
             if existing:
                 self.ctx.metrics["company_identity_reused_by_domain"] = (
@@ -174,6 +174,10 @@ class CompanyIdentityService:
                 right_root = right.get("company_root")
                 left_domain = left.get("resolved_domain")
                 right_domain = right.get("resolved_domain")
+                if is_job_board_domain(left_domain):
+                    left_domain = ""
+                if is_job_board_domain(right_domain):
+                    right_domain = ""
 
                 if allow_same_normalized and left_norm and right_norm and left_norm == right_norm:
                     candidates.append(
@@ -273,6 +277,8 @@ class CompanyIdentityService:
             normalized = self.normalize_company_name(display)
             root = self.normalize_company_root(display)
             resolved_domain = company.get("resolved_domain")
+            if is_job_board_domain(resolved_domain):
+                resolved_domain = None
 
             aliases, alias_type_map = self.build_aliases(display, normalized)
             existing_company_key = self.reconcile_existing_company_key(
