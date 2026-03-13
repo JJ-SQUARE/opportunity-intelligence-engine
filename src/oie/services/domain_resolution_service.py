@@ -30,6 +30,8 @@ BLOCKED_DOMAINS = {
     "t.co",
     "bit.ly",
     "goo.gl",
+    "google.com",
+    "www.google.com",
 }
 
 
@@ -67,7 +69,6 @@ class DomainResolutionService:
     def _resolve_company_domain(self, company: Dict[str, Any]) -> tuple[Optional[str], Optional[str], float]:
         candidate_urls = [
             ("apply_url", company.get("apply_url")),
-            ("job_url", company.get("job_url")),
             ("url", company.get("url")),
         ]
 
