@@ -21,7 +21,7 @@ from oie.persistence.sqlite import initialize_database
 class PersistenceService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.db_path = self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.db_path = self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
         self.run_repository = RunRepository(self.db_path)
         self.run_metrics_repository = RunMetricsRepository(self.db_path)
         self.provider_event_repository = ProviderEventRepository(self.db_path)

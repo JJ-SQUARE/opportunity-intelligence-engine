@@ -11,7 +11,7 @@ from oie.orchestration.run_context import RunContext
 class DBExportService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.db_path = self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.db_path = self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
         self.output_dir = Path(
             self.ctx.config.get("outputs", {}).get("path", "data/outputs")
         ) / self.ctx.run_id

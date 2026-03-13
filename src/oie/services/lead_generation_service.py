@@ -180,7 +180,7 @@ class LeadGenerationService:
                         "company_key": company_key,
                         "contact_name": "",
                         "contact_title": "Engineering Leadership",
-                        "email": f"engineering",
+                        "email": f"engineering@{domain}",
                         "linkedin_url": "",
                         "lead_source": "stub_generation",
                         "lead_confidence": 0.2,
