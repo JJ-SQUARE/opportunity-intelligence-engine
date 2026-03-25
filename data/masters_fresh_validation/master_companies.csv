@@ -1,0 +1,163 @@
+company_key,company_display,company_normalized,company_root,resolved_domain,domain_source,domain_confidence,total_openings,remote_jobs,contractor_jobs,opportunity_score,run_id,run_date
+cmp_1082e36bb3d8058e,BairesDev,bairesdev,bairesdev,bairesdev.com,serpapi_fallback,1.0,15,0,0,60,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_ee3430f3dd383c6f,Digital Solutions 324 Sl,digital solutions 324 sl,324 sl,,serpapi_fallback,0.45,7,0,0,60,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_10a0125ade3c48ac,Reclutamiento IT,reclutamiento it,reclutamiento it,,apply_url,0.55,3,0,0,44,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1602d6e2e5a6c820,Xideral,xideral,xideral,xideral.co,serpapi_fallback,1.0,3,0,0,44,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_75aa297b3e7d589e,Digital Solutions 324,digital solutions 324,324,324digital.com,serpapi_fallback,1.0,3,0,0,44,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_4c977b5ee0e0a3ce,SAPINDEX,sapindex,sapindex,,apply_url,0.0,3,0,0,44,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_5f14dc30f1aacd91,Training Talent,training talent,training talent,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_39ddc38b80cc3ed3,DEINTEC,deintec,deintec,deintec.com,serpapi_fallback,1.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_89f8d77f6324eeea,Sofka,sofka,sofka,oportunidades.sofka.com.co,apply_url,1.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_b0e7e85f75a6f4d3,ALTEN Spain,alten spain,alten spain,alten.es,serpapi_fallback,1.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_f75b67973ab5674e,INGEPSY,ingepsy,ingepsy,ingepsy.com,serpapi_fallback,1.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_c7d33ec3a43719a8,Servicios latam,servicios latam,servicios latam,,serpapi_fallback,0.45,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_83d8e8de75b385eb,CONFIDENTIAL,confidential,confidential,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1736715c92248699,Capgemini,capgemini,capgemini,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_2e4f6a3babec3d64,RH Master,rh master,rh master,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_aacb465931f20cd9,Hays,hays,hays,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a2d51c48a0310f70,Iguana Digital,iguana digital,iguana,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a51b300489eb6183,Seguros Equinoccial,seguros equinoccial,seguros equinoccial,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_990d0e570d82bae3,Zelcar Games LLC,zelcar games,zelcar games,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_37ff2372987e5372,icorp,icorp,icorp,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_9aba677e92055a9b,Quavanti Innovacion Digital Sa De Cv,quavanti innovacion digital de cv,quavanti innovacion de cv,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_9aec44eb83ac3343,Sofka Technologies,sofka technologies,sofka,sofka.com.co,serpapi_fallback,1.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_c57854d9eafac792,PSS Tecnologías de la Información,pss tecnologías de la información,pss tecnologías de la información,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_058081650a4b00a5,Information Technologies Consultant Home S.A. de C.V.,information technologies consultant home s a de c v,information consultant home s a de c v,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_b4c71c8313791f2b,Capitole,capitole,capitole,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_86fd6afa36d87249,Plastlit,plastlit,plastlit,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1ac4cef510f3e951,Capital Empresarial Horizonte,capital empresarial horizonte,capital empresarial horizonte,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_05511b6dbbaa193a,DaCodes.,dacodes,dacodes,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_05511b6dbbaa193a,The Brick,the brick,the brick,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_6c1191dca1fe35f2,EX Squared LATAM,ex squared latam,ex squared latam,,apply_url,0.55,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_057966956bbc6839,NetPartners International,netpartners international,netpartners,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1237414db0191e3f,myCloudDoor,myclouddoor,myclouddoor,,apply_url,0.0,2,0,0,36,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_2e7ae38fc6f05cda,Azkait,azkait,azkait,azkait.ai,serpapi_fallback,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_75aa297b3e7d589e,Decskill España,decskill españa,decskill españa,decskill.com,serpapi_fallback,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_834bcb3a4df486eb,Zemsania,zemsania,zemsania,careers.zemsania.com,apply_url,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_4287caf054d33a5c,Northware,northware,northware,northware.com,serpapi_fallback,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a06c8d7d6295f0b6,IdearHumano,idearhumano,idearhumano,idearhumano.com.ar,serpapi_fallback,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_e789bd8e19518ab9,Aderen,aderen,aderen,aderen.es,serpapi_fallback,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_05511b6dbbaa193a,DaCodes,dacodes,dacodes,dacodes.com,serpapi_fallback,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_da5a4c934211b388,Clip,clip,clip,clipmoney.com,serpapi_fallback,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_e22ed6c0d4cfe71d,Rubixware,rubixware,rubixware,rubixware.com,apply_url,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_4535fa9180c34919,WILD FI,wild fi,wild fi,wildfi.com,serpapi_fallback,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_44339f0a3d6daad4,"IDS Comercial, S.A. de C.V.",ids comercial s a de c v,ids comercial s a de c v,ids.com.mx,serpapi_fallback,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_f233e0e48e114a5c,NORTHWARE SA DE CV,northware de cv,northware de cv,northware.mx,serpapi_fallback,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_ee5e08a30bf63983,Exportadora Data Base S.A.,exportadora data base s a,exportadora data base s a,,serpapi_fallback,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_0c6e8b62527a31d2,Codifin,codifin,codifin,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_320b356dfc7c04ab,Recodme,recodme,recodme,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_070674cfb3cc7be1,Vass Latam,vass latam,vass latam,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a8420951c3b34cc2,FACTECH SAS,factech sas,factech sas,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_df90e0f9cb9752b9,Mindtech,mindtech,mindtech,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_826c231727a4a1a3,VIVA ENGAGE SOLUTIONS S.A.S.,viva engage solutions s a s,viva engage s a s,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_6c3ddf027da24560,ADMINISTRACION OPERATIVA AUTOMOTRIZ,administracion operativa automotriz,administracion operativa automotriz,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_91b86d71da27aa25,software journeys,software journeys,software journeys,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_9e0f5523ea6609e7,PRAXIS I.T COLOMBIA LTDA,praxis i t colombia ltda,praxis i t colombia ltda,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_5c4c4ec8edb785a1,IGUANA DIGITAL  DIGITAL S.A,iguana digital digital s a,iguana s a,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_3128cf9c770c936b,Bowstreet,bowstreet,bowstreet,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_5182f26e8e98ae76,Prosegur,prosegur,prosegur,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_abe08111a280f2cb,Perform,perform,perform,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_5182f26e8e98ae76,Hitss Ecuador,hitss ecuador,hitss ecuador,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a06fa8a3b16a2792,Multiplica Talent,multiplica talent,multiplica talent,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_ea30213761fc79a2,"Seguros el Potosi, S.A.",seguros el potosi s a,seguros el potosi s a,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_65bce4fc715d307f,CXCENTRODECONTACTO,cxcentrodecontacto,cxcentrodecontacto,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_464af178d4ad6d28,MayanSoft,mayansoft,mayansoft,jobs.mayansoft.com,apply_url,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_133b675dd2d326a6,Redwood Logistics LLC,redwood logistics,redwood logistics,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_fcbe06bb12bb9770,Pinterest,pinterest,pinterest,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_91bf450f20c7cf22,ALTEN MÉXICO,alten méxico,alten méxico,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_e2d1ae261c348bff,Stones,stones,stones,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_4f3fd8884ffb7aec,Scalepex,scalepex,scalepex,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a818ba2e4f621b64,HIRELINE,hireline,hireline,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_e71eb6224965a84e,AgileEngine,agileengine,agileengine,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_2f886ee313104dd2,Medium,medium,medium,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_54d86a870c0d8ecd,Dresden Partners,dresden partners,dresden,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_15f83b3fccfa8187,CodersLink,coderslink,coderslink,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_fcbe06bb12bb9770,Gentera,gentera,gentera,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_314d03bb3748a6a0,RevenueCat,revenuecat,revenuecat,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_d4a66e05e0a59403,ESFERA SOLUTIONS,esfera solutions,esfera,esferasolutions.com,apply_url,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1bfa1b8e46b7e76d,Ofertasynegocios,ofertasynegocios,ofertasynegocios,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_f4e2fbb7a15997ca,Marmot & Asociados S.A,marmot and asociados s a,marmot asociados s a,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_7e4b741296ba2b51,Property Leads,property leads,property leads,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_f2af3bd31a4ba8ca,SETI S.A.S,seti s a s,seti s a s,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a3301d5adb9c7083,Cinte Colombia SAS,cinte colombia sas,cinte colombia sas,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_366f0e2018b57f8d,Zarego,zarego,zarego,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_d01cd336562cc534,Fisla Tecnologia SAS,fisla tecnologia sas,fisla tecnologia sas,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_65e1737b9a06929a,Stori Argentina,stori argentina,stori argentina,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_31165bcc1d83a5b4,NexTI Business Solutions,nexti business solutions,nexti business,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a34858a040accb89,Mega Mayorista,mega mayorista,mega mayorista,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a6e5c4598178b074,Centro Hub,centro hub,centro hub,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_17340eba59054ffc,Congelados Polar,congelados polar,congelados polar,polardistribuciones.com.ar,serpapi_fallback,0.82,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1d1e38258525b7bb,Integrity Solutions,integrity solutions,integrity,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_dc6859a2c82f9a6d,Instituto Tecnológico Superior Quito Metropolitano,instituto tecnológico superior quito metropolitano,instituto tecnológico superior quito metropolitano,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_68e8c45e5081d603,Manexware S.A.,manexware s a,manexware s a,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_f048a2ca8eddfacc,KRIMDA,krimda,krimda,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_24f4f9fb4a22a7e6,Pixxels desarrolo de software & TI,pixxels desarrolo de software and ti,pixxels desarrolo de software ti,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_3b9ef88af0eab0e4,Strappberry,strappberry,strappberry,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_396ce6565223ea66,Confidencial,confidencial,confidencial,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_42f969fe905562eb,Pharmis Traze,pharmis traze,pharmis traze,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a07423e4d20aa081,Delphiaccess,delphiaccess,delphiaccess,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_8cd674e9f77884c8,GRUPO SECURITAS MÉXICO,grupo securitas méxico,grupo securitas méxico,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_99e730c573d1c955,Securitas Technology México,securitas technology méxico,securitas méxico,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_c39f015aab853621,Banco Falabella,banco falabella,banco falabella,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_696e12659448e1f6,Talent,talent,talent,,apply_url,0.45,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_9957c30ef9b63af5,The Brick Soluciones,the brick soluciones,the brick soluciones,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_dd77e9634468b58e,ATG ARKKOSI TECHNOLOGY GROUP SA DE CV,atg arkkosi technology group de cv,atg arkkosi de cv,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_77f32ed4763344d6,Yel Solutions,yel solutions,yel,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_01e20d2bf1a9d3b9,INFOSYST,infosyst,infosyst,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_7da7f5a6feb0f5d2,Informatica Notarial España Mexico SA de CV,informatica notarial espan a mexico de cv,informatica notarial espan a mexico de cv,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_99a220c07db5c6dc,"Indra Sistemas México, S.A. de C.V.",indra sistemas méxico s a de c v,indra sistemas méxico s a de c v,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1405a8c039138f2f,Plexus Tech,plexus tech,plexus tech,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_3882186067e701ce,Talently,talently,talently,talently.tech,apply_url,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_3d8747bb026d8019,Acierta Headhunter,acierta headhunter,acierta headhunter,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_b76c206d3f4915e4,Adecco Colombia S.A.,adecco colombia s a,adecco colombia s a,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_fcb905625e00ada1,PeakU,peaku,peaku,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_e98b044c80120d99,Futura Software,futura software,futura software,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_c02b134d9cfe63f8,Wanqara,wanqara,wanqara,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_5719b0d11e5fcee5,Condelpi,condelpi,condelpi,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_f891b389f6048a66,Selecta,selecta,selecta,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1706a04deaa460e3,Quid Solutions,quid solutions,quid,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_4d77fa470ff4277c,Importante empresa del sector,importante empresa del sector,importante empresa del sector,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_541a88721e8ced3d,Corus,corus,corus,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_cacf6ca33da130e0,Solucionies FAFER,solucionies fafer,solucionies fafer,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_38de04848eb2a1f4,HE CALA MEXICO,he cala mexico,he cala mexico,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_f5007948c2933a93,Grupo Ioe - Formación De Calidad Para Empresas,grupo ioe formación de calidad para empresas,grupo ioe formación de calidad para empresas,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_5f7696d72a3683fa,TALYCAP GLOBAL SAS,talycap global sas,talycap sas,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_9da52015e192c96d,Ausum Cloud,ausum cloud,ausum cloud,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_92135d60ea1280df,SALES MARKETING OUTSOURCING HOLDING SAS,sales marketing outsourcing holding sas,sales marketing outsourcing sas,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_07689d580d4fec26,Michael Page,michael page,michael page,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_bee6af689193e49d,Komanda F5,komanda f5,komanda f5,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_977c08a0d4cb5c2c,Burn20 LLC,burn20,burn20,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_cfcc38eea259b34a,Inetum,inetum,inetum,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_8aff472905af9bca,Desarrollo de Sistemas y Servicios SAS,desarrollo de sistemas y servicios sas,desarrollo de sistemas y servicios sas,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_74cc9c6898a4f0dd,IntekGlobal,intekglobal,intekglobal,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1c051bbb40959855,Intel Corporation,intel,intel,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_13a4f0ca1140e41d,FEG Outsourcing Administrativo,feg outsourcing administrativo,feg outsourcing administrativo,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_e0870c18c999fe97,Intekglobal Technologies SA de CV,intekglobal technologies de cv,intekglobal de cv,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_db4971ff0a18962e,Hiberus México,hiberus méxico,hiberus méxico,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_57d855ce4077a93f,EPAM Systems,epam systems,epam,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_2193816088ec4f91,Indeed,indeed,indeed,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_e4680d7135ab3481,EMA,ema,ema,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1db7df4a9fec53a4,Golabs Tech,golabs tech,golabs tech,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_dbc501ff2cc4d5ab,Aubay Spain,aubay spain,aubay spain,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_59fadf2b75cdbb2b,Bigan TI,bigan ti,bigan ti,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_6f1b5b48090552a4,Innovación Y Administración De Ti S. De R.L. De C.V,innovación y administración de ti s de r l de c v,innovación y administración de ti s de r l de c v,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_69fdd16783b38b2d,JoinReady,joinready,joinready,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_9a7c4381165b251c,Teknei,teknei,teknei,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_9da52015e192c96d,Keppri,keppri,keppri,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_96c5e64f2958609f,Siigo,siigo,siigo,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_1d02bb3acba23b1d,Management and Quality,management and quality,management quality,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_d4b524c348caedd2,Lhh,lhh,lhh,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_a712d81a6998da15,PERCEPTIO S.A.S,perceptio s a s,perceptio s a s,jobs.perceptio.co,apply_url,1.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_141e71a0d1879393,Nequi,nequi,nequi,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_fcc1bca2033736bf,Datalytics,datalytics,datalytics,,apply_url,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_0ec3bff50de97176,DVincenzini,dvincenzini,dvincenzini,,apply_url,0.55,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_e81801dd9c441bc1,REKLUT,reklut,reklut,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_b8156d9929618457,FullStack Labs,fullstack labs,fullstack,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_9139cc8c3f404cc1,Melius Services Inc,melius services,melius,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_092a817234f6339c,Infosys,infosys,infosys,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_0fde56e7728f90b1,Satori Tech,satori tech,satori tech,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_71a9aa71651f1bf7,Conecta Talento,conecta talento,conecta talento,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_35a68ff2a1dabd28,Rimutee,rimutee,rimutee,,,0.0,1,0,0,28,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_e8b52742c9f4dac7,Nunegal Consulting,nunegal consulting,nunegal consulting,nunegal.com,serpapi_fallback,1.0,1,0,0,18,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_b29ec68097eaaf3f,Azka IT Consulting,azka it consulting,azka it consulting,,apply_url,0.0,1,0,0,18,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00
+cmp_24126754fc0651b6,Match Consulting,match consulting,match consulting,,apply_url,0.0,1,0,0,18,20260325_222313_036b4a77,2026-03-25T22:23:13.469393+00:00

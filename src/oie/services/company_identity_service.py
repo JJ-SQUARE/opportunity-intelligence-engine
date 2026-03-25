@@ -178,6 +178,51 @@ class CompanyIdentityService:
         right_domain = (right.get("resolved_domain") or "").strip().lower()
         return bool(left_domain and right_domain and left_domain == right_domain)
 
+    def _is_strong_brand_match(self, left: dict, right: dict) -> bool:
+        left_norm = (left.get("company_normalized") or "").lower()
+        right_norm = (right.get("company_normalized") or "").lower()
+
+        if not left_norm or not right_norm:
+            return False
+
+        # Tokens limpios
+        def tokens(v):
+            parts = re.split(r"[^a-z0-9]+", v)
+            stopwords = {
+                "sa","s","de","cv","llc","inc","corp","co","company",
+                "group","solutions","solution","technology","technologies",
+                "tech","digital","systems","services","service","global","latam"
+            }
+            return [p for p in parts if p and p not in stopwords and len(p) >= 3]
+
+        left_tokens = set(tokens(left_norm))
+        right_tokens = set(tokens(right_norm))
+
+        if not left_tokens or not right_tokens:
+            return False
+
+        shared = left_tokens & right_tokens
+
+        # Caso fuerte: token principal compartido
+        if len(shared) == 1:
+            token = next(iter(shared))
+
+            # containment real
+            if (left_norm.startswith(token) or right_norm.startswith(token)):
+                if token in left_norm and token in right_norm:
+                    # evitar falsos positivos por dominio contradictorio
+                    ld = (left.get("resolved_domain") or "").lower()
+                    rd = (right.get("resolved_domain") or "").lower()
+
+                    if ld and rd and ld != rd:
+                        return False
+
+                    return True
+
+        return False
+
+
+
     def _is_safe_same_root_merge(
         self,
         left: dict,
@@ -256,6 +301,10 @@ class CompanyIdentityService:
                 if allow_same_root and left_root and right_root and left_root == right_root:
                     confidence = 0.8
                     reason = "same_company_root"
+                if self._is_strong_brand_match(left, right):
+                    pass
+                elif not self._is_safe_same_root_merge(left, right):
+                    continue
 
                     if left_domain and right_domain and left_domain == right_domain:
                         confidence = 0.98

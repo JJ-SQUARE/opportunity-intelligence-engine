@@ -138,10 +138,16 @@ sales_intel:
     partner_opportunities_csv: "data/processed/partner_opportunities.csv"
     competitive_watchlist_csv: "data/processed/competitive_watchlist.csv"
 
+providers:
+  clients:
+    serpapi:
+      api_key_env: "SERPAPI_KEY"
+
 enrichment:
   enabled: false
 
   providers:
+
     hunter:
       enabled: true
       api_key_env: "HUNTER_API_KEY"

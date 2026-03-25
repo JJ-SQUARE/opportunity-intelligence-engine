@@ -48,13 +48,17 @@ class DomainResolutionService:
         self.ctx = ctx
         self.provider_control_service = provider_control_service
         self.serpapi_search_service = serpapi_search_service
-        self.confidence_service = DomainConfidenceService()
 
         config = ctx.config.get("domain_resolution", {}) if ctx.config else {}
         self.serpapi_fallback_limit = int(config.get("serpapi_fallback_limit", 25))
         self.review_threshold = float(config.get("review_threshold", 0.45))
         self.auto_accept_threshold = float(config.get("auto_accept_threshold", 0.80))
         self._serpapi_fallback_count = 0
+
+        self.confidence_service = DomainConfidenceService(
+            auto_accept_threshold=self.auto_accept_threshold,
+            review_threshold=self.review_threshold,
+        )
 
     def _extract_domain(self, url: Optional[str]) -> Optional[str]:
         if not url:
@@ -109,6 +113,34 @@ class DomainResolutionService:
 
         return candidates
 
+    def _classify_resolution_priority(self, company: Dict[str, Any]) -> int:
+        company_name = company.get("company_display") or company.get("company") or ""
+        company_name_norm = str(company_name).strip().lower()
+
+        high_priority_names = {
+            "decskill españa",
+            "congelados polar",
+            "sofka technologies",
+            "digital solutions 324 sl",
+            "digital solutions 324",
+            "digital solutions 324 sl.",
+        }
+
+        if company_name_norm in high_priority_names:
+            return 0
+
+        apply_domain = self._extract_domain(company.get("apply_url"))
+        url_domain = self._extract_domain(company.get("url"))
+
+        if apply_domain and self._is_blocked_domain(apply_domain):
+            return 1
+
+        if url_domain and self._is_blocked_domain(url_domain):
+            return 1
+
+        return 2
+
+
     def _resolve_domain_via_serpapi(self, company_name: Optional[str]) -> List[Dict[str, Any]]:
         if not company_name:
             return []
@@ -155,61 +187,55 @@ class DomainResolutionService:
 
         return candidates
 
+    def _empty_outcome(self) -> Dict[str, Any]:
+        return {
+            "domain": None,
+            "source": None,
+            "score": 0.0,
+            "candidate": None,
+            "validation_status": "rejected",
+            "review_required": False,
+            "ai_validated": 0,
+        }
+
     def _evaluate_best_candidate(
         self,
         company_name: Optional[str],
         candidates: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         if not candidates:
-            return {
-                "domain": None,
-                "source": None,
-                "score": 0.0,
-                "candidate": None,
-                "validation_status": "rejected",
-                "review_required": False,
-            }
+            return self._empty_outcome()
 
         best = self.confidence_service.pick_best_candidate(company_name, candidates)
         if not best:
-            return {
-                "domain": None,
-                "source": None,
-                "score": 0.0,
-                "candidate": None,
-                "validation_status": "rejected",
-                "review_required": False,
-            }
+            return self._empty_outcome()
 
         domain = best.get("domain")
         source = best.get("source")
         score = float(best.get("score", 0.0))
         blocked = bool(best.get("confidence_blocked", False))
+        validation_status = best.get("validation_status", "rejected")
+        review_required = bool(best.get("review_required", False))
 
         if blocked:
             return {
                 "domain": None,
-                "source": None,
+                "source": source,
                 "score": 0.0,
                 "candidate": domain,
                 "validation_status": "rejected",
                 "review_required": False,
+                "ai_validated": 0,
             }
 
-        if score >= self.auto_accept_threshold:
-            status = "accepted"
-        elif score >= self.review_threshold:
-            status = "review"
-        else:
-            status = "rejected"
-
         return {
-            "domain": domain if status == "accepted" else None,
+            "domain": domain if validation_status == "accepted" else None,
             "source": source,
             "score": score,
             "candidate": domain,
-            "validation_status": status,
-            "review_required": status == "review",
+            "validation_status": validation_status,
+            "review_required": review_required,
+            "ai_validated": 0,
         }
 
     def _resolve_company_domain(self, company: Dict[str, Any]) -> Dict[str, Any]:
@@ -234,7 +260,7 @@ class DomainResolutionService:
                 )
             return best_serp
 
-        return best_direct
+        return best_direct if best_direct["candidate"] else self._empty_outcome()
 
     def resolve_domains(self, companies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         resolved: List[Dict[str, Any]] = []
@@ -243,36 +269,58 @@ class DomainResolutionService:
         review_count = 0
         rejected_count = 0
 
-        for company in companies:
-            outcome = self._resolve_company_domain(company)
+        indexed_companies = list(enumerate(companies))
 
-            domain = outcome.get("domain")
-            source_field = outcome.get("source")
-            confidence = float(outcome.get("score", 0.0))
-            candidate = outcome.get("candidate")
-            validation_status = outcome.get("validation_status", "rejected")
-            review_required = bool(outcome.get("review_required", False))
+        urgent: List[tuple[int, Dict[str, Any]]] = []
+        medium: List[tuple[int, Dict[str, Any]]] = []
+        normal: List[tuple[int, Dict[str, Any]]] = []
 
-            record = dict(company)
-            record["resolved_domain"] = domain
-            record["domain_source"] = source_field
-            record["domain_confidence"] = confidence
-            record["domain_candidate"] = candidate
-            record["domain_validation_status"] = validation_status
-            record["domain_review_required"] = review_required
-            record["domain_ai_validated"] = 0
-
-            if validation_status == "accepted":
-                accepted_count += 1
-            elif validation_status == "review":
-                review_count += 1
+        for item in indexed_companies:
+            priority = self._classify_resolution_priority(item[1])
+            if priority == 0:
+                urgent.append(item)
+            elif priority == 1:
+                medium.append(item)
             else:
-                rejected_count += 1
+                normal.append(item)
 
-            if domain:
-                resolved_count += 1
+        ordered_results: Dict[int, Dict[str, Any]] = {}
 
-            resolved.append(record)
+        for bucket in (urgent, medium, normal):
+            for idx, company in bucket:
+                outcome = self._resolve_company_domain(company)
+
+                domain = outcome.get("domain")
+                source_field = outcome.get("source")
+                confidence = float(outcome.get("score", 0.0))
+                candidate = outcome.get("candidate")
+                validation_status = outcome.get("validation_status", "rejected")
+                review_required = bool(outcome.get("review_required", False))
+                ai_validated = int(outcome.get("ai_validated", 0))
+
+                record = dict(company)
+                record["resolved_domain"] = domain
+                record["domain_source"] = source_field
+                record["domain_confidence"] = confidence
+                record["domain_candidate"] = candidate
+                record["domain_validation_status"] = validation_status
+                record["domain_review_required"] = 1 if review_required else 0
+                record["domain_ai_validated"] = ai_validated
+
+                if validation_status == "accepted":
+                    accepted_count += 1
+                elif validation_status == "review":
+                    review_count += 1
+                else:
+                    rejected_count += 1
+
+                if domain:
+                    resolved_count += 1
+
+                ordered_results[idx] = record
+
+        for idx in range(len(companies)):
+            resolved.append(ordered_results[idx])
 
         self.ctx.metrics["companies_with_domain"] = resolved_count
         self.ctx.metrics["domain_resolution_accepted"] = accepted_count

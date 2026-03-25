@@ -83,10 +83,46 @@ GENERIC_COMPANY_TOKENS = {
     "talent",
     "training",
     "confidential",
+    "technology",
+    "technologies",
+    "tech",
+    "holding",
+    "holdings",
+    "company",
+    "companies",
+    "corp",
+    "corporation",
+    "inc",
+    "llc",
+    "ltd",
+    "sas",
+    "sa",
+    "de",
+    "del",
+    "la",
+    "el",
+    "and",
+    "the",
+    "españa",
+    "mexico",
+    "méxico",
+    "colombia",
+    "ecuador",
+    "peru",
+    "perú",
+    "latam",
 }
 
 
 class DomainConfidenceService:
+    def __init__(
+        self,
+        auto_accept_threshold: float = 0.80,
+        review_threshold: float = 0.45,
+    ) -> None:
+        self.auto_accept_threshold = auto_accept_threshold
+        self.review_threshold = review_threshold
+
     def _normalize_text(self, value: Optional[str]) -> str:
         if not value:
             return ""
@@ -97,6 +133,9 @@ class DomainConfidenceService:
             .replace("-", " ")
             .replace("_", " ")
             .replace("/", " ")
+            .replace("(", " ")
+            .replace(")", " ")
+            .replace("&", " ")
             .strip()
         )
 
@@ -104,13 +143,12 @@ class DomainConfidenceService:
         text = self._normalize_text(company_name)
         return [t for t in text.split() if t and len(t) > 2]
 
-    def is_generic_company_name(self, company_name: Optional[str]) -> bool:
+    def _extract_core_tokens(self, company_name: Optional[str]) -> List[str]:
         tokens = self._company_tokens(company_name)
-        if not tokens:
-            return True
+        return [t for t in tokens if t not in GENERIC_COMPANY_TOKENS and len(t) > 2]
 
-        meaningful = [t for t in tokens if t not in GENERIC_COMPANY_TOKENS]
-        return len(meaningful) == 0
+    def is_generic_company_name(self, company_name: Optional[str]) -> bool:
+        return len(self._extract_core_tokens(company_name)) == 0
 
     def _is_blocked_domain(self, domain: Optional[str]) -> bool:
         if not domain:
@@ -120,24 +158,39 @@ class DomainConfidenceService:
             return True
         return d in BLOCKED_DOMAINS or is_job_board_domain(d)
 
-    def _domain_brand_match(self, company_name: Optional[str], domain: Optional[str]) -> bool:
-        if not company_name or not domain:
-            return False
-
-        tokens = self._company_tokens(company_name)
-        if not tokens:
-            return False
-
-        normalized_domain = normalize_domain(domain)
+    def _domain_brand_match_details(self, company_name: Optional[str], domain: Optional[str]) -> Dict[str, Any]:
+        normalized_domain = normalize_domain(domain or "")
         domain_text = normalized_domain.replace(".", " ")
         domain_compact = normalized_domain.replace(".", "")
 
-        joined = "".join(tokens)
-        if joined and joined in domain_compact:
-            return True
+        tokens = self._company_tokens(company_name)
+        core_tokens = self._extract_core_tokens(company_name)
 
-        hits = sum(1 for token in tokens if token in domain_text or token in domain_compact)
-        return hits >= max(1, min(2, len(tokens)))
+        joined_all = "".join(tokens)
+        joined_core = "".join(core_tokens)
+
+        full_join_match = bool(joined_all and joined_all in domain_compact)
+        core_join_match = bool(joined_core and joined_core in domain_compact)
+
+        token_hits = sum(1 for token in tokens if token in domain_text or token in domain_compact)
+        core_hits = sum(1 for token in core_tokens if token in domain_text or token in domain_compact)
+
+        # NUEVO: match fuerte por token principal de marca
+        primary_core_token = core_tokens[0] if core_tokens else ""
+        primary_token_match = bool(primary_core_token and primary_core_token in domain_compact)
+
+        brand_match = full_join_match or core_join_match or primary_token_match or core_hits > 0
+
+        return {
+            "brand_match": brand_match,
+            "token_hits": token_hits,
+            "core_hits": core_hits,
+            "full_join_match": full_join_match,
+            "core_join_match": core_join_match,
+            "primary_token_match": primary_token_match,
+            "primary_core_token": primary_core_token,
+            "core_tokens": core_tokens,
+        }
 
     def score_candidate(
         self,
@@ -166,8 +219,15 @@ class DomainConfidenceService:
         snippet = self._normalize_text(candidate.get("snippet"))
 
         blocked = self._is_blocked_domain(normalized_domain)
-        brand_match = self._domain_brand_match(company_name, normalized_domain)
         generic_name = self.is_generic_company_name(company_name)
+        brand_info = self._domain_brand_match_details(company_name, normalized_domain)
+
+        brand_match = brand_info["brand_match"]
+        token_hits = brand_info["token_hits"]
+        core_hits = brand_info["core_hits"]
+        full_join_match = brand_info["full_join_match"]
+        core_join_match = brand_info["core_join_match"]
+        primary_token_match = brand_info["primary_token_match"]
 
         reasons: List[str] = []
         raw_score = 0.0
@@ -177,13 +237,13 @@ class DomainConfidenceService:
             reasons.append("blocked_domain")
 
         if source == "apply_url":
-            raw_score += 0.25
+            raw_score += 0.55
             reasons.append("source_apply_url")
         elif source == "url":
-            raw_score += 0.20
+            raw_score += 0.50
             reasons.append("source_url")
         elif source == "serpapi_fallback":
-            raw_score += 0.15
+            raw_score += 0.20
             reasons.append("source_serpapi_fallback")
 
         if isinstance(serp_rank, int) and serp_rank > 0:
@@ -191,12 +251,32 @@ class DomainConfidenceService:
             raw_score += rank_bonus
             reasons.append(f"serp_rank_{serp_rank}")
 
-        if brand_match:
-            raw_score += 0.55
-            reasons.append("brand_match")
+        if full_join_match:
+            raw_score += 0.40
+            reasons.append("full_join_match")
+        elif core_join_match:
+            raw_score += 0.36
+            reasons.append("core_join_match")
+        elif primary_token_match:
+            raw_score += 0.28
+            reasons.append("primary_token_match")
+
+        if core_hits >= 2:
+            raw_score += 0.35
+            reasons.append("core_hits_2plus")
+        elif core_hits == 1:
+            raw_score += 0.25
+            reasons.append("core_hits_1")
+
+        if token_hits >= 2:
+            raw_score += 0.10
+            reasons.append("token_hits_2plus")
+        elif token_hits == 1:
+            raw_score += 0.05
+            reasons.append("token_hits_1")
 
         if generic_name:
-            raw_score -= 0.20
+            raw_score -= 0.10
             reasons.append("generic_company_name")
 
         if normalized_domain.endswith(".gov"):
@@ -207,15 +287,54 @@ class DomainConfidenceService:
             raw_score -= 0.20
             reasons.append("edu_domain_penalty")
 
-        tokens = self._company_tokens(company_name)
-        if tokens:
-            text = f"{title} {snippet}"
-            token_hits = sum(1 for token in tokens if token in text)
-            if token_hits:
-                raw_score += min(0.15, token_hits * 0.05)
-                reasons.append(f"text_token_hits_{token_hits}")
+        text = f"{title} {snippet}".strip()
+        core_tokens = brand_info["core_tokens"]
+        if core_tokens and text:
+            text_core_hits = sum(1 for token in core_tokens if token in text)
+            if text_core_hits >= 2:
+                raw_score += 0.15
+                reasons.append("text_core_hits_2plus")
+            elif text_core_hits == 1:
+                raw_score += 0.08
+                reasons.append("text_core_hits_1")
+
+        if not blocked and source in {"apply_url", "url"} and brand_match:
+            raw_score = max(raw_score, 0.80)
+            reasons.append("direct_url_brand_floor")
+
+        if not blocked and source == "serpapi_fallback" and full_join_match:
+            raw_score = max(raw_score, 0.90)
+            reasons.append("serp_brand_floor_full")
+        elif not blocked and source == "serpapi_fallback" and core_hits >= 1 and "official" in text:
+            raw_score = max(raw_score, 0.85)
+            reasons.append("serp_brand_floor_official")
+
+        # NUEVO: match honesto por marca principal -> mínimo review
+        if (
+            not blocked
+            and source == "serpapi_fallback"
+            and not generic_name
+            and (core_hits >= 1 or primary_token_match or core_join_match)
+        ):
+            raw_score = max(raw_score, self.review_threshold)
+            reasons.append("serp_honest_brand_review_floor")
 
         score = max(0.0, min(1.0, round(raw_score, 4)))
+
+        if blocked:
+            validation_status = "rejected"
+        elif score >= self.auto_accept_threshold:
+            validation_status = "accepted"
+        elif score >= self.review_threshold:
+            validation_status = "review"
+        elif brand_match:
+            validation_status = "review"
+            reasons.append("brand_match_forced_review")
+        else:
+            validation_status = "rejected"
+
+        review_required = validation_status == "review"
+        auto_accepted = validation_status == "accepted"
 
         result = dict(candidate)
         result["domain"] = normalized_domain
@@ -225,8 +344,9 @@ class DomainConfidenceService:
         result["confidence_brand_match"] = brand_match
         result["confidence_generic_company_name"] = generic_name
         result["confidence_reasons"] = reasons
-        result["review_required"] = score < 0.80
-        result["auto_accepted"] = score >= 0.80
+        result["review_required"] = review_required
+        result["auto_accepted"] = auto_accepted
+        result["validation_status"] = validation_status
         return result
 
     def pick_best_candidate(
@@ -248,6 +368,7 @@ class DomainConfidenceService:
             key=lambda c: (
                 c.get("score", 0.0),
                 1 if c.get("confidence_brand_match") else 0,
+                1 if c.get("auto_accepted") else 0,
                 0 if c.get("confidence_blocked") else 1,
             ),
             reverse=True,
