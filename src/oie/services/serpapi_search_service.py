@@ -18,7 +18,9 @@ class SerpAPISearchService:
     ) -> None:
         self.ctx = ctx
         self.provider_control_service = provider_control_service
-        self.provider_execution_service = ProviderExecutionService(ctx, provider_control_service)
+        self.provider_execution_service = ProviderExecutionService(
+            ctx, provider_control_service
+        )
 
     def search_google_jobs(
         self,
@@ -48,4 +50,34 @@ class SerpAPISearchService:
         self.ctx.metrics["serpapi_search_requests"] = (
             int(self.ctx.metrics.get("serpapi_search_requests", 0)) + 1
         )
+
+        return result
+
+    def search_google(
+        self,
+        query: str,
+        num: int = 10,
+    ) -> Dict[str, Any]:
+        client = self.provider_control_service.registry.get_client("serpapi")
+        if client is None:
+            self.ctx.metrics["serpapi_search_skipped_no_client"] = True
+            return {}
+
+        try:
+            result = self.provider_execution_service.execute(
+                "serpapi",
+                "search_google",
+                client.search_google,
+                query,
+                num=num,
+                cost=1,
+            )
+        except ProviderExecutionBlockedError:
+            self.ctx.metrics["serpapi_search_skipped_blocked"] = True
+            return {}
+
+        self.ctx.metrics["serpapi_search_requests"] = (
+            int(self.ctx.metrics.get("serpapi_search_requests", 0)) + 1
+        )
+
         return result

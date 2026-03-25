@@ -56,6 +56,10 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 resolved_domain TEXT,
                 domain_source TEXT,
                 domain_confidence REAL,
+                domain_candidate TEXT,
+                domain_validation_status TEXT,
+                domain_review_required INTEGER DEFAULT 0,
+                domain_ai_validated INTEGER DEFAULT 0,
                 industry TEXT,
                 employee_range TEXT,
                 linkedin_company_url TEXT,
@@ -200,6 +204,10 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
 
         company_columns = {row["name"] for row in conn.execute("PRAGMA table_info(companies)").fetchall()}
         required_company_columns = {
+            "domain_candidate": "TEXT",
+            "domain_validation_status": "TEXT",
+            "domain_review_required": "INTEGER DEFAULT 0",
+            "domain_ai_validated": "INTEGER DEFAULT 0",
             "industry": "TEXT",
             "employee_range": "TEXT",
             "linkedin_company_url": "TEXT",

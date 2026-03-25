@@ -38,6 +38,7 @@ from oie.services.persistence_service import PersistenceService
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.run_readiness_export_service import RunReadinessExportService
 from oie.services.run_readiness_service import RunReadinessService
+from oie.services.serpapi_search_service import SerpAPISearchService
 
 
 class PipelineOrchestrator:
@@ -48,10 +49,10 @@ class PipelineOrchestrator:
         self.job_dedup_service = JobDedupService(ctx)
         self.hiring_signals_service = HiringSignalsService(ctx)
         self.company_identity_service = CompanyIdentityService(ctx)
-        self.domain_resolution_service = DomainResolutionService(ctx)
+        self.provider_control_service = ProviderControlService(ctx)
+        self.domain_resolution_service = DomainResolutionService(ctx, self.provider_control_service)
         self.opportunity_scoring_service = OpportunityScoringService(ctx)
         self.persistence_service = PersistenceService(ctx)
-        self.provider_control_service = ProviderControlService(ctx)
         self.master_data_service = MasterDataService(ctx)
         self.master_dedup_service = MasterDedupService(ctx)
         self.duplicate_report_service = DuplicateReportService(ctx)
@@ -87,6 +88,12 @@ class PipelineOrchestrator:
             self.provider_control_service,
         )
         self.lead_ranking_service = LeadRankingService(ctx)
+        self.serpapi_search_service = SerpAPISearchService(ctx, self.provider_control_service)
+        self.domain_resolution_service = DomainResolutionService(
+            ctx,
+            self.provider_control_service,
+            self.serpapi_search_service,
+        )
 
     def run_initial_stages(self) -> List[Dict[str, Any]]:
         jobs = self.collection_service.collect()

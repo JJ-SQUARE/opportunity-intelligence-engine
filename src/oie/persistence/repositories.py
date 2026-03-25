@@ -95,6 +95,10 @@ class CompanyRepository:
                     resolved_domain,
                     domain_source,
                     domain_confidence,
+                    domain_candidate,
+                    domain_validation_status,
+                    domain_review_required,
+                    domain_ai_validated,
                     industry,
                     employee_range,
                     linkedin_company_url,
@@ -107,13 +111,17 @@ class CompanyRepository:
                     classification_provider,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(company_key) DO UPDATE SET
                     company_display = excluded.company_display,
                     company_normalized = excluded.company_normalized,
                     resolved_domain = excluded.resolved_domain,
                     domain_source = excluded.domain_source,
                     domain_confidence = excluded.domain_confidence,
+                    domain_candidate = excluded.domain_candidate,
+                    domain_validation_status = excluded.domain_validation_status,
+                    domain_review_required = excluded.domain_review_required,
+                    domain_ai_validated = excluded.domain_ai_validated,
                     industry = COALESCE(excluded.industry, companies.industry),
                     employee_range = COALESCE(excluded.employee_range, companies.employee_range),
                     linkedin_company_url = COALESCE(excluded.linkedin_company_url, companies.linkedin_company_url),
@@ -134,6 +142,10 @@ class CompanyRepository:
                         company.get("resolved_domain"),
                         company.get("domain_source"),
                         company.get("domain_confidence"),
+                        company.get("domain_candidate"),
+                        company.get("domain_validation_status"),
+                        1 if company.get("domain_review_required") else 0,
+                        1 if company.get("domain_ai_validated") else 0,
                         company.get("industry"),
                         company.get("employee_range"),
                         company.get("linkedin_company_url"),

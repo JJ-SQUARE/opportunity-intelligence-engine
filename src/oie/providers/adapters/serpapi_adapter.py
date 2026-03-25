@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, Optional
 
 import requests
@@ -13,8 +14,16 @@ class SerpAPIAdapter(ProviderClient):
 
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
         super().__init__(config=config)
-        self.api_key = (self.config or {}).get("api_key")
-        self.timeout = float((self.config or {}).get("timeout_seconds", 20))
+
+        cfg = self.config or {}
+        api_key = cfg.get("api_key")
+        api_key_env = cfg.get("api_key_env")
+
+        if not api_key and api_key_env:
+            api_key = os.getenv(api_key_env)
+
+        self.api_key = api_key
+        self.timeout = float(cfg.get("timeout_seconds", 20))
 
     def search_google_jobs(
         self,
@@ -33,6 +42,29 @@ class SerpAPIAdapter(ProviderClient):
         }
         if location:
             params["location"] = location
+
+        response = requests.get(
+            self.base_url,
+            params=params,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def search_google(
+        self,
+        query: str,
+        num: int = 10,
+    ) -> Dict[str, Any]:
+        if not self.api_key:
+            raise ValueError("Missing SerpAPI api_key")
+
+        params: Dict[str, Any] = {
+            "engine": "google",
+            "q": query,
+            "api_key": self.api_key,
+            "num": num,
+        }
 
         response = requests.get(
             self.base_url,

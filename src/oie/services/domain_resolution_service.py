@@ -4,6 +4,9 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from oie.orchestration.run_context import RunContext
+from oie.services.domain_confidence_service import DomainConfidenceService
+from oie.services.provider_control_service import ProviderControlService
+from oie.services.serpapi_search_service import SerpAPISearchService
 from oie.utils.domain_filters import is_job_board_domain, normalize_domain
 
 
@@ -36,8 +39,22 @@ BLOCKED_DOMAINS = {
 
 
 class DomainResolutionService:
-    def __init__(self, ctx: RunContext) -> None:
+    def __init__(
+        self,
+        ctx: RunContext,
+        provider_control_service: Optional[ProviderControlService] = None,
+        serpapi_search_service: Optional[SerpAPISearchService] = None,
+    ) -> None:
         self.ctx = ctx
+        self.provider_control_service = provider_control_service
+        self.serpapi_search_service = serpapi_search_service
+        self.confidence_service = DomainConfidenceService()
+
+        config = ctx.config.get("domain_resolution", {}) if ctx.config else {}
+        self.serpapi_fallback_limit = int(config.get("serpapi_fallback_limit", 25))
+        self.review_threshold = float(config.get("review_threshold", 0.45))
+        self.auto_accept_threshold = float(config.get("auto_accept_threshold", 0.80))
+        self._serpapi_fallback_count = 0
 
     def _extract_domain(self, url: Optional[str]) -> Optional[str]:
         if not url:
@@ -66,30 +83,191 @@ class DomainResolutionService:
             return True
         return False
 
-    def _resolve_company_domain(self, company: Dict[str, Any]) -> tuple[Optional[str], Optional[str], float]:
-        candidate_urls = [
+    def _should_skip_generic_name(self, company_name: Optional[str]) -> bool:
+        return self.confidence_service.is_generic_company_name(company_name)
+
+    def _build_direct_candidates(self, company: Dict[str, Any]) -> List[Dict[str, Any]]:
+        candidates: List[Dict[str, Any]] = []
+
+        for source_field, url in [
             ("apply_url", company.get("apply_url")),
             ("url", company.get("url")),
-        ]
-
-        for source_field, url in candidate_urls:
+        ]:
             domain = self._extract_domain(url)
-            if domain and not self._is_blocked_domain(domain):
-                return domain, source_field, 0.9 if source_field == "apply_url" else 0.7
+            if not domain:
+                continue
 
-        return None, None, 0.0
+            candidates.append(
+                {
+                    "domain": domain,
+                    "source": source_field,
+                    "serp_rank": None,
+                    "title": "",
+                    "snippet": "",
+                }
+            )
+
+        return candidates
+
+    def _resolve_domain_via_serpapi(self, company_name: Optional[str]) -> List[Dict[str, Any]]:
+        if not company_name:
+            return []
+
+        if self._serpapi_fallback_count >= self.serpapi_fallback_limit:
+            self.ctx.metrics["serpapi_domain_resolution_skipped_limit"] = True
+            return []
+
+        if self._should_skip_generic_name(company_name):
+            self.ctx.metrics["serpapi_domain_resolution_skipped_generic_name"] = (
+                int(self.ctx.metrics.get("serpapi_domain_resolution_skipped_generic_name", 0)) + 1
+            )
+            return []
+
+        service = self.serpapi_search_service
+        if service is None and self.provider_control_service is not None:
+            service = SerpAPISearchService(self.ctx, self.provider_control_service)
+
+        if service is None:
+            self.ctx.metrics["serpapi_domain_resolution_skipped_no_service"] = True
+            return []
+
+        payload = service.search_google(f"{company_name} official website", num=5) or {}
+        self._serpapi_fallback_count += 1
+
+        organic_results = payload.get("organic_results") or []
+        candidates: List[Dict[str, Any]] = []
+
+        for idx, item in enumerate(organic_results, start=1):
+            link = item.get("link") or ""
+            domain = self._extract_domain(link)
+            if not domain:
+                continue
+
+            candidates.append(
+                {
+                    "domain": domain,
+                    "source": "serpapi_fallback",
+                    "serp_rank": idx,
+                    "title": item.get("title") or "",
+                    "snippet": item.get("snippet") or "",
+                }
+            )
+
+        return candidates
+
+    def _evaluate_best_candidate(
+        self,
+        company_name: Optional[str],
+        candidates: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        if not candidates:
+            return {
+                "domain": None,
+                "source": None,
+                "score": 0.0,
+                "candidate": None,
+                "validation_status": "rejected",
+                "review_required": False,
+            }
+
+        best = self.confidence_service.pick_best_candidate(company_name, candidates)
+        if not best:
+            return {
+                "domain": None,
+                "source": None,
+                "score": 0.0,
+                "candidate": None,
+                "validation_status": "rejected",
+                "review_required": False,
+            }
+
+        domain = best.get("domain")
+        source = best.get("source")
+        score = float(best.get("score", 0.0))
+        blocked = bool(best.get("confidence_blocked", False))
+
+        if blocked:
+            return {
+                "domain": None,
+                "source": None,
+                "score": 0.0,
+                "candidate": domain,
+                "validation_status": "rejected",
+                "review_required": False,
+            }
+
+        if score >= self.auto_accept_threshold:
+            status = "accepted"
+        elif score >= self.review_threshold:
+            status = "review"
+        else:
+            status = "rejected"
+
+        return {
+            "domain": domain if status == "accepted" else None,
+            "source": source,
+            "score": score,
+            "candidate": domain,
+            "validation_status": status,
+            "review_required": status == "review",
+        }
+
+    def _resolve_company_domain(self, company: Dict[str, Any]) -> Dict[str, Any]:
+        company_name = company.get("company_display") or company.get("company")
+
+        direct_candidates = self._build_direct_candidates(company)
+        best_direct = self._evaluate_best_candidate(company_name, direct_candidates)
+
+        if best_direct["validation_status"] == "accepted":
+            return best_direct
+
+        serp_candidates = self._resolve_domain_via_serpapi(company_name)
+        best_serp = self._evaluate_best_candidate(company_name, serp_candidates)
+
+        if best_serp["validation_status"] == "accepted":
+            return best_serp
+
+        if best_serp["candidate"]:
+            if best_serp["validation_status"] == "rejected":
+                self.ctx.metrics["serpapi_domain_resolution_rejected_low_confidence"] = (
+                    int(self.ctx.metrics.get("serpapi_domain_resolution_rejected_low_confidence", 0)) + 1
+                )
+            return best_serp
+
+        return best_direct
 
     def resolve_domains(self, companies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         resolved: List[Dict[str, Any]] = []
         resolved_count = 0
+        accepted_count = 0
+        review_count = 0
+        rejected_count = 0
 
         for company in companies:
-            domain, source_field, confidence = self._resolve_company_domain(company)
+            outcome = self._resolve_company_domain(company)
+
+            domain = outcome.get("domain")
+            source_field = outcome.get("source")
+            confidence = float(outcome.get("score", 0.0))
+            candidate = outcome.get("candidate")
+            validation_status = outcome.get("validation_status", "rejected")
+            review_required = bool(outcome.get("review_required", False))
 
             record = dict(company)
             record["resolved_domain"] = domain
             record["domain_source"] = source_field
             record["domain_confidence"] = confidence
+            record["domain_candidate"] = candidate
+            record["domain_validation_status"] = validation_status
+            record["domain_review_required"] = review_required
+            record["domain_ai_validated"] = 0
+
+            if validation_status == "accepted":
+                accepted_count += 1
+            elif validation_status == "review":
+                review_count += 1
+            else:
+                rejected_count += 1
 
             if domain:
                 resolved_count += 1
@@ -97,6 +275,8 @@ class DomainResolutionService:
             resolved.append(record)
 
         self.ctx.metrics["companies_with_domain"] = resolved_count
+        self.ctx.metrics["domain_resolution_accepted"] = accepted_count
+        self.ctx.metrics["domain_resolution_review"] = review_count
+        self.ctx.metrics["domain_resolution_rejected"] = rejected_count
         self.ctx.metrics["domain_resolution_completed"] = True
-
         return resolved
