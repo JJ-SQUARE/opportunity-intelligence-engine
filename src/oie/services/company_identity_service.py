@@ -156,6 +156,69 @@ class CompanyIdentityService:
 
         return None
 
+
+    def _tokenize_identity_value(self, value: str | None) -> set[str]:
+        if not value:
+            return set()
+        parts = re.split(r"[^a-z0-9]+", value.lower())
+        stopwords = {
+            "sa", "s", "de", "cv", "llc", "inc", "corp", "co", "company",
+            "group", "solutions", "solution", "technology", "technologies",
+            "tech", "digital", "systems", "services", "service", "global",
+            "latam", "mx", "sas", "ltda"
+        }
+        return {p for p in parts if p and p not in stopwords and len(p) >= 3}
+
+    def _have_shared_resolved_domain(
+        self,
+        left: dict,
+        right: dict,
+    ) -> bool:
+        left_domain = (left.get("resolved_domain") or "").strip().lower()
+        right_domain = (right.get("resolved_domain") or "").strip().lower()
+        return bool(left_domain and right_domain and left_domain == right_domain)
+
+    def _is_safe_same_root_merge(
+        self,
+        left: dict,
+        right: dict,
+    ) -> bool:
+        left_norm = (left.get("company_normalized") or "").strip().lower()
+        right_norm = (right.get("company_normalized") or "").strip().lower()
+
+        if not left_norm or not right_norm:
+            return False
+
+        if left_norm == right_norm:
+            return True
+
+        if self._have_shared_resolved_domain(left, right):
+            return True
+
+        left_tokens = self._tokenize_identity_value(left_norm)
+        right_tokens = self._tokenize_identity_value(right_norm)
+
+        if not left_tokens or not right_tokens:
+            return False
+
+        shared = left_tokens & right_tokens
+
+        # exigir superposición fuerte; un solo token genérico no basta
+        if len(shared) >= 2:
+            return True
+
+        # si solo comparten 1 token, solo permitir cuando uno contiene al otro
+        # y además el token compartido es claramente la marca principal
+        if len(shared) == 1:
+            token = next(iter(shared))
+            if token in left_norm and token in right_norm:
+                if left_norm.startswith(token) or right_norm.startswith(token):
+                    if left_norm in right_norm or right_norm in left_norm:
+                        return True
+
+        return False
+
+
     def detect_merge_candidates(self, companies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         candidates: List[Dict[str, Any]] = []
         merge_rules = self.get_merge_rules()
