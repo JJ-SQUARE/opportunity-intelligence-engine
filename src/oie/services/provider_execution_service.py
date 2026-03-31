@@ -27,6 +27,43 @@ class ProviderExecutionService:
         self.ctx = ctx
         self.provider_control_service = provider_control_service
 
+    def _get_operation_limit(self, provider_name: str, operation_name: str) -> int | None:
+        providers_cfg = (self.ctx.config or {}).get("providers", {})
+        operation_limits = providers_cfg.get("operation_limits", {}) or {}
+        provider_limits = operation_limits.get(provider_name, {}) or {}
+        raw_limit = provider_limits.get(operation_name)
+        if raw_limit is None:
+            return None
+        return int(raw_limit)
+
+    def _get_operation_used_metric_key(self, provider_name: str, operation_name: str) -> str:
+        return _operation_metric_key(provider_name, operation_name, "used_calls")
+
+    def _get_operation_blocked_metric_key(self, provider_name: str, operation_name: str) -> str:
+        return _operation_metric_key(provider_name, operation_name, "blocked_budget")
+
+    def _can_execute_operation(self, provider_name: str, operation_name: str, cost: int) -> bool:
+        limit = self._get_operation_limit(provider_name, operation_name)
+        if limit is None:
+            return True
+
+        used_key = self._get_operation_used_metric_key(provider_name, operation_name)
+        used = int(self.ctx.metrics.get(used_key, 0))
+        return used + cost <= limit
+
+    def _consume_operation_budget(self, provider_name: str, operation_name: str, cost: int) -> None:
+        limit = self._get_operation_limit(provider_name, operation_name)
+        used_key = self._get_operation_used_metric_key(provider_name, operation_name)
+
+        self.ctx.metrics[used_key] = int(self.ctx.metrics.get(used_key, 0)) + cost
+
+        if limit is not None:
+            max_key = _operation_metric_key(provider_name, operation_name, "max_calls")
+            remaining_key = _operation_metric_key(provider_name, operation_name, "remaining_calls")
+            used = int(self.ctx.metrics.get(used_key, 0))
+            self.ctx.metrics[max_key] = limit
+            self.ctx.metrics[remaining_key] = max(limit - used, 0)
+
     def execute(
         self,
         provider_name: str,
@@ -58,8 +95,22 @@ class ProviderExecutionService:
                 f"Provider execution blocked for provider={provider_name} operation={operation_name}"
             )
 
+        if not self._can_execute_operation(provider_name, operation_name, cost):
+            blocked_metric_key = self._get_operation_blocked_metric_key(provider_name, operation_name)
+            self.ctx.metrics[blocked_metric_key] = int(self.ctx.metrics.get(blocked_metric_key, 0)) + 1
+            self.ctx.add_provider_event(
+                provider=provider_name,
+                event_type="operation_budget_blocked",
+                message=f"Operation budget blocked for operation={operation_name}",
+                metadata={"operation_name": operation_name, "cost": cost},
+            )
+            raise ProviderExecutionBlockedError(
+                f"Operation budget blocked for provider={provider_name} operation={operation_name}"
+            )
+
         try:
             self.provider_control_service.consume_budget(provider_name, amount=cost)
+            self._consume_operation_budget(provider_name, operation_name, cost)
         except BudgetExceededError as exc:
             self.ctx.add_provider_event(
                 provider=provider_name,

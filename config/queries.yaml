@@ -143,6 +143,13 @@ providers:
     serpapi:
       api_key_env: "SERPAPI_KEY"
 
+  operation_limits:
+    openai:
+      classify_company: 80
+      domain_ai_validation: 20
+    serpapi:
+      search_google: 25
+
 enrichment:
   enabled: false
 

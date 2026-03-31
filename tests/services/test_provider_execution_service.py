@@ -177,3 +177,103 @@ def test_execute_records_operation_specific_execution_error_metrics():
     assert attempts["n"] >= 1
     assert ctx.metrics["openai_classify_company_started"] >= 1
     assert ctx.metrics["openai_classify_company_errors_execution_error"] >= 1
+
+
+def test_execute_respects_operation_specific_budget_limit():
+    ctx = RunContext.create(
+        config={
+            "providers": {
+                "operation_limits": {
+                    "openai": {
+                        "domain_ai_validation": 1,
+                    }
+                }
+            }
+        }
+    )
+    provider_control_service = ProviderControlService(ctx)
+    provider_control_service.initialize()
+
+    service = ProviderExecutionService(ctx, provider_control_service)
+
+    def _ok(payload):
+        return {"ok": True}
+
+    result = service.execute(
+        "openai",
+        "domain_ai_validation",
+        _ok,
+        {"company_name": "Tenaris"},
+        cost=1,
+    )
+    assert result["ok"] is True
+
+    try:
+        service.execute(
+            "openai",
+            "domain_ai_validation",
+            _ok,
+            {"company_name": "Sofka"},
+            cost=1,
+        )
+        assert False, "Expected ProviderExecutionBlockedError"
+    except ProviderExecutionBlockedError:
+        pass
+
+    assert ctx.metrics["openai_domain_ai_validation_used_calls"] == 1
+    assert ctx.metrics["openai_domain_ai_validation_max_calls"] == 1
+    assert ctx.metrics["openai_domain_ai_validation_remaining_calls"] == 0
+    assert ctx.metrics["openai_domain_ai_validation_blocked_budget"] == 1
+
+
+def test_execute_allows_other_operation_when_one_operation_budget_is_exhausted():
+    ctx = RunContext.create(
+        config={
+            "providers": {
+                "operation_limits": {
+                    "openai": {
+                        "domain_ai_validation": 1,
+                        "classify_company": 2,
+                    }
+                }
+            }
+        }
+    )
+    provider_control_service = ProviderControlService(ctx)
+    provider_control_service.initialize()
+
+    service = ProviderExecutionService(ctx, provider_control_service)
+
+    def _ok(payload):
+        return {"ok": True}
+
+    service.execute(
+        "openai",
+        "domain_ai_validation",
+        _ok,
+        {"company_name": "Tenaris"},
+        cost=1,
+    )
+
+    try:
+        service.execute(
+            "openai",
+            "domain_ai_validation",
+            _ok,
+            {"company_name": "Sofka"},
+            cost=1,
+        )
+    except ProviderExecutionBlockedError:
+        pass
+
+    result = service.execute(
+        "openai",
+        "classify_company",
+        _ok,
+        {"company_name": "Acme"},
+        cost=1,
+    )
+
+    assert result["ok"] is True
+    assert ctx.metrics["openai_classify_company_used_calls"] == 1
+    assert ctx.metrics["openai_classify_company_remaining_calls"] == 1
