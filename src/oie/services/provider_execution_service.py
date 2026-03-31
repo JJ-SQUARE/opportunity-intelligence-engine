@@ -16,6 +16,12 @@ class ProviderExecutionBlockedError(ProviderExecutionError):
     pass
 
 
+def _operation_metric_key(provider_name: str, operation_name: str, suffix: str) -> str:
+    safe_provider = str(provider_name or "unknown").strip().lower().replace("-", "_").replace(" ", "_")
+    safe_operation = str(operation_name or "unknown").strip().lower().replace("-", "_").replace(" ", "_")
+    return f"{safe_provider}_{safe_operation}_{suffix}"
+
+
 class ProviderExecutionService:
     def __init__(self, ctx: RunContext, provider_control_service: ProviderControlService) -> None:
         self.ctx = ctx
@@ -83,6 +89,10 @@ class ProviderExecutionService:
                 self.ctx.metrics[f"{provider_name}_retry_count"] = (
                     int(self.ctx.metrics.get(f"{provider_name}_retry_count", 0)) + 1
                 )
+                retry_metric_key = _operation_metric_key(provider_name, operation_name, "retry_count")
+                self.ctx.metrics[retry_metric_key] = (
+                    int(self.ctx.metrics.get(retry_metric_key, 0)) + 1
+                )
                 time.sleep(delay)
 
             self.ctx.add_provider_event(
@@ -90,6 +100,10 @@ class ProviderExecutionService:
                 event_type="request_started",
                 message=f"Starting operation={operation_name}",
                 metadata={"operation_name": operation_name, "cost": cost, "attempt": attempt},
+            )
+            started_metric_key = _operation_metric_key(provider_name, operation_name, "started")
+            self.ctx.metrics[started_metric_key] = (
+                int(self.ctx.metrics.get(started_metric_key, 0)) + 1
             )
 
             try:
@@ -101,6 +115,10 @@ class ProviderExecutionService:
                     message=f"Completed operation={operation_name}",
                     metadata={"operation_name": operation_name, "attempt": attempt},
                 )
+                success_metric_key = _operation_metric_key(provider_name, operation_name, "success")
+                self.ctx.metrics[success_metric_key] = (
+                    int(self.ctx.metrics.get(success_metric_key, 0)) + 1
+                )
                 return result
             except TimeoutError as exc:
                 last_exception = exc
@@ -111,6 +129,10 @@ class ProviderExecutionService:
                     message=str(exc),
                     metadata={"operation_name": operation_name, "attempt": attempt},
                 )
+                timeout_metric_key = _operation_metric_key(provider_name, operation_name, "errors_timeout")
+                self.ctx.metrics[timeout_metric_key] = (
+                    int(self.ctx.metrics.get(timeout_metric_key, 0)) + 1
+                )
             except Exception as exc:
                 last_exception = exc
                 self.provider_control_service.register_provider_failure(provider_name, "execution_error")
@@ -119,6 +141,10 @@ class ProviderExecutionService:
                     event_type="execution_error",
                     message=str(exc),
                     metadata={"operation_name": operation_name, "attempt": attempt},
+                )
+                execution_error_metric_key = _operation_metric_key(provider_name, operation_name, "errors_execution_error")
+                self.ctx.metrics[execution_error_metric_key] = (
+                    int(self.ctx.metrics.get(execution_error_metric_key, 0)) + 1
                 )
 
         raise ProviderExecutionError(

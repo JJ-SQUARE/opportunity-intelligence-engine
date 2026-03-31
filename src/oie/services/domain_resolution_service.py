@@ -7,7 +7,11 @@ from oie.orchestration.run_context import RunContext
 from oie.services.domain_confidence_service import DomainConfidenceService
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.serpapi_search_service import SerpAPISearchService
+from oie.services.provider_execution_service import ProviderExecutionError
 from oie.utils.domain_filters import is_job_board_domain, normalize_domain
+from oie.utils.company_identity_utils import is_actionable_company_name
+from oie.services.domain_ai_validation_service import DomainAIValidationService
+from oie.utils.company_name_extraction import extract_actionable_company_name
 
 
 BLOCKED_DOMAINS = {
@@ -30,6 +34,24 @@ BLOCKED_DOMAINS = {
     "jobs.teamtailor.com",
     "breezy.hr",
     "app.breezy.hr",
+    "jobgether.com",
+    "www.jobgether.com",
+    "multitrabajos.com",
+    "www.multitrabajos.com",
+    "vacantesdigitales.com",
+    "www.vacantesdigitales.com",
+    "computrabajo.com",
+    "www.computrabajo.com",
+    "talenteca.com",
+    "www.talenteca.com",
+    "grabjobs.co",
+    "www.grabjobs.co",
+    "jobleads.com",
+    "www.jobleads.com",
+    "oficinaempleo.com",
+    "www.oficinaempleo.com",
+    "quierolaburo.com",
+    "www.quierolaburo.com",
     "t.co",
     "bit.ly",
     "goo.gl",
@@ -44,10 +66,12 @@ class DomainResolutionService:
         ctx: RunContext,
         provider_control_service: Optional[ProviderControlService] = None,
         serpapi_search_service: Optional[SerpAPISearchService] = None,
+        domain_ai_validation_service: Optional[DomainAIValidationService] = None,
     ) -> None:
         self.ctx = ctx
         self.provider_control_service = provider_control_service
         self.serpapi_search_service = serpapi_search_service
+        self.domain_ai_validation_service = domain_ai_validation_service
 
         config = ctx.config.get("domain_resolution", {}) if ctx.config else {}
         self.serpapi_fallback_limit = int(config.get("serpapi_fallback_limit", 25))
@@ -90,6 +114,58 @@ class DomainResolutionService:
     def _should_skip_generic_name(self, company_name: Optional[str]) -> bool:
         return self.confidence_service.is_generic_company_name(company_name)
 
+    def _is_aggregator_candidate(self, candidate: Dict[str, Any]) -> bool:
+        domain = candidate.get("domain")
+        return self._is_blocked_domain(domain)
+
+    def _can_attempt_domain_resolution(self, company_name: Optional[str]) -> bool:
+        return is_actionable_company_name(company_name)
+
+    def _resolve_effective_company_name(self, company: Dict[str, Any]) -> Optional[str]:
+        return extract_actionable_company_name(
+            company_display=company.get("company_display") or company.get("company"),
+            title=company.get("title"),
+            snippet=company.get("snippet") or company.get("description"),
+            apply_url=company.get("apply_url"),
+        )
+
+    def _should_send_candidate_to_ai(
+        self,
+        company_name: Optional[str],
+        candidate: Dict[str, Any],
+        validation_status: str,
+        score: float,
+    ) -> bool:
+        if validation_status != "review":
+            return False
+
+        if not self._can_attempt_domain_resolution(company_name):
+            return False
+
+        domain = candidate.get("domain")
+        if not domain:
+            return False
+
+        source = candidate.get("source")
+        is_aggregator = self._is_aggregator_candidate(candidate)
+
+        # No gastar AI en agregadores directos de apply/url
+        if is_aggregator and source in {"apply_url", "url"}:
+            return False
+
+        # Mantener AI solo para zona gris útil
+        if score < self.review_threshold:
+            return False
+
+        if score > 0.75:
+            return False
+
+        return self.domain_ai_validation_service is not None
+
+    def _is_aggregator_candidate(self, candidate: Dict[str, Any]) -> bool:
+        domain = candidate.get("domain")
+        return self._is_blocked_domain(domain)
+
     def _build_direct_candidates(self, company: Dict[str, Any]) -> List[Dict[str, Any]]:
         candidates: List[Dict[str, Any]] = []
 
@@ -108,37 +184,45 @@ class DomainResolutionService:
                     "serp_rank": None,
                     "title": "",
                     "snippet": "",
+                    "is_aggregator": self._is_blocked_domain(domain),
                 }
             )
 
         return candidates
 
     def _classify_resolution_priority(self, company: Dict[str, Any]) -> int:
-        company_name = company.get("company_display") or company.get("company") or ""
-        company_name_norm = str(company_name).strip().lower()
-
-        high_priority_names = {
-            "decskill españa",
-            "congelados polar",
-            "sofka technologies",
-            "digital solutions 324 sl",
-            "digital solutions 324",
-            "digital solutions 324 sl.",
-        }
-
-        if company_name_norm in high_priority_names:
-            return 0
+        company_name = self._resolve_effective_company_name(company)
+        raw_company_name = company.get("company_display") or company.get("company") or ""
 
         apply_domain = self._extract_domain(company.get("apply_url"))
         url_domain = self._extract_domain(company.get("url"))
 
-        if apply_domain and self._is_blocked_domain(apply_domain):
+        apply_blocked = bool(apply_domain and self._is_blocked_domain(apply_domain))
+        url_blocked = bool(url_domain and self._is_blocked_domain(url_domain))
+
+        has_blocked_direct_source = apply_blocked or url_blocked
+        has_actionable_name = bool(company_name and self._can_attempt_domain_resolution(company_name))
+        raw_name_actionable = self._can_attempt_domain_resolution(raw_company_name)
+
+        # Prioridad 0:
+        # Casos de mayor valor: agregador/job-board con nombre de empresa accionable
+        # (incluye nombres extraídos desde title/snippet/apply_url como "Tenaris")
+        if has_blocked_direct_source and has_actionable_name:
+            return 0
+
+        # Prioridad 1:
+        # Empresa accionable sin dominio directo útil, pero con posibilidad de resolver por SerpAPI
+        if has_actionable_name and not (apply_domain or url_domain):
             return 1
 
-        if url_domain and self._is_blocked_domain(url_domain):
-            return 1
+        # Prioridad 2:
+        # Nombre visible accionable, aunque no sea caso crítico de agregador
+        if raw_name_actionable:
+            return 2
 
-        return 2
+        # Prioridad 3:
+        # Confidencial / no accionable / ruido
+        return 3
 
 
     def _resolve_domain_via_serpapi(self, company_name: Optional[str]) -> List[Dict[str, Any]]:
@@ -163,8 +247,23 @@ class DomainResolutionService:
             self.ctx.metrics["serpapi_domain_resolution_skipped_no_service"] = True
             return []
 
-        payload = service.search_google(f"{company_name} official website", num=5) or {}
-        self._serpapi_fallback_count += 1
+        try:
+            payload = service.search_google(f"{company_name} official website", num=5) or {}
+            self._serpapi_fallback_count += 1
+        except ProviderExecutionError as exc:
+            self.ctx.metrics["serpapi_domain_resolution_provider_errors"] = (
+                int(self.ctx.metrics.get("serpapi_domain_resolution_provider_errors", 0)) + 1
+            )
+            self.ctx.add_provider_event(
+                provider="serpapi",
+                event_type="domain_resolution_search_failed",
+                message="serpapi_domain_resolution_failed",
+                metadata={
+                    "company_name": company_name,
+                    "error": repr(exc),
+                },
+            )
+            return []
 
         organic_results = payload.get("organic_results") or []
         candidates: List[Dict[str, Any]] = []
@@ -196,6 +295,9 @@ class DomainResolutionService:
             "validation_status": "rejected",
             "review_required": False,
             "ai_validated": 0,
+            "ai_decision": None,
+            "ai_confidence": None,
+            "ai_reason": None,
         }
 
     def _evaluate_best_candidate(
@@ -206,16 +308,34 @@ class DomainResolutionService:
         if not candidates:
             return self._empty_outcome()
 
-        best = self.confidence_service.pick_best_candidate(company_name, candidates)
+        pre_scored_single_candidate = (
+            len(candidates) == 1
+            and any(
+                key in candidates[0]
+                for key in (
+                    "score",
+                    "validation_status",
+                    "review_required",
+                    "confidence_blocked",
+                )
+            )
+        )
+
+        if pre_scored_single_candidate:
+            best = dict(candidates[0])
+        else:
+            best = self.confidence_service.pick_best_candidate(company_name, candidates)
+
         if not best:
             return self._empty_outcome()
 
         domain = best.get("domain")
         source = best.get("source")
-        score = float(best.get("score", 0.0))
+        score = float(best.get("score", 0.0) or 0.0)
         blocked = bool(best.get("confidence_blocked", False))
         validation_status = best.get("validation_status", "rejected")
-        review_required = bool(best.get("review_required", False))
+        review_required = bool(best.get("review_required", validation_status == "review"))
+        is_aggregator = self._is_aggregator_candidate(best)
 
         if blocked:
             return {
@@ -226,7 +346,55 @@ class DomainResolutionService:
                 "validation_status": "rejected",
                 "review_required": False,
                 "ai_validated": 0,
+                "ai_decision": None,
+                "ai_confidence": None,
+                "ai_reason": None,
             }
+
+        # Si el mejor candidato directo viene de un agregador/job board,
+        # nunca lo aceptamos como dominio final de la empresa.
+        # Lo dejamos en review para permitir fallback posterior (SerpAPI / IA).
+        if is_aggregator and source in {"apply_url", "url"}:
+            return {
+                "domain": None,
+                "source": source,
+                "score": score,
+                "candidate": domain,
+                "validation_status": "review",
+                "review_required": True,
+                "ai_validated": 0,
+                "ai_decision": None,
+                "ai_confidence": None,
+                "ai_reason": "direct_aggregator_candidate",
+            }
+
+        ai_validated = 0
+        ai_decision = None
+        ai_confidence = None
+        ai_reason = None
+
+        if self._should_send_candidate_to_ai(
+            company_name,
+            best,
+            validation_status,
+            score,
+        ):
+            ai_result = self.domain_ai_validation_service.validate(
+                company_name or "",
+                [best],
+            )
+            ai_validated = 1
+            ai_decision = ai_result.get("decision")
+            ai_confidence = ai_result.get("confidence")
+            ai_reason = ai_result.get("reason")
+
+            if (
+                ai_result.get("decision") == "accepted"
+                and ai_result.get("selected_domain") == domain
+            ):
+                validation_status = "accepted"
+                review_required = False
+                score = max(score, float(ai_result.get("confidence", score)))
 
         return {
             "domain": domain if validation_status == "accepted" else None,
@@ -235,18 +403,30 @@ class DomainResolutionService:
             "candidate": domain,
             "validation_status": validation_status,
             "review_required": review_required,
-            "ai_validated": 0,
+            "ai_validated": ai_validated,
+            "ai_decision": ai_decision,
+            "ai_confidence": ai_confidence,
+            "ai_reason": ai_reason,
         }
 
     def _resolve_company_domain(self, company: Dict[str, Any]) -> Dict[str, Any]:
-        company_name = company.get("company_display") or company.get("company")
+        company_name = self._resolve_effective_company_name(company)
+
+        if not self._can_attempt_domain_resolution(company_name):
+            self.ctx.metrics["domain_resolution_skipped_non_actionable_company_name"] = (
+                int(self.ctx.metrics.get("domain_resolution_skipped_non_actionable_company_name", 0)) + 1
+            )
+            return self._empty_outcome()
 
         direct_candidates = self._build_direct_candidates(company)
         best_direct = self._evaluate_best_candidate(company_name, direct_candidates)
 
+        # Si el directo ya quedó aceptado con dominio válido, lo usamos.
         if best_direct["validation_status"] == "accepted":
             return best_direct
 
+        # Si el directo es review (por ejemplo, apply_url de agregador),
+        # intentamos resolver el dominio real vía SerpAPI.
         serp_candidates = self._resolve_domain_via_serpapi(company_name)
         best_serp = self._evaluate_best_candidate(company_name, serp_candidates)
 
@@ -260,7 +440,10 @@ class DomainResolutionService:
                 )
             return best_serp
 
-        return best_direct if best_direct["candidate"] else self._empty_outcome()
+        if best_direct["candidate"]:
+            return best_direct
+
+        return self._empty_outcome()
 
     def resolve_domains(self, companies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         resolved: List[Dict[str, Any]] = []
@@ -306,6 +489,9 @@ class DomainResolutionService:
                 record["domain_validation_status"] = validation_status
                 record["domain_review_required"] = 1 if review_required else 0
                 record["domain_ai_validated"] = ai_validated
+                record["domain_ai_decision"] = outcome.get("ai_decision")
+                record["domain_ai_confidence"] = outcome.get("ai_confidence")
+                record["domain_ai_reason"] = outcome.get("ai_reason")
 
                 if validation_status == "accepted":
                     accepted_count += 1

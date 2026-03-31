@@ -15,6 +15,7 @@ from oie.services.company_enrichment_service import CompanyEnrichmentService
 from oie.services.company_identity_service import CompanyIdentityService
 from oie.services.db_export_service import DBExportService
 from oie.services.domain_resolution_service import DomainResolutionService
+from oie.services.domain_ai_validation_service import DomainAIValidationService
 from oie.services.duplicate_report_service import DuplicateReportService
 from oie.services.executive_summary_service import ExecutiveSummaryService
 from oie.services.historical_export_service import HistoricalExportService
@@ -39,6 +40,7 @@ from oie.services.provider_control_service import ProviderControlService
 from oie.services.run_readiness_export_service import RunReadinessExportService
 from oie.services.run_readiness_service import RunReadinessService
 from oie.services.serpapi_search_service import SerpAPISearchService
+from oie.services.domain_review_queue_service import DomainReviewQueueService
 
 
 class PipelineOrchestrator:
@@ -56,6 +58,7 @@ class PipelineOrchestrator:
         self.master_data_service = MasterDataService(ctx)
         self.master_dedup_service = MasterDedupService(ctx)
         self.duplicate_report_service = DuplicateReportService(ctx)
+        self.domain_review_queue_service = DomainReviewQueueService(ctx)
         self.db_export_service = DBExportService(ctx)
         self.opportunity_dataset_service = OpportunityDatasetService(ctx)
         self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
@@ -89,10 +92,15 @@ class PipelineOrchestrator:
         )
         self.lead_ranking_service = LeadRankingService(ctx)
         self.serpapi_search_service = SerpAPISearchService(ctx, self.provider_control_service)
+        self.domain_ai_validation_service = DomainAIValidationService(
+            ctx,
+            self.provider_control_service,
+        )
         self.domain_resolution_service = DomainResolutionService(
             ctx,
             self.provider_control_service,
             self.serpapi_search_service,
+            self.domain_ai_validation_service,
         )
 
     def run_initial_stages(self) -> List[Dict[str, Any]]:
@@ -205,6 +213,7 @@ class PipelineOrchestrator:
             leads_duplicates=[],
         )
         self.duplicate_report_service.write_suspected_duplicates_report(duplicate_report_rows)
+        self.domain_review_queue_service.export_csv(companies)
         self.db_export_service.export_all()
 
         dataset = self.opportunity_dataset_service.build_dataset()
@@ -278,6 +287,7 @@ class PipelineOrchestrator:
             "provider_events_count": len(self.ctx.provider_events),
             "db_path": self.ctx.paths.get("db_path"),
             "suspected_duplicates_report": self.ctx.paths.get("suspected_duplicates_report"),
+            "domain_review_queue_csv": self.ctx.paths.get("domain_review_queue_csv"),
             "companies_export": self.ctx.paths.get("companies_export"),
             "jobs_export": self.ctx.paths.get("jobs_export"),
             "leads_export": self.ctx.paths.get("leads_export"),

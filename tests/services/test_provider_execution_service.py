@@ -72,3 +72,108 @@ def test_provider_execution_service_respects_dry_run_mode():
         assert True
 
     assert ctx.budgets["openai"]["used_calls"] == 0
+
+
+def test_execute_records_operation_specific_success_metrics():
+    ctx = RunContext.create(config={})
+    pcs = ProviderControlService(ctx)
+    pcs.initialize()
+
+    service = ProviderExecutionService(ctx, pcs)
+
+    def _ok(payload):
+        return {"ok": True, "payload": payload}
+
+    result = service.execute(
+        "openai",
+        "domain_ai_validation",
+        _ok,
+        {"company_name": "Tenaris"},
+        cost=1,
+    )
+
+    assert result["ok"] is True
+    assert ctx.metrics["openai_domain_ai_validation_started"] == 1
+    assert ctx.metrics["openai_domain_ai_validation_success"] == 1
+
+
+def test_execute_records_operation_specific_retry_and_error_metrics():
+    ctx = RunContext.create(config={})
+    pcs = ProviderControlService(ctx)
+    pcs.initialize()
+
+    service = ProviderExecutionService(ctx, pcs)
+
+    attempts = {"n": 0}
+
+    def _fail(*args, **kwargs):
+        attempts["n"] += 1
+        raise RuntimeError("boom")
+
+    try:
+        service.execute(
+            "openai",
+            "classify_company",
+            _fail,
+            {"company_name": "Acme"},
+            cost=1,
+        )
+    except ProviderExecutionError:
+        pass
+
+    assert attempts["n"] >= 1
+    assert ctx.metrics["openai_classify_company_started"] >= 1
+    assert ctx.metrics["openai_classify_company_errors_execution_error"] >= 1
+    assert ctx.metrics.get("openai_classify_company_retry_count", 0) >= 0
+
+
+def test_execute_records_operation_specific_success_metrics():
+    ctx = RunContext.create(config={})
+    provider_control_service = ProviderControlService(ctx)
+    provider_control_service.initialize()
+
+    service = ProviderExecutionService(ctx, provider_control_service)
+
+    def _ok(payload):
+        return {"ok": True, "payload": payload}
+
+    result = service.execute(
+        "openai",
+        "domain_ai_validation",
+        _ok,
+        {"company_name": "Tenaris"},
+        cost=1,
+    )
+
+    assert result["ok"] is True
+    assert ctx.metrics["openai_domain_ai_validation_started"] == 1
+    assert ctx.metrics["openai_domain_ai_validation_success"] == 1
+
+
+def test_execute_records_operation_specific_execution_error_metrics():
+    ctx = RunContext.create(config={})
+    provider_control_service = ProviderControlService(ctx)
+    provider_control_service.initialize()
+
+    service = ProviderExecutionService(ctx, provider_control_service)
+
+    attempts = {"n": 0}
+
+    def _fail(*args, **kwargs):
+        attempts["n"] += 1
+        raise RuntimeError("boom")
+
+    try:
+        service.execute(
+            "openai",
+            "classify_company",
+            _fail,
+            {"company_name": "Acme"},
+            cost=1,
+        )
+    except ProviderExecutionError:
+        pass
+
+    assert attempts["n"] >= 1
+    assert ctx.metrics["openai_classify_company_started"] >= 1
+    assert ctx.metrics["openai_classify_company_errors_execution_error"] >= 1
