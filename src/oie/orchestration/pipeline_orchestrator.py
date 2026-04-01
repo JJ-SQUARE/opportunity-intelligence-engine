@@ -37,6 +37,8 @@ from oie.services.opportunity_scoring_service import OpportunityScoringService
 from oie.services.outbound_export_service import OutboundExportService
 from oie.services.persistence_service import PersistenceService
 from oie.services.provider_control_service import ProviderControlService
+from oie.services.provider_operation_metrics_service import ProviderOperationMetricsService
+from oie.services.provider_operation_metrics_export_service import ProviderOperationMetricsExportService
 from oie.services.run_readiness_export_service import RunReadinessExportService
 from oie.services.run_readiness_service import RunReadinessService
 from oie.services.serpapi_search_service import SerpAPISearchService
@@ -78,6 +80,8 @@ class PipelineOrchestrator:
         self.collector_roi_export_service = CollectorROIExportService(ctx)
         self.run_readiness_service = RunReadinessService(ctx)
         self.run_readiness_export_service = RunReadinessExportService(ctx)
+        self.provider_operation_metrics_service = ProviderOperationMetricsService(ctx)
+        self.provider_operation_metrics_export_service = ProviderOperationMetricsExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
             ctx,
             self.provider_control_service,
@@ -267,6 +271,10 @@ class PipelineOrchestrator:
         self.collector_roi_export_service.export_csv(collector_roi)
         self.collector_roi_export_service.export_json(collector_roi)
 
+        provider_operation_metrics = self.provider_operation_metrics_service.build_rows()
+        self.provider_operation_metrics_export_service.export_csv(provider_operation_metrics)
+        self.provider_operation_metrics_export_service.export_json(provider_operation_metrics)
+
         readiness_report = self.run_readiness_service.build_report(
             jobs=unique_jobs,
             companies=companies,
@@ -310,5 +318,7 @@ class PipelineOrchestrator:
             "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
             "collector_roi_metrics_csv": self.ctx.paths.get("collector_roi_metrics_csv"),
             "collector_roi_metrics_json": self.ctx.paths.get("collector_roi_metrics_json"),
+            "provider_operation_metrics_csv": self.ctx.paths.get("provider_operation_metrics_csv"),
+            "provider_operation_metrics_json": self.ctx.paths.get("provider_operation_metrics_json"),
             "run_readiness_report_json": self.ctx.paths.get("run_readiness_report_json"),
         }
