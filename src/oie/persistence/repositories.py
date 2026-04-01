@@ -79,6 +79,57 @@ class ProviderEventRepository:
             conn.close()
 
 
+
+class ProviderOperationMetricsRepository:
+    def __init__(self, db_path: str = "data/oie.db") -> None:
+        self.db_path = db_path
+
+    def replace_rows(self, run_id: str, rows: List[Dict[str, Any]]) -> None:
+        conn = get_connection(self.db_path)
+        try:
+            conn.execute("DELETE FROM provider_operation_metrics WHERE run_id = ?", (run_id,))
+            if rows:
+                conn.executemany(
+                    """
+                    INSERT INTO provider_operation_metrics (
+                        run_id,
+                        provider,
+                        operation,
+                        max_calls,
+                        used_calls,
+                        remaining_calls,
+                        started,
+                        success,
+                        retry_count,
+                        blocked_budget,
+                        errors_timeout,
+                        errors_execution_error
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            run_id,
+                            row.get("provider"),
+                            row.get("operation"),
+                            row.get("max_calls"),
+                            row.get("used_calls", 0),
+                            row.get("remaining_calls"),
+                            row.get("started", 0),
+                            row.get("success", 0),
+                            row.get("retry_count", 0),
+                            row.get("blocked_budget", 0),
+                            row.get("errors_timeout", 0),
+                            row.get("errors_execution_error", 0),
+                        )
+                        for row in rows
+                    ],
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+
 class CompanyRepository:
     def __init__(self, db_path: str = "data/oie.db") -> None:
         self.db_path = db_path

@@ -12,10 +12,12 @@ from oie.persistence.repositories import (
     JobRepository,
     LeadRepository,
     ProviderEventRepository,
+    ProviderOperationMetricsRepository,
     RunMetricsRepository,
     RunRepository,
 )
 from oie.persistence.sqlite import initialize_database
+from oie.services.provider_operation_metrics_service import ProviderOperationMetricsService
 
 
 class PersistenceService:
@@ -25,6 +27,8 @@ class PersistenceService:
         self.run_repository = RunRepository(self.db_path)
         self.run_metrics_repository = RunMetricsRepository(self.db_path)
         self.provider_event_repository = ProviderEventRepository(self.db_path)
+        self.provider_operation_metrics_repository = ProviderOperationMetricsRepository(self.db_path)
+        self.provider_operation_metrics_service = ProviderOperationMetricsService(ctx)
         self.company_repository = CompanyRepository(self.db_path)
         self.company_alias_repository = CompanyAliasRepository(self.db_path)
         self.domain_repository = DomainRepository(self.db_path)
@@ -54,6 +58,13 @@ class PersistenceService:
         self.provider_event_repository.replace_events(
             run_id=self.ctx.run_id,
             provider_events=self.ctx.provider_events,
+        )
+
+    def persist_provider_operation_metrics(self) -> None:
+        rows = self.provider_operation_metrics_service.build_rows()
+        self.provider_operation_metrics_repository.replace_rows(
+            run_id=self.ctx.run_id,
+            rows=rows,
         )
 
     def persist_companies(self, companies: List[Dict[str, Any]]) -> None:
@@ -93,6 +104,7 @@ class PersistenceService:
         self.persist_run(status=status)
         self.persist_metrics()
         self.persist_provider_events()
+        self.persist_provider_operation_metrics()
 
         if companies is not None:
             self.persist_companies(companies)

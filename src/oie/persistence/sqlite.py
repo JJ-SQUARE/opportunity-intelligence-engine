@@ -143,6 +143,25 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 FOREIGN KEY (company_key) REFERENCES companies (company_key)
             );
 
+            CREATE TABLE IF NOT EXISTS provider_operation_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                max_calls INTEGER,
+                used_calls INTEGER DEFAULT 0,
+                remaining_calls INTEGER,
+                started INTEGER DEFAULT 0,
+                success INTEGER DEFAULT 0,
+                retry_count INTEGER DEFAULT 0,
+                blocked_budget INTEGER DEFAULT 0,
+                errors_timeout INTEGER DEFAULT 0,
+                errors_execution_error INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (run_id) REFERENCES runs (run_id)
+            );
+
+
             CREATE TABLE IF NOT EXISTS company_scores (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id TEXT NOT NULL,
@@ -196,6 +215,13 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_leads_email
             ON leads (email);
+
+            CREATE INDEX IF NOT EXISTS idx_provider_operation_metrics_run_id
+            ON provider_operation_metrics (run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_provider_operation_metrics_provider_operation
+            ON provider_operation_metrics (provider, operation);
+
 
             CREATE INDEX IF NOT EXISTS idx_company_scores_run_id
             ON company_scores (run_id);
