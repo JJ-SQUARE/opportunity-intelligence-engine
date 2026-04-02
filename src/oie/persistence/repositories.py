@@ -102,10 +102,13 @@ class ProviderOperationMetricsRepository:
                         success,
                         retry_count,
                         blocked_budget,
+                        blocked_provider,
                         errors_timeout,
+                        errors_rate_limit,
+                        errors_http_5xx,
                         errors_execution_error
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         (
@@ -119,7 +122,10 @@ class ProviderOperationMetricsRepository:
                             row.get("success", 0),
                             row.get("retry_count", 0),
                             row.get("blocked_budget", 0),
+                            row.get("blocked_provider", 0),
                             row.get("errors_timeout", 0),
+                            row.get("errors_rate_limit", 0),
+                            row.get("errors_http_5xx", 0),
                             row.get("errors_execution_error", 0),
                         )
                         for row in rows

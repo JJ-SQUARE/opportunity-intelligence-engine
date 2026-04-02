@@ -31,6 +31,7 @@ class SerpAPISearchService:
         client = self.provider_control_service.registry.get_client("serpapi")
         if client is None:
             self.ctx.metrics["serpapi_search_skipped_no_client"] = True
+            self.ctx.metrics["serpapi_search_google_jobs_skipped_no_client"] = True
             return {}
 
         try:
@@ -45,6 +46,7 @@ class SerpAPISearchService:
             )
         except ProviderExecutionBlockedError:
             self.ctx.metrics["serpapi_search_skipped_blocked"] = True
+            self.ctx.metrics["serpapi_search_google_jobs_skipped_blocked"] = True
             return {}
 
         self.ctx.metrics["serpapi_search_requests"] = (
@@ -61,6 +63,7 @@ class SerpAPISearchService:
         client = self.provider_control_service.registry.get_client("serpapi")
         if client is None:
             self.ctx.metrics["serpapi_search_skipped_no_client"] = True
+            self.ctx.metrics["serpapi_search_google_skipped_no_client"] = True
             return {}
 
         try:
@@ -74,6 +77,7 @@ class SerpAPISearchService:
             )
         except ProviderExecutionBlockedError:
             self.ctx.metrics["serpapi_search_skipped_blocked"] = True
+            self.ctx.metrics["serpapi_search_google_skipped_blocked"] = True
             return {}
 
         self.ctx.metrics["serpapi_search_requests"] = (

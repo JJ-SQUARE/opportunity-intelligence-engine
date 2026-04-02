@@ -14,7 +14,10 @@ KNOWN_SUFFIXES = [
     "success",
     "retry_count",
     "blocked_budget",
+    "blocked_provider",
     "errors_timeout",
+    "errors_rate_limit",
+    "errors_http_5xx",
     "errors_execution_error",
 ]
 
@@ -63,7 +66,10 @@ class ProviderOperationMetricsService:
                     "success": 0,
                     "retry_count": 0,
                     "blocked_budget": 0,
+                    "blocked_provider": 0,
                     "errors_timeout": 0,
+                    "errors_rate_limit": 0,
+                    "errors_http_5xx": 0,
                     "errors_execution_error": 0,
                 }
 

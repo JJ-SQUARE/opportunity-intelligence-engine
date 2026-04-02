@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import time
+
+import requests
 from typing import Any, Callable
 
 from oie.orchestration.run_context import RunContext
@@ -85,6 +87,10 @@ class ProviderExecutionService:
             )
 
         if not self.provider_control_service.can_execute(provider_name):
+            blocked_provider_key = _operation_metric_key(provider_name, operation_name, "blocked_provider")
+            self.ctx.metrics[blocked_provider_key] = (
+                int(self.ctx.metrics.get(blocked_provider_key, 0)) + 1
+            )
             self.ctx.add_provider_event(
                 provider=provider_name,
                 event_type="blocked",
@@ -184,6 +190,59 @@ class ProviderExecutionService:
                 self.ctx.metrics[timeout_metric_key] = (
                     int(self.ctx.metrics.get(timeout_metric_key, 0)) + 1
                 )
+            except requests.exceptions.HTTPError as exc:
+                last_exception = exc
+                response = getattr(exc, "response", None)
+                status_code = getattr(response, "status_code", None)
+
+                if status_code == 429:
+                    self.provider_control_service.register_provider_failure(provider_name, "rate_limit")
+                    self.ctx.add_provider_event(
+                        provider=provider_name,
+                        event_type="rate_limit",
+                        message=str(exc),
+                        metadata={
+                            "operation_name": operation_name,
+                            "attempt": attempt,
+                            "status_code": status_code,
+                        },
+                    )
+                    metric_key = _operation_metric_key(provider_name, operation_name, "errors_rate_limit")
+                    self.ctx.metrics[metric_key] = (
+                        int(self.ctx.metrics.get(metric_key, 0)) + 1
+                    )
+                elif status_code is not None and 500 <= int(status_code) < 600:
+                    self.provider_control_service.register_provider_failure(provider_name, "http_5xx")
+                    self.ctx.add_provider_event(
+                        provider=provider_name,
+                        event_type="http_5xx",
+                        message=str(exc),
+                        metadata={
+                            "operation_name": operation_name,
+                            "attempt": attempt,
+                            "status_code": status_code,
+                        },
+                    )
+                    metric_key = _operation_metric_key(provider_name, operation_name, "errors_http_5xx")
+                    self.ctx.metrics[metric_key] = (
+                        int(self.ctx.metrics.get(metric_key, 0)) + 1
+                    )
+                else:
+                    self.provider_control_service.register_provider_failure(provider_name, "execution_error")
+                    self.ctx.add_provider_event(
+                        provider=provider_name,
+                        event_type="execution_error",
+                        message=str(exc),
+                        metadata={
+                            "operation_name": operation_name,
+                            "attempt": attempt,
+                            "status_code": status_code,
+                        },
+                    )
+                    metric_key = _operation_metric_key(provider_name, operation_name, "errors_execution_error")
+                    self.ctx.metrics[metric_key] = (
+                        int(self.ctx.metrics.get(metric_key, 0)) + 1
+                    )
             except Exception as exc:
                 last_exception = exc
                 self.provider_control_service.register_provider_failure(provider_name, "execution_error")

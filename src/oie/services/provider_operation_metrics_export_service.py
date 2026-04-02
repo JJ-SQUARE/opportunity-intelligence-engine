@@ -38,7 +38,10 @@ class ProviderOperationMetricsExportService:
             "success",
             "retry_count",
             "blocked_budget",
+            "blocked_provider",
             "errors_timeout",
+            "errors_rate_limit",
+            "errors_http_5xx",
             "errors_execution_error",
         ]
 

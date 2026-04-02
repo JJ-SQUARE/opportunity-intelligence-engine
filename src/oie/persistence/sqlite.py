@@ -155,7 +155,10 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 success INTEGER DEFAULT 0,
                 retry_count INTEGER DEFAULT 0,
                 blocked_budget INTEGER DEFAULT 0,
+                blocked_provider INTEGER DEFAULT 0,
                 errors_timeout INTEGER DEFAULT 0,
+                errors_rate_limit INTEGER DEFAULT 0,
+                errors_http_5xx INTEGER DEFAULT 0,
                 errors_execution_error INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (run_id) REFERENCES runs (run_id)
@@ -254,6 +257,20 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
         for column_name, column_type in required_company_columns.items():
             if column_name not in company_columns:
                 conn.execute(f"ALTER TABLE companies ADD COLUMN {column_name} {column_type}")
+
+        provider_operation_metrics_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(provider_operation_metrics)").fetchall()
+        }
+        required_provider_operation_metrics_columns = {
+            "blocked_provider": "INTEGER DEFAULT 0",
+            "errors_rate_limit": "INTEGER DEFAULT 0",
+            "errors_http_5xx": "INTEGER DEFAULT 0",
+        }
+        for column_name, column_type in required_provider_operation_metrics_columns.items():
+            if column_name not in provider_operation_metrics_columns:
+                conn.execute(
+                    f"ALTER TABLE provider_operation_metrics ADD COLUMN {column_name} {column_type}"
+                )
 
         lead_columns = {row["name"] for row in conn.execute("PRAGMA table_info(leads)").fetchall()}
         required_lead_columns = {

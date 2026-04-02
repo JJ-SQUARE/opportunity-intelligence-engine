@@ -60,6 +60,33 @@ class RunReadinessService:
         if len(self.ctx.provider_events) > 0:
             warnings.append("La corrida registró provider_events; revisar si hubo errores relevantes.")
 
+        collector_error_keys = [
+            key for key, value in metrics.items()
+            if key.startswith("collector_") and key.endswith("_status") and str(value) == "error"
+        ]
+        if collector_error_keys:
+            warnings.append(
+                f"Se detectaron collectors con error: {', '.join(sorted(collector_error_keys))}."
+            )
+
+        rate_limit_keys = [
+            key for key, value in metrics.items()
+            if key.endswith("_errors_rate_limit") and int(value or 0) > 0
+        ]
+        if rate_limit_keys:
+            warnings.append(
+                f"Se detectaron rate limits en operaciones provider: {', '.join(sorted(rate_limit_keys))}."
+            )
+
+        blocked_budget_keys = [
+            key for key, value in metrics.items()
+            if key.endswith("_blocked_budget") and int(value or 0) > 0
+        ]
+        if blocked_budget_keys:
+            warnings.append(
+                f"Se detectaron bloqueos por presupuesto operativo: {', '.join(sorted(blocked_budget_keys))}."
+            )
+
         is_ready = len(jobs) > 0 and len(companies) > 0
 
         report = {
@@ -81,6 +108,9 @@ class RunReadinessService:
                 "leads_export": paths.get("leads_export"),
                 "opportunities_export": paths.get("opportunities_export"),
                 "top_opportunities_export": paths.get("top_opportunities_export"),
+                "domain_review_queue_csv": paths.get("domain_review_queue_csv"),
+                "provider_operation_metrics_json": paths.get("provider_operation_metrics_json"),
+                "provider_operation_metrics_csv": paths.get("provider_operation_metrics_csv"),
                 "executive_summary_json": paths.get("executive_summary_json"),
                 "collector_contribution_metrics_json": paths.get("collector_contribution_metrics_json"),
                 "collector_roi_metrics_json": paths.get("collector_roi_metrics_json"),
