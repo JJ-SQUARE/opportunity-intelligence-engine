@@ -41,6 +41,8 @@ from oie.services.provider_operation_metrics_service import ProviderOperationMet
 from oie.services.provider_operation_metrics_export_service import ProviderOperationMetricsExportService
 from oie.services.run_readiness_export_service import RunReadinessExportService
 from oie.services.run_readiness_service import RunReadinessService
+from oie.services.run_metrics_summary_export_service import RunMetricsSummaryExportService
+from oie.services.run_metrics_summary_service import RunMetricsSummaryService
 from oie.services.serpapi_search_service import SerpAPISearchService
 from oie.services.domain_review_queue_service import DomainReviewQueueService
 
@@ -80,6 +82,8 @@ class PipelineOrchestrator:
         self.collector_roi_export_service = CollectorROIExportService(ctx)
         self.run_readiness_service = RunReadinessService(ctx)
         self.run_readiness_export_service = RunReadinessExportService(ctx)
+        self.run_metrics_summary_service = RunMetricsSummaryService(ctx)
+        self.run_metrics_summary_export_service = RunMetricsSummaryExportService(ctx)
         self.provider_operation_metrics_service = ProviderOperationMetricsService(ctx)
         self.provider_operation_metrics_export_service = ProviderOperationMetricsExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
@@ -282,6 +286,9 @@ class PipelineOrchestrator:
         )
         self.run_readiness_export_service.export_json(readiness_report)
 
+        run_metrics_summary = self.run_metrics_summary_service.build_summary()
+        self.run_metrics_summary_export_service.export_json(run_metrics_summary)
+
         return {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
@@ -321,4 +328,6 @@ class PipelineOrchestrator:
             "provider_operation_metrics_csv": self.ctx.paths.get("provider_operation_metrics_csv"),
             "provider_operation_metrics_json": self.ctx.paths.get("provider_operation_metrics_json"),
             "run_readiness_report_json": self.ctx.paths.get("run_readiness_report_json"),
+            "run_metrics_summary_json": self.ctx.paths.get("run_metrics_summary_json"),
+            "run_metrics_summary": run_metrics_summary,
         }

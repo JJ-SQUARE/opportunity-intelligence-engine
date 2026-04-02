@@ -115,11 +115,17 @@ def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
     assert result["db_path"] is not None
     assert result["executive_summary_json"] is not None
     assert result["run_readiness_report_json"] is not None
+    assert result["run_metrics_summary_json"] is not None
+    assert result["run_metrics_summary"] is not None
     assert result["collector_contribution_metrics_json"] is not None
     assert result["collector_roi_metrics_json"] is not None
+
+    assert result["run_metrics_summary"]["jobs_after_dedupe"] == 2
+    assert result["run_metrics_summary"]["companies_detected"] == 2
 
     assert Path(result["db_path"]).exists()
     assert Path(result["executive_summary_json"]).exists()
     assert Path(result["run_readiness_report_json"]).exists()
+    assert Path(result["run_metrics_summary_json"]).exists()
     assert Path(result["collector_contribution_metrics_json"]).exists()
     assert Path(result["collector_roi_metrics_json"]).exists()
