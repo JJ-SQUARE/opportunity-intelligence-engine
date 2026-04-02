@@ -28,6 +28,11 @@ class ProviderExecutionService:
     def __init__(self, ctx: RunContext, provider_control_service: ProviderControlService) -> None:
         self.ctx = ctx
         self.provider_control_service = provider_control_service
+        blocked_operations = self.ctx.provider_state.get("blocked_operations")
+        if not isinstance(blocked_operations, set):
+            blocked_operations = set()
+            self.ctx.provider_state["blocked_operations"] = blocked_operations
+        self._blocked_operations = blocked_operations
 
     def _get_operation_limit(self, provider_name: str, operation_name: str) -> int | None:
         providers_cfg = (self.ctx.config or {}).get("providers", {})
@@ -75,6 +80,17 @@ class ProviderExecutionService:
         cost: int = 1,
         **kwargs: Any,
     ) -> Any:
+        operation_key = f"{provider_name}:{operation_name}"
+
+        if operation_key in self._blocked_operations:
+            blocked_provider_key = _operation_metric_key(provider_name, operation_name, "blocked_provider")
+            self.ctx.metrics[blocked_provider_key] = (
+                int(self.ctx.metrics.get(blocked_provider_key, 0)) + 1
+            )
+            raise ProviderExecutionBlockedError(
+                f"Provider execution already blocked in this run for provider={provider_name} operation={operation_name}"
+            )
+
         if self.ctx.mode in {"dry-run", "cache-only"}:
             self.ctx.add_provider_event(
                 provider=provider_name,
@@ -87,6 +103,7 @@ class ProviderExecutionService:
             )
 
         if not self.provider_control_service.can_execute(provider_name):
+            self._blocked_operations.add(operation_key)
             blocked_provider_key = _operation_metric_key(provider_name, operation_name, "blocked_provider")
             self.ctx.metrics[blocked_provider_key] = (
                 int(self.ctx.metrics.get(blocked_provider_key, 0)) + 1
