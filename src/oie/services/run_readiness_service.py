@@ -87,6 +87,30 @@ class RunReadinessService:
                 f"Se detectaron bloqueos por presupuesto operativo: {', '.join(sorted(blocked_budget_keys))}."
             )
 
+        blocked_provider_keys = [
+            key for key, value in metrics.items()
+            if key.endswith("_blocked_provider") and int(value or 0) > 0
+        ]
+        if blocked_provider_keys:
+            warnings.append(
+                f"Se detectaron bloqueos por provider/circuit breaker: {', '.join(sorted(blocked_provider_keys))}."
+            )
+
+        domain_review_queue_count = int(metrics.get("domain_review_queue_count", 0) or 0)
+        if domain_review_queue_count > 0:
+            warnings.append(
+                f"Hay {domain_review_queue_count} compañías pendientes de revisión manual de dominio."
+            )
+
+        enrichment_attempted = [
+            key for key, value in metrics.items()
+            if key.endswith("_enrich_company_by_domain_started") and int(value or 0) > 0
+        ]
+        if enrichment_attempted and int(metrics.get("companies_enriched", 0) or 0) == 0:
+            warnings.append(
+                "Se intentó enrichment de compañías pero no se obtuvo ninguna enriquecida."
+            )
+
         is_ready = len(jobs) > 0 and len(companies) > 0
 
         report = {

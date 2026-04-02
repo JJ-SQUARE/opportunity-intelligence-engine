@@ -13,6 +13,7 @@ from oie.services.provider_execution_service import (
     ProviderExecutionError,
     ProviderExecutionService,
 )
+from oie.utils.domain_filters import is_job_board_domain
 
 
 class CompanyEnrichmentService:
@@ -25,6 +26,11 @@ class CompanyEnrichmentService:
         self.provider_control_service = provider_control_service
         self.provider_execution_service = ProviderExecutionService(ctx, provider_control_service)
         self.cached_provider_service = CachedProviderService(ctx)
+        failed_enrichment_domains = self.ctx.provider_state.get("failed_enrichment_domains")
+        if not isinstance(failed_enrichment_domains, set):
+            failed_enrichment_domains = set()
+            self.ctx.provider_state["failed_enrichment_domains"] = failed_enrichment_domains
+        self._failed_enrichment_domains = failed_enrichment_domains
         self.db_path = self.ctx.config.get("database", {}).get("path", "data/oie.db")
         self.ttl_days = int(
             self.ctx.config.get("enrichment", {}).get("apollo_company_ttl_days", 30)
@@ -64,6 +70,26 @@ class CompanyEnrichmentService:
 
         return (now - enriched_at) <= timedelta(days=self.ttl_days)
 
+
+    def _should_attempt_enrichment(self, company: Dict[str, Any]) -> bool:
+        company_key = company.get("company_key")
+        domain = (company.get("resolved_domain") or "").strip().lower()
+        validation_status = (company.get("domain_validation_status") or "").strip().lower()
+
+        if not company_key or not domain:
+            return False
+
+        if validation_status == "review":
+            return False
+
+        if is_job_board_domain(domain):
+            return False
+
+        if domain in self._failed_enrichment_domains:
+            return False
+
+        return True
+
     def _map_apollo_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         organization = payload.get("organization") or payload
 
@@ -94,9 +120,9 @@ class CompanyEnrichmentService:
         for company in companies:
             record = dict(company)
             company_key = record.get("company_key")
-            domain = record.get("resolved_domain")
+            domain = (record.get("resolved_domain") or "").strip().lower()
 
-            if not company_key or not domain:
+            if not self._should_attempt_enrichment(record):
                 enriched_companies.append(record)
                 continue
 
@@ -122,7 +148,8 @@ class CompanyEnrichmentService:
                     record.update(mapped)
                     enriched_count += 1
             except (ProviderExecutionBlockedError, ProviderExecutionError, ValueError):
-                pass
+                if domain:
+                    self._failed_enrichment_domains.add(domain)
 
             enriched_companies.append(record)
 

@@ -84,5 +84,6 @@ class DomainReviewQueueService:
 
         self.ctx.metrics["domain_review_queue_count"] = len(rows)
         self.ctx.metrics["domain_review_queue_written"] = len(rows)
+        self.ctx.paths["domain_review_queue_csv"] = str(out_path)
 
         return str(out_path)

@@ -41,6 +41,18 @@ class LeadGenerationService:
         self.provider_execution_service = ProviderExecutionService(ctx, provider_control_service)
         self.cached_provider_service = CachedProviderService(ctx)
 
+        failed_apollo_lead_domains = self.ctx.provider_state.get("failed_apollo_lead_domains")
+        if not isinstance(failed_apollo_lead_domains, set):
+            failed_apollo_lead_domains = set()
+            self.ctx.provider_state["failed_apollo_lead_domains"] = failed_apollo_lead_domains
+        self._failed_apollo_lead_domains = failed_apollo_lead_domains
+
+        failed_hunter_lead_domains = self.ctx.provider_state.get("failed_hunter_lead_domains")
+        if not isinstance(failed_hunter_lead_domains, set):
+            failed_hunter_lead_domains = set()
+            self.ctx.provider_state["failed_hunter_lead_domains"] = failed_hunter_lead_domains
+        self._failed_hunter_lead_domains = failed_hunter_lead_domains
+
     def _is_relevant_title(self, title: str) -> bool:
         value = (title or "").strip().lower()
         if not value:
@@ -99,14 +111,42 @@ class LeadGenerationService:
 
         return leads
 
+
+    def _should_attempt_lead_generation(self, company: Dict[str, Any]) -> bool:
+        company_key = company.get("company_key")
+        domain = (company.get("resolved_domain") or "").strip().lower()
+        validation_status = (company.get("domain_validation_status") or "").strip().lower()
+        company_type = (company.get("company_type_ai") or "").strip().lower()
+        classification_confidence = float(company.get("classification_confidence_ai") or 0.0)
+        opportunity_score = float(company.get("opportunity_score") or 0.0)
+
+        if not company_key or not domain:
+            return False
+
+        if is_job_board_domain(domain):
+            return False
+
+        if validation_status == "review":
+            return False
+
+        if company_type and company_type != "end_client" and classification_confidence >= 0.75:
+            return False
+
+        if opportunity_score > 0 and opportunity_score < 10:
+            return False
+
+        return True
+
     def _search_apollo_people(self, company: Dict[str, Any]) -> List[Dict[str, Any]]:
         client = self.provider_control_service.registry.get_client("apollo")
         if client is None:
             return []
 
-        domain = company.get("resolved_domain") or ""
+        domain = (company.get("resolved_domain") or "").strip().lower()
         company_key = company.get("company_key") or ""
         if not domain or not company_key:
+            return []
+        if domain in self._failed_apollo_lead_domains:
             return []
 
         try:
@@ -123,6 +163,8 @@ class LeadGenerationService:
                 ),
             )
         except (ProviderExecutionBlockedError, ProviderExecutionError, ValueError):
+            if domain:
+                self._failed_apollo_lead_domains.add(domain)
             return []
 
         return self._map_apollo_people(company_key, payload)
@@ -132,9 +174,11 @@ class LeadGenerationService:
         if client is None:
             return []
 
-        domain = company.get("resolved_domain") or ""
+        domain = (company.get("resolved_domain") or "").strip().lower()
         company_key = company.get("company_key") or ""
         if not domain or not company_key:
+            return []
+        if domain in self._failed_hunter_lead_domains:
             return []
 
         try:
@@ -150,6 +194,8 @@ class LeadGenerationService:
                 ),
             )
         except (ProviderExecutionBlockedError, ProviderExecutionError, ValueError):
+            if domain:
+                self._failed_hunter_lead_domains.add(domain)
             return []
 
         return self._map_hunter_people(company_key, payload)
@@ -162,6 +208,9 @@ class LeadGenerationService:
         leads: List[Dict[str, Any]] = []
 
         for company in companies:
+            if not self._should_attempt_lead_generation(company):
+                continue
+
             apollo_leads = self._search_apollo_people(company)
             if apollo_leads:
                 leads.extend(apollo_leads)
@@ -173,8 +222,14 @@ class LeadGenerationService:
                 continue
 
             company_key = company.get("company_key")
-            domain = company.get("resolved_domain") or ""
-            if company_key and domain and not is_job_board_domain(domain):
+            domain = (company.get("resolved_domain") or "").strip().lower()
+            if (
+                company_key
+                and domain
+                and not is_job_board_domain(domain)
+                and domain not in self._failed_apollo_lead_domains
+                and domain not in self._failed_hunter_lead_domains
+            ):
                 leads.append(
                     {
                         "company_key": company_key,

@@ -20,6 +20,7 @@ JOB_BOARD_DOMAINS = {
     "whatjobs.com",
     "expertini.com",
     "jobijoba.com",
+    "jobgether.com",
 }
 
 
