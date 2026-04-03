@@ -52,3 +52,24 @@ def test_normalization_service_detects_full_time_remote_from_extensions():
     assert len(result) == 1
     assert result[0]["is_remote"] is True
     assert result[0]["is_full_time"] is True
+
+
+def test_normalization_service_populates_legacy_flag_aliases():
+    ctx = RunContext.create(config={}, flags={})
+    service = NormalizationService(ctx)
+
+    jobs = [
+        {
+            "company": "Gamma",
+            "location": "Remote",
+            "description": "Contract role for LATAM contractor",
+        }
+    ]
+
+    result = service.normalize(jobs)
+
+    assert len(result) == 1
+    assert result[0]["is_remote"] is True
+    assert result[0]["remote_flag"] is True
+    assert result[0]["is_contractor"] is True
+    assert result[0]["contractor_flag"] is True

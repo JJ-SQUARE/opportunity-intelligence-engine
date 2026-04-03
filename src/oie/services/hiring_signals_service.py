@@ -33,10 +33,13 @@ class HiringSignalsService:
             grouped[company]["jobs"].append(job)
             grouped[company]["total_openings"] += 1
 
-            if job.get("remote_flag"):
+            is_remote = bool(job.get("is_remote") or job.get("remote_flag"))
+            is_contractor = bool(job.get("is_contractor") or job.get("contractor_flag"))
+
+            if is_remote:
                 grouped[company]["remote_jobs"] += 1
 
-            if job.get("contractor_flag"):
+            if is_contractor:
                 grouped[company]["contractor_jobs"] += 1
 
             if job.get("source"):

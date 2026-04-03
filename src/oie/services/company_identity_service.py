@@ -282,6 +282,7 @@ class CompanyIdentityService:
                 right_root = right.get("company_root")
                 left_domain = left.get("resolved_domain")
                 right_domain = right.get("resolved_domain")
+
                 if is_job_board_domain(left_domain):
                     left_domain = ""
                 if is_job_board_domain(right_domain):
@@ -299,26 +300,23 @@ class CompanyIdentityService:
                     continue
 
                 if allow_same_root and left_root and right_root and left_root == right_root:
-                    confidence = 0.8
-                    reason = "same_company_root"
-                if self._is_strong_brand_match(left, right):
-                    pass
-                elif not self._is_safe_same_root_merge(left, right):
-                    continue
+                    if self._is_strong_brand_match(left, right) or self._is_safe_same_root_merge(left, right):
+                        confidence = 0.8
+                        reason = "same_company_root"
 
-                    if left_domain and right_domain and left_domain == right_domain:
-                        confidence = 0.98
-                        reason = "same_company_root_and_domain"
+                        if left_domain and right_domain and left_domain == right_domain:
+                            confidence = 0.98
+                            reason = "same_company_root_and_domain"
 
-                    candidates.append(
-                        {
-                            "company_key_left": left["company_key"],
-                            "company_key_right": right["company_key"],
-                            "reason": reason,
-                            "confidence": confidence,
-                        }
-                    )
-                    continue
+                        candidates.append(
+                            {
+                                "company_key_left": left["company_key"],
+                                "company_key_right": right["company_key"],
+                                "reason": reason,
+                                "confidence": confidence,
+                            }
+                        )
+                        continue
 
                 if allow_same_domain and left_domain and right_domain and left_domain == right_domain:
                     candidates.append(

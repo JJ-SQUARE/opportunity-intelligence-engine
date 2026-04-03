@@ -17,6 +17,17 @@ class RunMetricsSummaryService:
         except Exception:
             return 0
 
+    def _int_metric_or_snapshot(self, key: str, snapshot_key: str) -> int:
+        if key in self.ctx.metrics:
+            return self._int_metric(key)
+
+        snapshot = self.ctx.provider_state.get("run_metrics_summary_counts", {}) or {}
+        value = snapshot.get(snapshot_key, 0)
+        try:
+            return int(value)
+        except Exception:
+            return 0
+
     def _bool_metric(self, key: str) -> bool:
         value = self.ctx.metrics.get(key, False)
         if isinstance(value, bool):
@@ -76,20 +87,20 @@ class RunMetricsSummaryService:
 
     def build_summary(self) -> Dict[str, Any]:
         summary = RunMetrics(
-            jobs_collected=self._int_metric("jobs_collected_raw"),
-            jobs_after_dedupe=self._int_metric("jobs_after_dedupe"),
+            jobs_collected=self._int_metric_or_snapshot("jobs_collected_raw", "jobs_count"),
+            jobs_after_dedupe=self._int_metric_or_snapshot("jobs_after_dedupe", "jobs_count"),
             jobs_deduplicated=self._int_metric("jobs_deduplicated"),
             jobs_duplicates_detected=self._int_metric("master_jobs_duplicates_detected"),
             jobs_unique_to_append=self._int_metric("master_jobs_unique_to_append"),
-            companies_detected=self._int_metric("companies_detected"),
+            companies_detected=self._int_metric_or_snapshot("companies_detected", "companies_count"),
             companies_after_identity_dedupe=self._int_metric("companies_after_identity_dedupe"),
             companies_with_domain=self._int_metric("companies_with_domain"),
             companies_enriched=self._int_metric("companies_enriched"),
             companies_classified=self._int_metric("companies_classified"),
             companies_scored=self._int_metric("companies_scored"),
-            leads_generated=self._int_metric("leads_generated"),
+            leads_generated=self._int_metric_or_snapshot("leads_generated", "leads_count"),
             leads_ranked=self._int_metric("leads_ranked"),
-            best_leads_selected=self._int_metric("best_leads_selected"),
+            best_leads_selected=self._int_metric_or_snapshot("best_leads_selected", "leads_count"),
             domain_resolution_accepted=self._int_metric("domain_resolution_accepted"),
             domain_resolution_review=self._int_metric("domain_resolution_review"),
             domain_resolution_rejected=self._int_metric("domain_resolution_rejected"),

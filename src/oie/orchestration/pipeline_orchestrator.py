@@ -286,6 +286,12 @@ class PipelineOrchestrator:
         )
         self.run_readiness_export_service.export_json(readiness_report)
 
+        self.ctx.provider_state["run_metrics_summary_counts"] = {
+            "jobs_count": len(unique_jobs),
+            "companies_count": len(companies),
+            "leads_count": len(best_leads),
+        }
+
         run_metrics_summary = self.run_metrics_summary_service.build_summary()
         self.run_metrics_summary_export_service.export_json(run_metrics_summary)
 

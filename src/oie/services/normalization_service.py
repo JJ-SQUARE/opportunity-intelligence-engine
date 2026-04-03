@@ -166,6 +166,10 @@ class NormalizationService:
             record["is_remote"] = self._detect_remote(record, text)
             record["is_contractor"] = self._detect_contractor(text)
             record["is_full_time"] = self._detect_full_time(text)
+
+            # Compatibilidad retroactiva con servicios que aún puedan leer nombres legacy
+            record["remote_flag"] = record["is_remote"]
+            record["contractor_flag"] = record["is_contractor"]
             record["nearshore_friendly"] = self._detect_nearshore_friendly(text)
             record["offshore_mentioned"] = self._detect_offshore_mentioned(text)
             record["us_only"] = self._detect_us_only(text)
