@@ -135,6 +135,7 @@ class RunReadinessService:
                 "domain_review_queue_csv": paths.get("domain_review_queue_csv"),
                 "provider_operation_metrics_json": paths.get("provider_operation_metrics_json"),
                 "provider_operation_metrics_csv": paths.get("provider_operation_metrics_csv"),
+                "collector_metrics_json": paths.get("collector_metrics_json"),
                 "run_metrics_summary_json": paths.get("run_metrics_summary_json"),
                 "executive_summary_json": paths.get("executive_summary_json"),
                 "collector_contribution_metrics_json": paths.get("collector_contribution_metrics_json"),

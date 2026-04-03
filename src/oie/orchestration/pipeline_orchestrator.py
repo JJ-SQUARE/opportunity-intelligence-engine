@@ -327,6 +327,7 @@ class PipelineOrchestrator:
             "market_segmented_companies_csv": self.ctx.paths.get("market_segmented_companies_csv"),
             "market_segment_summary_csv": self.ctx.paths.get("market_segment_summary_csv"),
             "market_segment_summary_json": self.ctx.paths.get("market_segment_summary_json"),
+            "collector_metrics_json": self.ctx.paths.get("collector_metrics_json"),
             "collector_contribution_metrics_csv": self.ctx.paths.get("collector_contribution_metrics_csv"),
             "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
             "collector_roi_metrics_csv": self.ctx.paths.get("collector_roi_metrics_csv"),

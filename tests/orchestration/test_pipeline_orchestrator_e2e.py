@@ -117,6 +117,7 @@ def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
     assert result["run_readiness_report_json"] is not None
     assert result["run_metrics_summary_json"] is not None
     assert result["run_metrics_summary"] is not None
+    assert result["collector_metrics_json"] is not None
     assert result["collector_contribution_metrics_json"] is not None
     assert result["collector_roi_metrics_json"] is not None
 
@@ -127,5 +128,13 @@ def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
     assert Path(result["executive_summary_json"]).exists()
     assert Path(result["run_readiness_report_json"]).exists()
     assert Path(result["run_metrics_summary_json"]).exists()
+    assert Path(result["collector_metrics_json"]).exists()
     assert Path(result["collector_contribution_metrics_json"]).exists()
     assert Path(result["collector_roi_metrics_json"]).exists()
+    assert "output_dir" in ctx.paths
+    assert Path(result["executive_summary_json"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["run_readiness_report_json"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["run_metrics_summary_json"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["collector_metrics_json"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["collector_contribution_metrics_json"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["collector_roi_metrics_json"]).parent == Path(ctx.paths["output_dir"])

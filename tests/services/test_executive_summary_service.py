@@ -36,4 +36,7 @@ def test_executive_summary_service_builds_and_writes_summary(tmp_path):
     assert summary["companies_count"] == 1
     assert summary["leads_count"] == 1
     assert summary["top_companies"][0]["company_display"] == "Acme Inc."
+    assert ctx.paths["executive_summary_json"] == output_path
+    assert "output_dir" in ctx.paths
     assert Path(output_path).exists()
+    assert Path(output_path).parent == Path(ctx.paths["output_dir"])
