@@ -20,6 +20,8 @@ def test_run_metrics_summary_service_builds_summary():
             "leads_generated": 18,
             "leads_ranked": 18,
             "best_leads_selected": 15,
+            "master_leads_duplicates_detected": 4,
+            "master_leads_unique_to_append": 14,
             "domain_resolution_accepted": 20,
             "domain_resolution_review": 8,
             "domain_resolution_rejected": 12,
@@ -47,6 +49,8 @@ def test_run_metrics_summary_service_builds_summary():
     assert summary["companies_detected"] == 40
     assert summary["companies_with_domain"] == 20
     assert summary["leads_generated"] == 18
+    assert summary["leads_duplicates_detected"] == 4
+    assert summary["leads_unique_to_append"] == 14
     assert summary["provider_events_count"] == 2
     assert summary["provider_errors"]["openai"]["execution_error"] == 3
     assert summary["provider_errors"]["serpapi"]["rate_limit"] == 2

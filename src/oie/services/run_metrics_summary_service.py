@@ -101,6 +101,8 @@ class RunMetricsSummaryService:
             leads_generated=self._int_metric_or_snapshot("leads_generated", "leads_count"),
             leads_ranked=self._int_metric("leads_ranked"),
             best_leads_selected=self._int_metric_or_snapshot("best_leads_selected", "leads_count"),
+            leads_duplicates_detected=self._int_metric("master_leads_duplicates_detected"),
+            leads_unique_to_append=self._int_metric("master_leads_unique_to_append"),
             domain_resolution_accepted=self._int_metric("domain_resolution_accepted"),
             domain_resolution_review=self._int_metric("domain_resolution_review"),
             domain_resolution_rejected=self._int_metric("domain_resolution_rejected"),

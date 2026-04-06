@@ -20,6 +20,8 @@ class RunMetrics:
     leads_generated: int = 0
     leads_ranked: int = 0
     best_leads_selected: int = 0
+    leads_duplicates_detected: int = 0
+    leads_unique_to_append: int = 0
     domain_resolution_accepted: int = 0
     domain_resolution_review: int = 0
     domain_resolution_rejected: int = 0

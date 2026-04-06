@@ -13,6 +13,14 @@ def test_persistence_service_persist_run_snapshot_writes_core_records(tmp_path):
         flags={},
     )
     ctx.metrics["jobs_after_dedupe"] = 2
+    ctx.provider_state["company_merge_candidates"] = [
+        {
+            "company_key_left": "cmp_a",
+            "company_key_right": "cmp_b",
+            "reason": "same_company_root",
+            "confidence": 0.8,
+        }
+    ]
     ctx.add_provider_event(
         provider="openai",
         event_type="execution_error",
@@ -31,6 +39,13 @@ def test_persistence_service_persist_run_snapshot_writes_core_records(tmp_path):
                 "resolved_domain": "acme.com",
                 "domain_source": "apply_url",
                 "domain_confidence": 0.9,
+                "domain_candidate": "acme.com",
+                "domain_validation_status": "accepted",
+                "domain_review_required": 0,
+                "domain_ai_validated": 1,
+                "domain_ai_decision": "accepted",
+                "domain_ai_confidence": 0.91,
+                "domain_ai_reason": "brand_match",
                 "aliases": ["Acme Inc."],
                 "alias_type_map": {
                     "Acme Inc.": "acme",
@@ -94,10 +109,76 @@ def test_persistence_service_persist_run_snapshot_writes_core_records(tmp_path):
         assert events[0]["provider"] == "openai"
 
         companies = conn.execute(
-            "SELECT company_key FROM companies"
+            """
+            SELECT
+                company_key,
+                resolved_domain,
+                domain_candidate,
+                domain_validation_status,
+                domain_ai_decision
+            FROM companies
+            """
         ).fetchall()
         assert len(companies) == 1
         assert companies[0]["company_key"] == "cmp_a"
+        assert companies[0]["resolved_domain"] == "acme.com"
+        assert companies[0]["domain_candidate"] == "acme.com"
+        assert companies[0]["domain_validation_status"] == "accepted"
+        assert companies[0]["domain_ai_decision"] == "accepted"
+
+        aliases = conn.execute(
+            "SELECT company_key, alias_value, alias_normalized, alias_type FROM company_aliases"
+        ).fetchall()
+        assert len(aliases) == 1
+        assert aliases[0]["company_key"] == "cmp_a"
+        assert aliases[0]["alias_value"] == "Acme Inc."
+        assert aliases[0]["alias_normalized"] == "acme"
+        assert aliases[0]["alias_type"] == "observed_name"
+
+        domains = conn.execute(
+            "SELECT company_key, domain, source, confidence, is_primary FROM domains"
+        ).fetchall()
+        assert len(domains) == 1
+        assert domains[0]["company_key"] == "cmp_a"
+        assert domains[0]["domain"] == "acme.com"
+        assert domains[0]["source"] == "apply_url"
+        assert domains[0]["confidence"] == 0.9
+        assert domains[0]["is_primary"] == 1
+
+        merge_candidates = conn.execute(
+            "SELECT run_id, company_key_left, company_key_right, reason, confidence FROM company_merge_candidates WHERE run_id = ?",
+            (ctx.run_id,),
+        ).fetchall()
+        assert len(merge_candidates) == 1
+        assert merge_candidates[0]["company_key_left"] == "cmp_a"
+        assert merge_candidates[0]["company_key_right"] == "cmp_b"
+        assert merge_candidates[0]["reason"] == "same_company_root"
+        assert merge_candidates[0]["confidence"] == 0.8
+
+        company_scores = conn.execute(
+            """
+            SELECT
+                run_id,
+                company_key,
+                opportunity_score,
+                score_openings,
+                score_remote,
+                score_contractor,
+                score_multi_source,
+                score_company_type
+            FROM company_scores
+            WHERE run_id = ?
+            """,
+            (ctx.run_id,),
+        ).fetchall()
+        assert len(company_scores) == 1
+        assert company_scores[0]["company_key"] == "cmp_a"
+        assert company_scores[0]["opportunity_score"] == 42
+        assert company_scores[0]["score_openings"] == 16
+        assert company_scores[0]["score_remote"] == 8
+        assert company_scores[0]["score_contractor"] == 6
+        assert company_scores[0]["score_multi_source"] == 10
+        assert company_scores[0]["score_company_type"] == 2
 
         jobs = conn.execute(
             "SELECT company_key FROM jobs WHERE run_id = ?",
