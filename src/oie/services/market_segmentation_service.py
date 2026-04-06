@@ -15,16 +15,21 @@ class MarketSegmentationService:
             company.get("company", ""),
             company.get("company_display", ""),
             company.get("industry_ai", ""),
+            company.get("industry", ""),
             company.get("company_type_ai", ""),
             company.get("sample_description", ""),
-            " ".join(company.get("notes_ai", []) or []) if isinstance(company.get("notes_ai"), list) else str(company.get("notes_ai") or ""),
+            company.get("company_description", ""),
+            company.get("sample_job_title", ""),
+            " ".join(company.get("notes_ai", []) or [])
+            if isinstance(company.get("notes_ai"), list)
+            else str(company.get("notes_ai") or ""),
         ]
         return " ".join(str(x) for x in parts if x).lower()
 
     def _segment_company(self, company: Dict[str, Any]) -> str:
         text = self._text_for_company(company)
         company_type = str(company.get("company_type_ai") or "").lower()
-        industry = str(company.get("industry_ai") or "").lower()
+        industry = str(company.get("industry_ai") or company.get("industry") or "").lower()
 
         gig_hints = [
             "survey",
@@ -77,15 +82,18 @@ class MarketSegmentationService:
         if any(hint in text for hint in speculative_hints):
             return "speculative_remote_labor"
 
-        if company_type in {"staffing_agency", "consulting"}:
+        if company_type in {"staffing", "consulting"}:
             if any(hint in text for hint in tech_hints):
                 return "partner_tech_services"
             return "partner_general_services"
 
-        if company_type == "product_company":
+        if company_type == "end_client":
             if any(hint in text for hint in tech_hints):
                 return "tech_product_hiring"
             return "digital_product_noncore"
+
+        if company_type == "marketplace":
+            return "marketplace_remote"
 
         if any(hint in text for hint in tech_hints):
             return "broad_tech_hiring"
@@ -133,11 +141,12 @@ class MarketSegmentationService:
                 },
             )
             item["companies"] += 1
-            item["avg_score"] += float(company.get("score") or 0)
+            item["avg_score"] += float(company.get("opportunity_score") or company.get("score") or 0)
             item["avg_vendor_prob"] += float(company.get("vendor_acceptance_probability_ai") or 0)
 
-            if len(item["top_examples"]) < 5:
-                item["top_examples"].append(company.get("company"))
+            example_name = company.get("company_display") or company.get("company")
+            if len(item["top_examples"]) < 5 and example_name:
+                item["top_examples"].append(example_name)
 
         rows = list(summary.values())
         for row in rows:

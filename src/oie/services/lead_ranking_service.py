@@ -78,3 +78,24 @@ class LeadRankingService:
         selected = list(best_by_company.values())
         self.ctx.metrics["best_leads_selected"] = len(selected)
         return selected
+
+    def build_top_leads(self, leads: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
+        ranked = self.rank_leads(leads)
+
+        return [
+            {
+                "company_key": lead.get("company_key"),
+                "contact_name": lead.get("contact_name"),
+                "contact_title": lead.get("contact_title"),
+                "email": lead.get("email"),
+                "linkedin_url": lead.get("linkedin_url"),
+                "lead_source": lead.get("lead_source"),
+                "lead_confidence": lead.get("lead_confidence"),
+                "lead_relevance_score": lead.get("lead_relevance_score", 0),
+                "lead_score_title": lead.get("lead_score_title", 0),
+                "lead_score_source": lead.get("lead_score_source", 0),
+                "lead_score_email": lead.get("lead_score_email", 0),
+                "lead_score_linkedin": lead.get("lead_score_linkedin", 0),
+            }
+            for lead in ranked[:limit]
+        ]

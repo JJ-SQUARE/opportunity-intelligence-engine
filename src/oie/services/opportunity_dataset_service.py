@@ -26,6 +26,9 @@ class OpportunityDatasetService:
                     c.industry,
                     c.employee_range,
                     c.linkedin_company_url,
+                    c.company_description,
+                    c.company_type_ai,
+                    c.classification_confidence_ai,
                     COALESCE(MAX(j.title), '') AS sample_job_title,
                     COUNT(DISTINCT j.job_key) AS jobs_count,
                     COALESCE(MAX(cs.opportunity_score), 0) AS opportunity_score,
@@ -54,7 +57,10 @@ class OpportunityDatasetService:
                     c.resolved_domain,
                     c.industry,
                     c.employee_range,
-                    c.linkedin_company_url
+                    c.linkedin_company_url,
+                    c.company_description,
+                    c.company_type_ai,
+                    c.classification_confidence_ai
                 ORDER BY opportunity_score DESC, jobs_count DESC, c.company_display ASC
                 """
             ).fetchall()

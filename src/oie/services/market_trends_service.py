@@ -9,7 +9,7 @@ from oie.orchestration.run_context import RunContext
 class MarketTrendsService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.db_path = self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.db_path = self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
 
     def build_source_trends(self) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(self.db_path)
@@ -107,6 +107,11 @@ class MarketTrendsService:
             "top_sources": sources[:10],
             "top_locations": countries[:10],
             "top_new_company_sources": new_companies[:10],
+            "totals": {
+                "sources": len(sources),
+                "locations": len(countries),
+                "new_company_sources": len(new_companies),
+            },
         }
 
         self.ctx.metrics["market_trends_summary_generated"] = True

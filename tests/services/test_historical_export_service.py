@@ -32,6 +32,10 @@ def test_historical_export_service_writes_all_outputs(tmp_path):
     assert ctx.paths["historical_company_hiring_csv"] == company_history_path
     assert ctx.paths["historical_growth_summary_csv"] == growth_summary_path
     assert ctx.paths["historical_summary_json"] == summary_json_path
+    assert "output_dir" in ctx.paths
+    assert Path(company_history_path).parent == Path(ctx.paths["output_dir"])
+    assert Path(growth_summary_path).parent == Path(ctx.paths["output_dir"])
+    assert Path(summary_json_path).parent == Path(ctx.paths["output_dir"])
 
     saved = json.loads(Path(summary_json_path).read_text(encoding="utf-8"))
     assert saved["run_id"] == ctx.run_id

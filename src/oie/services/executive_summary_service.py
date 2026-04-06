@@ -34,6 +34,12 @@ class ExecutiveSummaryService:
             reverse=True,
         )[:10]
 
+        ranked_leads = sorted(
+            leads,
+            key=lambda x: x.get("lead_relevance_score", 0),
+            reverse=True,
+        )[:10]
+
         summary = {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
@@ -50,9 +56,30 @@ class ExecutiveSummaryService:
                     "company_display": company.get("company_display"),
                     "opportunity_score": company.get("opportunity_score"),
                     "company_type_ai": company.get("company_type_ai"),
+                    "classification_confidence_ai": company.get("classification_confidence_ai"),
                     "resolved_domain": company.get("resolved_domain"),
+                    "score_breakdown": {
+                        "score_openings": company.get("score_openings", 0),
+                        "score_remote": company.get("score_remote", 0),
+                        "score_contractor": company.get("score_contractor", 0),
+                        "score_multi_source": company.get("score_multi_source", 0),
+                        "score_company_type": company.get("score_company_type", 0),
+                    },
                 }
                 for company in top_companies
+            ],
+            "top_leads": [
+                {
+                    "company_key": lead.get("company_key"),
+                    "contact_name": lead.get("contact_name"),
+                    "contact_title": lead.get("contact_title"),
+                    "email": lead.get("email"),
+                    "linkedin_url": lead.get("linkedin_url"),
+                    "lead_source": lead.get("lead_source"),
+                    "lead_confidence": lead.get("lead_confidence"),
+                    "lead_relevance_score": lead.get("lead_relevance_score", 0),
+                }
+                for lead in ranked_leads
             ],
         }
 

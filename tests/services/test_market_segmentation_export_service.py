@@ -16,13 +16,16 @@ def test_market_segmentation_export_service_writes_all_outputs(tmp_path):
         {
             "company_key": "cmp_a",
             "company_display": "Acme Inc.",
-            "segment": "end_client",
+            "market_segment": "tech_product_hiring",
         }
     ]
     summary_rows = [
         {
-            "segment": "end_client",
-            "companies_count": 1,
+            "market_segment": "tech_product_hiring",
+            "companies": 1,
+            "avg_score": 84.0,
+            "avg_vendor_prob": 0.0,
+            "top_examples": "Acme Inc.",
         }
     ]
 
@@ -38,6 +41,12 @@ def test_market_segmentation_export_service_writes_all_outputs(tmp_path):
     assert ctx.paths["market_segment_summary_csv"] == summary_csv_path
     assert ctx.paths["market_segment_summary_json"] == summary_json_path
 
+    assert "output_dir" in ctx.paths
+    assert Path(segmented_path).parent == Path(ctx.paths["output_dir"])
+    assert Path(summary_csv_path).parent == Path(ctx.paths["output_dir"])
+    assert Path(summary_json_path).parent == Path(ctx.paths["output_dir"])
+
     saved = json.loads(Path(summary_json_path).read_text(encoding="utf-8"))
     assert len(saved) == 1
-    assert saved[0]["segment"] == "end_client"
+    assert saved[0]["market_segment"] == "tech_product_hiring"
+    assert saved[0]["companies"] == 1

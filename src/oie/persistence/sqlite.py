@@ -112,6 +112,7 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
 
             CREATE TABLE IF NOT EXISTS jobs (
                 job_key TEXT PRIMARY KEY,
+                job_fingerprint TEXT,
                 run_id TEXT NOT NULL,
                 run_date TEXT NOT NULL,
                 title TEXT,
@@ -130,6 +131,7 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
 
             CREATE TABLE IF NOT EXISTS leads (
                 lead_key TEXT PRIMARY KEY,
+                lead_fingerprint TEXT,
                 run_id TEXT NOT NULL,
                 run_date TEXT NOT NULL,
                 company_key TEXT,
@@ -283,14 +285,26 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                     f"ALTER TABLE provider_operation_metrics ADD COLUMN {column_name} {column_type}"
                 )
 
+        job_columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+        required_job_columns = {
+            "job_fingerprint": "TEXT",
+        }
+        for column_name, column_type in required_job_columns.items():
+            if column_name not in job_columns:
+                conn.execute(f"ALTER TABLE jobs ADD COLUMN {column_name} {column_type}")
+
         lead_columns = {row["name"] for row in conn.execute("PRAGMA table_info(leads)").fetchall()}
         required_lead_columns = {
             "lead_source": "TEXT",
             "lead_confidence": "REAL",
+            "lead_fingerprint": "TEXT",
         }
         for column_name, column_type in required_lead_columns.items():
             if column_name not in lead_columns:
                 conn.execute(f"ALTER TABLE leads ADD COLUMN {column_name} {column_type}")
+
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_job_fingerprint ON jobs (job_fingerprint)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_lead_fingerprint ON leads (lead_fingerprint)")
 
         conn.commit()
     finally:

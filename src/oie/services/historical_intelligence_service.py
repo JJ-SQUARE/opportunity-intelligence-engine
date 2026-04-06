@@ -9,7 +9,10 @@ from oie.orchestration.run_context import RunContext
 class HistoricalIntelligenceService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.db_path = self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.db_path = (
+            self.ctx.paths.get("db_path")
+            or self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        )
 
     def build_company_hiring_history(self) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(self.db_path)

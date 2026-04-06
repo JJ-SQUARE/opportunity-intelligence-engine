@@ -19,7 +19,7 @@ def test_market_trends_export_service_writes_all_outputs(tmp_path):
         {"location": "Mexico", "jobs_count": 3, "companies_count": 2}
     ]
     new_companies_rows = [
-        {"source": "linkedin_serpapi", "new_companies": 2}
+        {"source": "linkedin_serpapi", "new_companies_count": 2}
     ]
     summary_payload = {
         "run_id": ctx.run_id,

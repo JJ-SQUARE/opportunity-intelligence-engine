@@ -59,9 +59,9 @@ def test_opportunity_scoring_service_caps_components():
         {
             "company_key": "cmp_cap",
             "company_display": "Cap Co",
-            "total_openings": 20,      # 20 * 8 = 160 -> cap 40
-            "remote_jobs": 10,         # 10 * 4 = 40 -> cap 20
-            "contractor_jobs": 10,     # 10 * 6 = 60 -> cap 20
+            "total_openings": 20,
+            "remote_jobs": 10,
+            "contractor_jobs": 10,
             "multi_source_signal": True,
             "company_type_ai": "consulting",
         }
@@ -76,3 +76,34 @@ def test_opportunity_scoring_service_caps_components():
     assert scored[0]["score_multi_source"] == 10
     assert scored[0]["score_company_type"] == 10
     assert scored[0]["opportunity_score"] == 100
+
+
+def test_opportunity_scoring_service_supports_legacy_company_type_aliases():
+    ctx = RunContext.create(config={}, flags={})
+    service = OpportunityScoringService(ctx)
+
+    companies = [
+        {
+            "company_key": "cmp_product",
+            "company_display": "Product Co",
+            "total_openings": 1,
+            "remote_jobs": 0,
+            "contractor_jobs": 0,
+            "multi_source_signal": False,
+            "company_type_ai": "product_company",
+        },
+        {
+            "company_key": "cmp_staffing",
+            "company_display": "Staffing Co",
+            "total_openings": 1,
+            "remote_jobs": 0,
+            "contractor_jobs": 0,
+            "multi_source_signal": False,
+            "company_type_ai": "staffing_agency",
+        },
+    ]
+
+    scored = {row["company_key"]: row for row in service.score_companies(companies)}
+
+    assert scored["cmp_product"]["score_company_type"] == 20
+    assert scored["cmp_staffing"]["score_company_type"] == 5

@@ -23,7 +23,13 @@ def test_run_analytics_service_builds_consolidated_payload():
                 "company_display": "Acme Inc.",
                 "resolved_domain": "acme.com",
                 "company_type_ai": "end_client",
+                "classification_confidence_ai": 0.95,
                 "opportunity_score": 42,
+                "score_openings": 16,
+                "score_remote": 8,
+                "score_contractor": 6,
+                "score_multi_source": 10,
+                "score_company_type": 2,
                 "total_openings": 3,
                 "remote_jobs": 2,
                 "contractor_jobs": 1,
@@ -33,15 +39,47 @@ def test_run_analytics_service_builds_consolidated_payload():
                 "company_display": "Beta Inc.",
                 "resolved_domain": "beta.com",
                 "company_type_ai": "consulting",
+                "classification_confidence_ai": 0.8,
                 "opportunity_score": 20,
+                "score_openings": 8,
+                "score_remote": 4,
+                "score_contractor": 0,
+                "score_multi_source": 0,
+                "score_company_type": 10,
                 "total_openings": 1,
                 "remote_jobs": 1,
                 "contractor_jobs": 0,
             },
         ],
         leads=[
-            {"company_key": "cmp_a"},
-            {"company_key": "cmp_b"},
+            {
+                "company_key": "cmp_a",
+                "contact_name": "Jane Doe",
+                "contact_title": "CTO",
+                "email": "jane@acme.com",
+                "linkedin_url": "https://linkedin.com/in/jane",
+                "lead_source": "apollo_people",
+                "lead_confidence": 0.9,
+                "lead_relevance_score": 160,
+                "lead_score_title": 100,
+                "lead_score_source": 30,
+                "lead_score_email": 20,
+                "lead_score_linkedin": 10,
+            },
+            {
+                "company_key": "cmp_b",
+                "contact_name": "John Roe",
+                "contact_title": "VP Engineering",
+                "email": "john@beta.com",
+                "linkedin_url": "",
+                "lead_source": "hunter_domain_search",
+                "lead_confidence": 0.5,
+                "lead_relevance_score": 125,
+                "lead_score_title": 90,
+                "lead_score_source": 15,
+                "lead_score_email": 20,
+                "lead_score_linkedin": 0,
+            },
         ],
         duplicate_jobs=[
             {"source": "google_jobs"},
@@ -92,6 +130,13 @@ def test_run_analytics_service_builds_consolidated_payload():
     assert analytics["top_collectors"]["by_roi"][0]["source"] == "google_jobs"
 
     assert analytics["top_companies"][0]["company_display"] == "Acme Inc."
+    assert analytics["top_companies"][0]["classification_confidence_ai"] == 0.95
+    assert analytics["top_companies"][0]["score_openings"] == 16
+
+    assert analytics["top_leads"][0]["contact_name"] == "Jane Doe"
+    assert analytics["top_leads"][0]["lead_relevance_score"] == 160
+    assert analytics["top_leads"][0]["lead_score_title"] == 100
+
     assert analytics["provider_health"]["provider_errors"]["openai"]["execution_error"] == 1
     assert analytics["provider_health"]["provider_blocks"]["hunter"]["blocked_provider"] == 2
     assert analytics["provider_health"]["provider_operation_metrics"][0]["provider"] == "openai"
@@ -99,3 +144,4 @@ def test_run_analytics_service_builds_consolidated_payload():
     assert analytics["readiness"]["is_ready_for_review"] is True
     assert analytics["executive_summary"]["companies_count"] == 2
     assert ctx.metrics["run_analytics_generated"] is True
+    assert ctx.metrics["run_analytics_top_leads_count"] == 2

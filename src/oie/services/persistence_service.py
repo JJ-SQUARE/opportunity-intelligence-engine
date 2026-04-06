@@ -60,8 +60,12 @@ class PersistenceService:
             provider_events=self.ctx.provider_events,
         )
 
-    def persist_provider_operation_metrics(self) -> None:
-        rows = self.provider_operation_metrics_service.build_rows()
+    def persist_provider_operation_metrics(self, rows: List[Dict[str, Any]] | None = None) -> None:
+        if rows is None:
+            rows = self.provider_operation_metrics_service.build_rows()
+        elif not rows:
+            rows = self.provider_operation_metrics_service.build_rows()
+
         self.provider_operation_metrics_repository.replace_rows(
             run_id=self.ctx.run_id,
             rows=rows,
@@ -104,7 +108,9 @@ class PersistenceService:
         self.persist_run(status=status)
         self.persist_metrics()
         self.persist_provider_events()
-        self.persist_provider_operation_metrics()
+        self.persist_provider_operation_metrics(
+            self.ctx.provider_state.get("provider_operation_metrics_rows_data")
+        )
 
         if companies is not None:
             self.persist_companies(companies)

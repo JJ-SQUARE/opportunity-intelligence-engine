@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import csv
-import sqlite3
 from pathlib import Path
 from typing import Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.services.opportunity_dataset_service import OpportunityDatasetService
 
 
 class OutboundExportService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.db_path = self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.opportunity_dataset_service = OpportunityDatasetService(ctx)
 
     def _get_output_dir(self) -> Path:
         output_dir_value = self.ctx.paths.get("output_dir")
@@ -41,62 +41,23 @@ class OutboundExportService:
         return str(output_path)
 
     def _load_dataset(self, company_types: List[str] | None = None) -> List[Dict[str, object]]:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            sql = """
-                SELECT
-                    c.company_key,
-                    c.company_display,
-                    c.resolved_domain,
-                    c.industry,
-                    c.employee_range,
-                    c.linkedin_company_url,
-                    c.company_description,
-                    c.company_type_ai,
-                    c.classification_confidence_ai,
-                    COALESCE(MAX(cs.opportunity_score), 0) AS opportunity_score,
-                    COALESCE(MAX(l.contact_name), '') AS contact_name,
-                    COALESCE(MAX(l.contact_title), '') AS contact_title,
-                    COALESCE(MAX(l.email), '') AS email,
-                    COALESCE(MAX(l.linkedin_url), '') AS linkedin_url,
-                    COALESCE(MAX(l.lead_source), '') AS lead_source,
-                    COALESCE(MAX(l.lead_confidence), 0) AS lead_confidence,
-                    COALESCE(MAX(j.title), '') AS sample_job_title
-                FROM companies c
-                LEFT JOIN company_scores cs
-                    ON cs.company_key = c.company_key
-                LEFT JOIN leads l
-                    ON l.company_key = c.company_key
-                LEFT JOIN jobs j
-                    ON j.company_key = c.company_key
-            """
-            params: tuple = ()
+        rows = self.opportunity_dataset_service.build_dataset()
 
-            if company_types:
-                placeholders = ",".join("?" for _ in company_types)
-                sql += f" WHERE c.company_type_ai IN ({placeholders}) "
-                params = tuple(company_types)
+        if company_types:
+            allowed = {value.strip().lower() for value in company_types}
+            rows = [
+                row for row in rows
+                if str(row.get("company_type_ai") or "").strip().lower() in allowed
+            ]
 
-            sql += """
-                GROUP BY
-                    c.company_key,
-                    c.company_display,
-                    c.resolved_domain,
-                    c.industry,
-                    c.employee_range,
-                    c.linkedin_company_url,
-                    c.company_description,
-                    c.company_type_ai,
-                    c.classification_confidence_ai
-                ORDER BY opportunity_score DESC, c.company_display ASC
-            """
-
-            rows = conn.execute(sql, params).fetchall()
-        finally:
-            conn.close()
-
-        return [dict(row) for row in rows]
+        rows.sort(
+            key=lambda row: (
+                float(row.get("opportunity_score") or 0),
+                str(row.get("company_display") or ""),
+            ),
+            reverse=True,
+        )
+        return rows
 
     def export_top_opportunities(self, limit: int = 50) -> str:
         rows = self._load_dataset()[:limit]
@@ -111,32 +72,29 @@ class OutboundExportService:
         return path
 
     def export_apollo_import(self) -> str:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            rows = conn.execute(
-                """
-                SELECT
-                    c.company_display AS account_name,
-                    c.resolved_domain AS website,
-                    c.linkedin_company_url AS company_linkedin_url,
-                    c.industry AS industry,
-                    c.company_description AS company_description,
-                    l.contact_name AS first_name,
-                    l.contact_title AS title,
-                    l.email AS email,
-                    l.linkedin_url AS person_linkedin_url
-                FROM companies c
-                LEFT JOIN leads l
-                    ON l.company_key = c.company_key
-                WHERE COALESCE(l.email, '') != ''
-                ORDER BY c.company_display ASC
-                """
-            ).fetchall()
-        finally:
-            conn.close()
+        dataset = self._load_dataset()
+        rows: List[Dict[str, object]] = []
 
-        path = self._write_csv("apollo_import.csv", [dict(row) for row in rows])
+        for row in dataset:
+            email = str(row.get("email") or "").strip()
+            if not email:
+                continue
+
+            rows.append(
+                {
+                    "account_name": row.get("company_display", ""),
+                    "website": row.get("resolved_domain", ""),
+                    "company_linkedin_url": row.get("linkedin_company_url", ""),
+                    "industry": row.get("industry", ""),
+                    "company_description": row.get("company_description", ""),
+                    "first_name": row.get("contact_name", ""),
+                    "title": row.get("contact_title", ""),
+                    "email": email,
+                    "person_linkedin_url": row.get("linkedin_url", ""),
+                }
+            )
+
+        path = self._write_csv("apollo_import.csv", rows)
         self.ctx.paths["apollo_import_csv"] = path
         return path
 

@@ -113,16 +113,27 @@ def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
     assert result["leads_count"] == 2
 
     assert result["db_path"] is not None
+    assert result["suspected_duplicates_report"] is not None
+    assert result["domain_review_queue_csv"] is not None
+    assert result["companies_export"] is not None
+    assert result["jobs_export"] is not None
+    assert result["leads_export"] is not None
     assert result["executive_summary_json"] is not None
     assert result["run_readiness_report_json"] is not None
     assert result["run_metrics_summary_json"] is not None
     assert result["run_metrics_summary"] is not None
+    assert result["run_analytics_json"] is not None
+    assert result["run_analytics"] is not None
     assert result["collector_metrics_json"] is not None
     assert result["collector_contribution_metrics_json"] is not None
     assert result["collector_roi_metrics_json"] is not None
 
     assert result["run_metrics_summary"]["jobs_after_dedupe"] == 2
     assert result["run_metrics_summary"]["companies_detected"] == 2
+
+    assert result["run_analytics"]["top_leads"][0]["contact_title"] == "CTO"
+    assert result["run_analytics"]["top_leads"][0]["lead_source"] == "apollo_people"
+    assert result["executive_summary"]["top_leads"][0]["contact_title"] == "CTO"
 
     assert result["historical_company_hiring_csv"] is not None
     assert result["historical_growth_summary_csv"] is not None
@@ -138,9 +149,15 @@ def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
     assert result["provider_operation_metrics_json"] is not None
 
     assert Path(result["db_path"]).exists()
+    assert Path(result["suspected_duplicates_report"]).exists()
+    assert Path(result["domain_review_queue_csv"]).exists()
+    assert Path(result["companies_export"]).exists()
+    assert Path(result["jobs_export"]).exists()
+    assert Path(result["leads_export"]).exists()
     assert Path(result["executive_summary_json"]).exists()
     assert Path(result["run_readiness_report_json"]).exists()
     assert Path(result["run_metrics_summary_json"]).exists()
+    assert Path(result["run_analytics_json"]).exists()
     assert Path(result["collector_metrics_json"]).exists()
     assert Path(result["collector_contribution_metrics_json"]).exists()
     assert Path(result["collector_roi_metrics_json"]).exists()
@@ -156,10 +173,17 @@ def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
     assert Path(result["market_segment_summary_json"]).exists()
     assert Path(result["provider_operation_metrics_csv"]).exists()
     assert Path(result["provider_operation_metrics_json"]).exists()
+
     assert "output_dir" in ctx.paths
+    assert Path(result["suspected_duplicates_report"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["domain_review_queue_csv"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["companies_export"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["jobs_export"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["leads_export"]).parent == Path(ctx.paths["output_dir"])
     assert Path(result["executive_summary_json"]).parent == Path(ctx.paths["output_dir"])
     assert Path(result["run_readiness_report_json"]).parent == Path(ctx.paths["output_dir"])
     assert Path(result["run_metrics_summary_json"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["run_analytics_json"]).parent == Path(ctx.paths["output_dir"])
     assert Path(result["collector_metrics_json"]).parent == Path(ctx.paths["output_dir"])
     assert Path(result["collector_contribution_metrics_json"]).parent == Path(ctx.paths["output_dir"])
     assert Path(result["collector_roi_metrics_json"]).parent == Path(ctx.paths["output_dir"])

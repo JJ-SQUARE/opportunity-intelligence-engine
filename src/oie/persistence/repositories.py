@@ -489,22 +489,33 @@ class JobRepository:
     def __init__(self, db_path: str = "data/oie.db") -> None:
         self.db_path = db_path
 
-    def _build_job_key(self, job: Dict[str, Any], run_id: str) -> str:
-        job_url = (job.get("job_url") or "").strip()
-        apply_url = (job.get("apply_url") or "").strip()
+    def _build_job_fingerprint(self, job: Dict[str, Any]) -> str:
+        job_url = (job.get("job_url") or "").strip().lower()
+        apply_url = (job.get("apply_url") or "").strip().lower()
+        title = (job.get("title") or "").strip().lower()
+        company = (job.get("company") or "").strip().lower()
+        location = (job.get("location") or "").strip().lower()
+        description = (job.get("description") or "").strip().lower()
+
         if job_url:
-            raw = f"{run_id}|job_url|{job_url}"
+            raw = f"job_url|{job_url}"
         elif apply_url:
-            raw = f"{run_id}|apply_url|{apply_url}"
+            raw = f"apply_url|{apply_url}"
         else:
             raw = "|".join(
                 [
-                    run_id,
-                    (job.get("title") or "").strip().lower(),
-                    (job.get("company") or "").strip().lower(),
-                    (job.get("description") or "").strip().lower(),
+                    "job_fallback",
+                    title,
+                    company,
+                    location,
+                    description,
                 ]
             )
+        return f"jobfp_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
+
+    def _build_job_key(self, job: Dict[str, Any], run_id: str) -> str:
+        fingerprint = self._build_job_fingerprint(job)
+        raw = f"{run_id}|{fingerprint}"
         return f"job_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
 
     def replace_jobs(self, run_id: str, run_date: str, jobs: List[Dict[str, Any]]) -> None:
@@ -514,6 +525,7 @@ class JobRepository:
             rows = [
                 (
                     self._build_job_key(job, run_id),
+                    self._build_job_fingerprint(job),
                     run_id,
                     run_date,
                     job.get("title"),
@@ -533,6 +545,7 @@ class JobRepository:
                     """
                     INSERT INTO jobs (
                         job_key,
+                        job_fingerprint,
                         run_id,
                         run_date,
                         title,
@@ -545,7 +558,7 @@ class JobRepository:
                         source,
                         detected_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     rows,
                 )
@@ -574,8 +587,8 @@ class LeadRepository:
     def __init__(self, db_path: str = "data/oie.db") -> None:
         self.db_path = db_path
 
-    def _build_lead_key(self, lead: Dict[str, Any], run_id: str) -> str:
-        company_key = (lead.get("company_key") or "").strip()
+    def _build_lead_fingerprint(self, lead: Dict[str, Any]) -> str:
+        company_key = (lead.get("company_key") or "").strip().lower()
         email = (lead.get("email") or "").strip().lower()
         linkedin_url = (lead.get("linkedin_url") or "").strip().lower()
         contact_name = (lead.get("contact_name") or "").strip().lower()
@@ -584,7 +597,6 @@ class LeadRepository:
         if email:
             raw = "|".join(
                 [
-                    run_id,
                     company_key,
                     "email",
                     email,
@@ -593,7 +605,6 @@ class LeadRepository:
         elif linkedin_url:
             raw = "|".join(
                 [
-                    run_id,
                     company_key,
                     "linkedin",
                     linkedin_url,
@@ -602,13 +613,17 @@ class LeadRepository:
         else:
             raw = "|".join(
                 [
-                    run_id,
                     company_key,
                     contact_name,
                     contact_title,
                 ]
             )
 
+        return f"leadfp_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
+
+    def _build_lead_key(self, lead: Dict[str, Any], run_id: str) -> str:
+        fingerprint = self._build_lead_fingerprint(lead)
+        raw = f"{run_id}|{fingerprint}"
         return f"lead_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
 
     def replace_leads(self, run_id: str, run_date: str, leads: List[Dict[str, Any]]) -> None:
@@ -618,6 +633,7 @@ class LeadRepository:
             rows = [
                 (
                     self._build_lead_key(lead, run_id),
+                    self._build_lead_fingerprint(lead),
                     run_id,
                     run_date,
                     lead.get("company_key"),
@@ -635,6 +651,7 @@ class LeadRepository:
                     """
                     INSERT INTO leads (
                         lead_key,
+                        lead_fingerprint,
                         run_id,
                         run_date,
                         company_key,
@@ -645,7 +662,7 @@ class LeadRepository:
                         lead_source,
                         lead_confidence
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     rows,
                 )

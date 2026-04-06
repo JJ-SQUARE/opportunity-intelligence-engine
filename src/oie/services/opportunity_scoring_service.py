@@ -15,17 +15,26 @@ CLASSIFICATION_WEIGHTS = {
     "": 0,
 }
 
+CLASSIFICATION_ALIASES = {
+    "product_company": "end_client",
+    "staffing_agency": "staffing",
+}
+
 
 class OpportunityScoringService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
+
+    def _normalized_company_type(self, company_type: str) -> str:
+        value = (company_type or "").strip().lower()
+        return CLASSIFICATION_ALIASES.get(value, value)
 
     def _score_company(self, company: Dict[str, Any]) -> Dict[str, Any]:
         total_openings = int(company.get("total_openings", 0) or 0)
         remote_jobs = int(company.get("remote_jobs", 0) or 0)
         contractor_jobs = int(company.get("contractor_jobs", 0) or 0)
         multi_source_signal = bool(company.get("multi_source_signal", False))
-        company_type = (company.get("company_type_ai") or "").strip()
+        company_type = self._normalized_company_type(company.get("company_type_ai") or "")
 
         score_openings = min(total_openings * 8, 40)
         score_remote = min(remote_jobs * 4, 20)

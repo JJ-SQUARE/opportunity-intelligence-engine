@@ -33,12 +33,44 @@ class RunAnalyticsService:
                 "company_display": company.get("company_display"),
                 "resolved_domain": company.get("resolved_domain"),
                 "company_type_ai": company.get("company_type_ai"),
+                "classification_confidence_ai": company.get("classification_confidence_ai"),
                 "opportunity_score": company.get("opportunity_score", 0),
+                "score_openings": company.get("score_openings", 0),
+                "score_remote": company.get("score_remote", 0),
+                "score_contractor": company.get("score_contractor", 0),
+                "score_multi_source": company.get("score_multi_source", 0),
+                "score_company_type": company.get("score_company_type", 0),
                 "total_openings": company.get("total_openings", 0),
                 "remote_jobs": company.get("remote_jobs", 0),
                 "contractor_jobs": company.get("contractor_jobs", 0),
             }
             for company in items[:limit]
+        ]
+
+    def _top_leads(
+        self,
+        leads: List[Dict[str, Any]] | None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        items = list(leads or [])
+        items.sort(key=lambda row: row.get("lead_relevance_score", 0) or 0, reverse=True)
+
+        return [
+            {
+                "company_key": lead.get("company_key"),
+                "contact_name": lead.get("contact_name"),
+                "contact_title": lead.get("contact_title"),
+                "email": lead.get("email"),
+                "linkedin_url": lead.get("linkedin_url"),
+                "lead_source": lead.get("lead_source"),
+                "lead_confidence": lead.get("lead_confidence"),
+                "lead_relevance_score": lead.get("lead_relevance_score", 0),
+                "lead_score_title": lead.get("lead_score_title", 0),
+                "lead_score_source": lead.get("lead_score_source", 0),
+                "lead_score_email": lead.get("lead_score_email", 0),
+                "lead_score_linkedin": lead.get("lead_score_linkedin", 0),
+            }
+            for lead in items[:limit]
         ]
 
     def build_analytics(
@@ -85,6 +117,7 @@ class RunAnalyticsService:
                 "by_roi": self._top_n(collector_roi, "utility_score", limit=5),
             },
             "top_companies": self._top_companies(companies, limit=10),
+            "top_leads": self._top_leads(leads, limit=10),
             "provider_health": {
                 "provider_errors": run_metrics_summary.get("provider_errors", {}),
                 "provider_blocks": run_metrics_summary.get("provider_blocks", {}),
@@ -117,4 +150,5 @@ class RunAnalyticsService:
 
         self.ctx.metrics["run_analytics_generated"] = True
         self.ctx.metrics["run_analytics_top_companies_count"] = len(analytics["top_companies"])
+        self.ctx.metrics["run_analytics_top_leads_count"] = len(analytics["top_leads"])
         return analytics

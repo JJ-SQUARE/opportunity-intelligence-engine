@@ -9,20 +9,22 @@ def test_market_segmentation_service_segments_companies():
     companies = [
         {
             "company": "Realign LLC",
-            "company_type_ai": "product_company",
-            "industry_ai": "fintech",
-            "sample_description": "Gen AI Strategy Lead, LLMs, cloud, RAG, architecture",
+            "company_display": "Realign LLC",
+            "company_type_ai": "end_client",
+            "industry": "fintech",
+            "company_description": "Gen AI Strategy Lead, LLMs, cloud, RAG, architecture",
             "notes_ai": ["enterprise ai initiatives", "cloud ai services"],
-            "score": 4,
+            "opportunity_score": 84,
             "vendor_acceptance_probability_ai": 75,
         },
         {
             "company": "TowardJobs",
+            "company_display": "TowardJobs",
             "company_type_ai": "unknown",
-            "industry_ai": "market research",
-            "sample_description": "survey focus groups data entry product testing",
+            "industry": "market research",
+            "company_description": "survey focus groups data entry product testing",
             "notes_ai": ["work from home side gig"],
-            "score": 6,
+            "opportunity_score": 22,
             "vendor_acceptance_probability_ai": 40,
         },
     ]
@@ -36,3 +38,8 @@ def test_market_segmentation_service_segments_companies():
     assert realign["market_segment"] == "tech_product_hiring"
     assert toward["market_segment"] == "gig_remote_labor"
     assert len(summary) >= 2
+
+    tech_summary = next(x for x in summary if x["market_segment"] == "tech_product_hiring")
+    assert tech_summary["companies"] == 1
+    assert tech_summary["avg_score"] == 84.0
+    assert "Realign LLC" in tech_summary["top_examples"]

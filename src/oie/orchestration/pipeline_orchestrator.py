@@ -204,8 +204,10 @@ class PipelineOrchestrator:
         companies: List[Dict[str, Any]] = []
         duplicate_jobs: List[Dict[str, Any]] = []
         best_leads: List[Dict[str, Any]] = []
+        duplicate_leads: List[Dict[str, Any]] = []
         run_metrics_summary: Dict[str, Any] | None = None
         run_analytics: Dict[str, Any] | None = None
+        executive_summary: Dict[str, Any] | None = None
         status = "failed"
 
         try:
@@ -216,6 +218,7 @@ class PipelineOrchestrator:
             leads = self.lead_generation_service.generate_leads(companies)
             ranked_leads = self.lead_ranking_service.rank_leads(leads)
             best_leads = self.lead_ranking_service.select_best_lead_per_company(ranked_leads)
+            best_leads, duplicate_leads = self.master_dedup_service.dedupe_leads_against_master(best_leads)
 
             status = "company_pipeline_completed"
 
@@ -232,7 +235,7 @@ class PipelineOrchestrator:
 
             duplicate_report_rows = self.master_dedup_service.build_suspected_duplicates_report(
                 jobs_duplicates=duplicate_jobs,
-                leads_duplicates=[],
+                leads_duplicates=duplicate_leads,
             )
             self.duplicate_report_service.write_suspected_duplicates_report(duplicate_report_rows)
             self.domain_review_queue_service.export_csv(companies)
@@ -244,8 +247,8 @@ class PipelineOrchestrator:
             self.opportunity_dataset_export_service.export_top_dataset(top_dataset)
             self.outbound_export_service.export_all()
 
-            summary = self.executive_summary_service.build_summary(companies, best_leads)
-            self.executive_summary_service.write_summary(summary)
+            executive_summary = self.executive_summary_service.build_summary(companies, best_leads)
+            self.executive_summary_service.write_summary(executive_summary)
 
             historical_rows = self.historical_intelligence_service.build_company_hiring_history()
             growth_rows = self.historical_intelligence_service.build_company_growth_summary()
@@ -321,7 +324,7 @@ class PipelineOrchestrator:
                 provider_operation_metrics=provider_operation_metrics,
                 readiness_report=readiness_report,
                 run_metrics_summary=run_metrics_summary,
-                executive_summary=summary,
+                executive_summary=executive_summary,
             )
             self.run_analytics_export_service.export_json(run_analytics)
 
@@ -399,5 +402,6 @@ class PipelineOrchestrator:
             "run_metrics_summary_json": self.ctx.paths.get("run_metrics_summary_json"),
             "run_analytics_json": self.ctx.paths.get("run_analytics_json"),
             "run_metrics_summary": run_metrics_summary,
+            "executive_summary": executive_summary,
             "run_analytics": run_analytics,
         }
