@@ -26,6 +26,7 @@ env/
 *.db
 *.sqlite
 *.sqlite3
+data/oie.db
 
 # Runtime / generated data
 data/http_cache/

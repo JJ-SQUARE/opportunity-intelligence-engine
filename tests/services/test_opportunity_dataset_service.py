@@ -1,3 +1,4 @@
+import csv
 from pathlib import Path
 
 from oie.orchestration.run_context import RunContext
@@ -89,3 +90,10 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
     assert dataset[0]["lead_source"] == "apollo_people"
     assert Path(ctx.paths["opportunities_export"]).exists()
     assert Path(ctx.paths["top_opportunities_export"]).exists()
+
+    with open(ctx.paths["opportunities_export"], newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        assert reader.fieldnames is not None
+        assert "company_key" in reader.fieldnames
+        assert "opportunity_score" in reader.fieldnames
+        assert "lead_confidence" in reader.fieldnames

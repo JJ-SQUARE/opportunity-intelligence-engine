@@ -1,3 +1,4 @@
+import csv
 from pathlib import Path
 
 from oie.orchestration.run_context import RunContext
@@ -80,3 +81,28 @@ def test_outbound_export_service_writes_files(tmp_path):
     assert Path(ctx.paths["end_clients_csv"]).exists()
     assert Path(ctx.paths["vendors_csv"]).exists()
     assert Path(ctx.paths["marketplaces_csv"]).exists()
+
+    with open(ctx.paths["top_opportunities_csv"], newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+        assert reader.fieldnames is not None
+        assert "company_key" in reader.fieldnames
+        assert "opportunity_score" in reader.fieldnames
+        assert "email" in reader.fieldnames
+        assert len(rows) == 1
+
+    with open(ctx.paths["apollo_import_csv"], newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+        assert reader.fieldnames == [
+            "account_name",
+            "website",
+            "company_linkedin_url",
+            "industry",
+            "company_description",
+            "first_name",
+            "title",
+            "email",
+            "person_linkedin_url",
+        ]
+        assert len(rows) == 1
