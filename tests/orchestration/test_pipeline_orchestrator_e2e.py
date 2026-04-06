@@ -124,6 +124,19 @@ def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
     assert result["run_metrics_summary"]["jobs_after_dedupe"] == 2
     assert result["run_metrics_summary"]["companies_detected"] == 2
 
+    assert result["historical_company_hiring_csv"] is not None
+    assert result["historical_growth_summary_csv"] is not None
+    assert result["historical_summary_json"] is not None
+    assert result["market_trends_by_source_csv"] is not None
+    assert result["market_trends_by_location_csv"] is not None
+    assert result["market_new_companies_by_source_csv"] is not None
+    assert result["market_trends_summary_json"] is not None
+    assert result["market_segmented_companies_csv"] is not None
+    assert result["market_segment_summary_csv"] is not None
+    assert result["market_segment_summary_json"] is not None
+    assert result["provider_operation_metrics_csv"] is not None
+    assert result["provider_operation_metrics_json"] is not None
+
     assert Path(result["db_path"]).exists()
     assert Path(result["executive_summary_json"]).exists()
     assert Path(result["run_readiness_report_json"]).exists()
@@ -131,6 +144,18 @@ def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
     assert Path(result["collector_metrics_json"]).exists()
     assert Path(result["collector_contribution_metrics_json"]).exists()
     assert Path(result["collector_roi_metrics_json"]).exists()
+    assert Path(result["historical_company_hiring_csv"]).exists()
+    assert Path(result["historical_growth_summary_csv"]).exists()
+    assert Path(result["historical_summary_json"]).exists()
+    assert Path(result["market_trends_by_source_csv"]).exists()
+    assert Path(result["market_trends_by_location_csv"]).exists()
+    assert Path(result["market_new_companies_by_source_csv"]).exists()
+    assert Path(result["market_trends_summary_json"]).exists()
+    assert Path(result["market_segmented_companies_csv"]).exists()
+    assert Path(result["market_segment_summary_csv"]).exists()
+    assert Path(result["market_segment_summary_json"]).exists()
+    assert Path(result["provider_operation_metrics_csv"]).exists()
+    assert Path(result["provider_operation_metrics_json"]).exists()
     assert "output_dir" in ctx.paths
     assert Path(result["executive_summary_json"]).parent == Path(ctx.paths["output_dir"])
     assert Path(result["run_readiness_report_json"]).parent == Path(ctx.paths["output_dir"])
@@ -138,3 +163,15 @@ def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
     assert Path(result["collector_metrics_json"]).parent == Path(ctx.paths["output_dir"])
     assert Path(result["collector_contribution_metrics_json"]).parent == Path(ctx.paths["output_dir"])
     assert Path(result["collector_roi_metrics_json"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["historical_company_hiring_csv"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["historical_growth_summary_csv"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["historical_summary_json"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["market_trends_by_source_csv"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["market_trends_by_location_csv"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["market_new_companies_by_source_csv"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["market_trends_summary_json"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["market_segmented_companies_csv"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["market_segment_summary_csv"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["market_segment_summary_json"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["provider_operation_metrics_csv"]).parent == Path(ctx.paths["output_dir"])
+    assert Path(result["provider_operation_metrics_json"]).parent == Path(ctx.paths["output_dir"])

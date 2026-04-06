@@ -29,6 +29,22 @@ class RunRepository:
         finally:
             conn.close()
 
+    def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+        conn = get_connection(self.db_path)
+        try:
+            row = conn.execute(
+                """
+                SELECT run_id, run_date, status, mode, created_at
+                FROM runs
+                WHERE run_id = ?
+                LIMIT 1
+                """,
+                (run_id,),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
 
 class RunMetricsRepository:
     def __init__(self, db_path: str = "data/oie.db") -> None:
@@ -49,6 +65,22 @@ class RunMetricsRepository:
         finally:
             conn.close()
 
+    def get_metrics(self, run_id: str) -> Dict[str, Any]:
+        conn = get_connection(self.db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT metric_key, metric_value
+                FROM run_metrics
+                WHERE run_id = ?
+                ORDER BY metric_key ASC
+                """,
+                (run_id,),
+            ).fetchall()
+            return {row["metric_key"]: row["metric_value"] for row in rows}
+        finally:
+            conn.close()
+
 
 class ProviderEventRepository:
     def __init__(self, db_path: str = "data/oie.db") -> None:
@@ -60,14 +92,15 @@ class ProviderEventRepository:
             conn.execute("DELETE FROM provider_events WHERE run_id = ?", (run_id,))
             conn.executemany(
                 """
-                INSERT INTO provider_events (run_id, provider, event_type, message, metadata_json)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO provider_events (run_id, provider, event_type, status_code, message, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
                         run_id,
                         event.get("provider"),
                         event.get("event_type"),
+                        event.get("status_code"),
                         event.get("message"),
                         json.dumps(event.get("metadata", {}), ensure_ascii=False),
                     )
@@ -75,6 +108,32 @@ class ProviderEventRepository:
                 ],
             )
             conn.commit()
+        finally:
+            conn.close()
+
+    def list_by_run(self, run_id: str) -> List[Dict[str, Any]]:
+        conn = get_connection(self.db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT run_id, provider, event_type, status_code, message, metadata_json, created_at
+                FROM provider_events
+                WHERE run_id = ?
+                ORDER BY id ASC
+                """,
+                (run_id,),
+            ).fetchall()
+
+            out: List[Dict[str, Any]] = []
+            for row in rows:
+                record = dict(row)
+                metadata_json = record.get("metadata_json")
+                try:
+                    record["metadata"] = json.loads(metadata_json) if metadata_json else {}
+                except Exception:
+                    record["metadata"] = {}
+                out.append(record)
+            return out
         finally:
             conn.close()
 
@@ -260,6 +319,20 @@ class CompanyRepository:
                 (resolved_domain,),
             ).fetchone()
             return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def list_companies(self) -> List[Dict[str, Any]]:
+        conn = get_connection(self.db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM companies
+                ORDER BY company_display ASC, company_key ASC
+                """
+            ).fetchall()
+            return [dict(row) for row in rows]
         finally:
             conn.close()
 
@@ -480,6 +553,22 @@ class JobRepository:
         finally:
             conn.close()
 
+    def list_jobs_by_run(self, run_id: str) -> List[Dict[str, Any]]:
+        conn = get_connection(self.db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM jobs
+                WHERE run_id = ?
+                ORDER BY job_key ASC
+                """,
+                (run_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
 
 class LeadRepository:
     def __init__(self, db_path: str = "data/oie.db") -> None:
@@ -561,6 +650,22 @@ class LeadRepository:
                     rows,
                 )
             conn.commit()
+        finally:
+            conn.close()
+
+    def list_leads_by_run(self, run_id: str) -> List[Dict[str, Any]]:
+        conn = get_connection(self.db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM leads
+                WHERE run_id = ?
+                ORDER BY rowid ASC
+                """,
+                (run_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
         finally:
             conn.close()
 

@@ -43,6 +43,7 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 run_id TEXT NOT NULL,
                 provider TEXT NOT NULL,
                 event_type TEXT NOT NULL,
+                status_code INTEGER,
                 message TEXT,
                 metadata_json TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -257,6 +258,16 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
         for column_name, column_type in required_company_columns.items():
             if column_name not in company_columns:
                 conn.execute(f"ALTER TABLE companies ADD COLUMN {column_name} {column_type}")
+
+        provider_event_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(provider_events)").fetchall()
+        }
+        required_provider_event_columns = {
+            "status_code": "INTEGER",
+        }
+        for column_name, column_type in required_provider_event_columns.items():
+            if column_name not in provider_event_columns:
+                conn.execute(f"ALTER TABLE provider_events ADD COLUMN {column_name} {column_type}")
 
         provider_operation_metrics_columns = {
             row["name"] for row in conn.execute("PRAGMA table_info(provider_operation_metrics)").fetchall()

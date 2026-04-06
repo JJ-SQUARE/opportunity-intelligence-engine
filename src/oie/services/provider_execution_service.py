@@ -217,6 +217,7 @@ class ProviderExecutionService:
                     self.ctx.add_provider_event(
                         provider=provider_name,
                         event_type="rate_limit",
+                        status_code=status_code,
                         message=str(exc),
                         metadata={
                             "operation_name": operation_name,
@@ -233,6 +234,7 @@ class ProviderExecutionService:
                     self.ctx.add_provider_event(
                         provider=provider_name,
                         event_type="http_5xx",
+                        status_code=status_code,
                         message=str(exc),
                         metadata={
                             "operation_name": operation_name,
@@ -249,6 +251,7 @@ class ProviderExecutionService:
                     self.ctx.add_provider_event(
                         provider=provider_name,
                         event_type="execution_error",
+                        status_code=status_code,
                         message=str(exc),
                         metadata={
                             "operation_name": operation_name,

@@ -277,3 +277,46 @@ def test_execute_allows_other_operation_when_one_operation_budget_is_exhausted()
     assert result["ok"] is True
     assert ctx.metrics["openai_classify_company_used_calls"] == 1
     assert ctx.metrics["openai_classify_company_remaining_calls"] == 1
+
+def test_provider_execution_service_records_status_code_in_http_error_event():
+    import requests
+
+    ctx = RunContext.create(
+        config={
+            "providers": {
+                "limits": {"serpapi": 3},
+                "retry_policy": {
+                    "serpapi": {
+                        "max_attempts": 1,
+                        "base_delay_seconds": 0.0,
+                        "backoff_multiplier": 1.0,
+                    }
+                },
+            }
+        }
+    )
+    provider_control_service = ProviderControlService(ctx)
+    provider_control_service.initialize()
+
+    service = ProviderExecutionService(ctx, provider_control_service)
+
+    class _FakeResponse:
+        status_code = 429
+
+    def _fail():
+        raise requests.exceptions.HTTPError("429 Too Many Requests", response=_FakeResponse())
+
+    try:
+        service.execute("serpapi", "search_google", _fail, cost=1)
+        assert False, "Expected ProviderExecutionError"
+    except ProviderExecutionError:
+        pass
+
+    rate_limit_events = [
+        event for event in ctx.provider_events
+        if event.get("provider") == "serpapi" and event.get("event_type") == "rate_limit"
+    ]
+
+    assert rate_limit_events
+    assert rate_limit_events[0]["status_code"] == 429
+

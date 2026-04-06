@@ -1,10 +1,49 @@
 from oie.orchestration.run_context import RunContext
 
 
-def test_run_context_create_generates_unique_run_ids():
-    ctx1 = RunContext.create(config={}, flags={})
-    ctx2 = RunContext.create(config={}, flags={})
+def test_run_context_add_provider_event_derives_status_code_from_metadata():
+    ctx = RunContext.create(config={}, flags={})
 
-    assert ctx1.run_id != ctx2.run_id
-    assert "T" in ctx1.run_date
-    assert "T" in ctx2.run_date
+    ctx.add_provider_event(
+        provider="openai",
+        event_type="execution_error",
+        message="boom",
+        metadata={"status_code": "429", "operation": "classify_company"},
+    )
+
+    assert len(ctx.provider_events) == 1
+    event = ctx.provider_events[0]
+    assert event["provider"] == "openai"
+    assert event["event_type"] == "execution_error"
+    assert event["message"] == "boom"
+    assert event["status_code"] == 429
+    assert event["metadata"]["operation"] == "classify_company"
+
+
+def test_run_context_add_provider_event_preserves_explicit_status_code():
+    ctx = RunContext.create(config={}, flags={})
+
+    ctx.add_provider_event(
+        provider="hunter",
+        event_type="rate_limit",
+        message="too many requests",
+        metadata={"status_code": "500"},
+        status_code=429,
+    )
+
+    event = ctx.provider_events[0]
+    assert event["status_code"] == 429
+
+
+def test_run_context_add_provider_event_handles_invalid_metadata_status_code():
+    ctx = RunContext.create(config={}, flags={})
+
+    ctx.add_provider_event(
+        provider="serpapi",
+        event_type="timeout",
+        message="timeout",
+        metadata={"status_code": "invalid"},
+    )
+
+    event = ctx.provider_events[0]
+    assert event["status_code"] is None

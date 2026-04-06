@@ -8,56 +8,71 @@ def test_opportunity_scoring_service_scores_and_sorts_companies():
 
     companies = [
         {
-            "company_display": "High Value Co",
-            "total_openings": 5,
-            "remote_jobs": 3,
-            "contractor_jobs": 2,
+            "company_key": "cmp_a",
+            "company_display": "Acme",
+            "total_openings": 3,
+            "remote_jobs": 2,
+            "contractor_jobs": 1,
             "multi_source_signal": True,
             "company_type_ai": "end_client",
         },
         {
-            "company_display": "Lower Value Co",
+            "company_key": "cmp_b",
+            "company_display": "Beta",
             "total_openings": 1,
             "remote_jobs": 0,
             "contractor_jobs": 0,
             "multi_source_signal": False,
-            "company_type_ai": "unknown",
+            "company_type_ai": "job_board",
         },
     ]
 
     scored = service.score_companies(companies)
 
     assert len(scored) == 2
-    assert scored[0]["company_display"] == "High Value Co"
-    assert scored[0]["score_openings"] == 40
-    assert scored[0]["score_remote"] == 12
-    assert scored[0]["score_contractor"] == 12
+
+    assert scored[0]["company_key"] == "cmp_a"
+    assert scored[0]["score_openings"] == 24
+    assert scored[0]["score_remote"] == 8
+    assert scored[0]["score_contractor"] == 6
     assert scored[0]["score_multi_source"] == 10
     assert scored[0]["score_company_type"] == 20
-    assert scored[0]["opportunity_score"] == 94
+    assert scored[0]["opportunity_score"] == 68
 
-    assert scored[1]["company_display"] == "Lower Value Co"
+    assert scored[1]["company_key"] == "cmp_b"
+    assert scored[1]["score_openings"] == 8
+    assert scored[1]["score_remote"] == 0
+    assert scored[1]["score_contractor"] == 0
+    assert scored[1]["score_multi_source"] == 0
+    assert scored[1]["score_company_type"] == -10
+    assert scored[1]["opportunity_score"] == -2
+
     assert ctx.metrics["companies_scored"] == 2
     assert ctx.metrics["scoring_completed"] is True
 
 
-def test_opportunity_scoring_service_applies_negative_weight_for_job_board():
+def test_opportunity_scoring_service_caps_components():
     ctx = RunContext.create(config={}, flags={})
     service = OpportunityScoringService(ctx)
 
     companies = [
         {
-            "company_display": "Aggregator",
-            "total_openings": 1,
-            "remote_jobs": 0,
-            "contractor_jobs": 0,
-            "multi_source_signal": False,
-            "company_type_ai": "job_board",
+            "company_key": "cmp_cap",
+            "company_display": "Cap Co",
+            "total_openings": 20,      # 20 * 8 = 160 -> cap 40
+            "remote_jobs": 10,         # 10 * 4 = 40 -> cap 20
+            "contractor_jobs": 10,     # 10 * 6 = 60 -> cap 20
+            "multi_source_signal": True,
+            "company_type_ai": "consulting",
         }
     ]
 
     scored = service.score_companies(companies)
 
     assert len(scored) == 1
-    assert scored[0]["score_company_type"] == -10
-    assert scored[0]["opportunity_score"] == -2
+    assert scored[0]["score_openings"] == 40
+    assert scored[0]["score_remote"] == 20
+    assert scored[0]["score_contractor"] == 20
+    assert scored[0]["score_multi_source"] == 10
+    assert scored[0]["score_company_type"] == 10
+    assert scored[0]["opportunity_score"] == 100

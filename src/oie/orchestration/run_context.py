@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from typing import Any, Dict
 from uuid import uuid4
 
+from oie.models.provider_event import ProviderEventRecord
+
 
 @dataclass
 class RunContext:
@@ -62,12 +64,24 @@ class RunContext:
         event_type: str,
         message: str,
         metadata: Dict[str, Any] | None = None,
+        status_code: int | None = None,
     ) -> None:
+        event_metadata = metadata or {}
+        derived_status_code = status_code
+
+        if derived_status_code is None:
+            raw_status_code = event_metadata.get("status_code")
+            try:
+                derived_status_code = int(raw_status_code) if raw_status_code is not None else None
+            except Exception:
+                derived_status_code = None
+
         self.provider_events.append(
             {
                 "provider": provider,
                 "event_type": event_type,
+                "status_code": derived_status_code,
                 "message": message,
-                "metadata": metadata or {},
+                "metadata": event_metadata,
             }
         )

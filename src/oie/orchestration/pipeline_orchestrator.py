@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import traceback
 from typing import Any, Dict, List, Tuple
 
 from oie.orchestration.run_context import RunContext
@@ -43,6 +44,8 @@ from oie.services.run_readiness_export_service import RunReadinessExportService
 from oie.services.run_readiness_service import RunReadinessService
 from oie.services.run_metrics_summary_export_service import RunMetricsSummaryExportService
 from oie.services.run_metrics_summary_service import RunMetricsSummaryService
+from oie.services.run_analytics_export_service import RunAnalyticsExportService
+from oie.services.run_analytics_service import RunAnalyticsService
 from oie.services.serpapi_search_service import SerpAPISearchService
 from oie.services.domain_review_queue_service import DomainReviewQueueService
 
@@ -84,6 +87,8 @@ class PipelineOrchestrator:
         self.run_readiness_export_service = RunReadinessExportService(ctx)
         self.run_metrics_summary_service = RunMetricsSummaryService(ctx)
         self.run_metrics_summary_export_service = RunMetricsSummaryExportService(ctx)
+        self.run_analytics_service = RunAnalyticsService(ctx)
+        self.run_analytics_export_service = RunAnalyticsExportService(ctx)
         self.provider_operation_metrics_service = ProviderOperationMetricsService(ctx)
         self.provider_operation_metrics_export_service = ProviderOperationMetricsExportService(ctx)
         self.company_classification_service = CompanyClassificationService(
@@ -195,105 +200,161 @@ class PipelineOrchestrator:
         return jobs_with_company_keys, companies, duplicate_jobs
 
     def run(self) -> Dict[str, Any]:
-        self.provider_control_service.initialize()
-        self.provider_control_service.sync_budget_metrics()
+        unique_jobs: List[Dict[str, Any]] = []
+        companies: List[Dict[str, Any]] = []
+        duplicate_jobs: List[Dict[str, Any]] = []
+        best_leads: List[Dict[str, Any]] = []
+        run_metrics_summary: Dict[str, Any] | None = None
+        run_analytics: Dict[str, Any] | None = None
+        status = "failed"
 
-        unique_jobs, companies, duplicate_jobs = self.run_company_pipeline()
-        leads = self.lead_generation_service.generate_leads(companies)
-        ranked_leads = self.lead_ranking_service.rank_leads(leads)
-        best_leads = self.lead_ranking_service.select_best_lead_per_company(ranked_leads)
+        try:
+            self.provider_control_service.initialize()
+            self.provider_control_service.sync_budget_metrics()
 
-        status = "company_pipeline_completed"
+            unique_jobs, companies, duplicate_jobs = self.run_company_pipeline()
+            leads = self.lead_generation_service.generate_leads(companies)
+            ranked_leads = self.lead_ranking_service.rank_leads(leads)
+            best_leads = self.lead_ranking_service.select_best_lead_per_company(ranked_leads)
 
-        self.persistence_service.persist_run_snapshot(
-            status=status,
-            companies=companies,
-            jobs=unique_jobs,
-            leads=best_leads,
-        )
+            status = "company_pipeline_completed"
 
-        self.master_data_service.append_jobs(unique_jobs)
-        self.master_data_service.append_companies(companies)
-        self.master_data_service.append_leads(best_leads)
+            self.persistence_service.persist_run_snapshot(
+                status=status,
+                companies=companies,
+                jobs=unique_jobs,
+                leads=best_leads,
+            )
 
-        duplicate_report_rows = self.master_dedup_service.build_suspected_duplicates_report(
-            jobs_duplicates=duplicate_jobs,
-            leads_duplicates=[],
-        )
-        self.duplicate_report_service.write_suspected_duplicates_report(duplicate_report_rows)
-        self.domain_review_queue_service.export_csv(companies)
-        self.db_export_service.export_all()
+            self.master_data_service.append_jobs(unique_jobs)
+            self.master_data_service.append_companies(companies)
+            self.master_data_service.append_leads(best_leads)
 
-        dataset = self.opportunity_dataset_service.build_dataset()
-        top_dataset = self.opportunity_dataset_service.build_top_opportunities(limit=25)
-        self.opportunity_dataset_export_service.export_dataset(dataset)
-        self.opportunity_dataset_export_service.export_top_dataset(top_dataset)
-        self.outbound_export_service.export_all()
+            duplicate_report_rows = self.master_dedup_service.build_suspected_duplicates_report(
+                jobs_duplicates=duplicate_jobs,
+                leads_duplicates=[],
+            )
+            self.duplicate_report_service.write_suspected_duplicates_report(duplicate_report_rows)
+            self.domain_review_queue_service.export_csv(companies)
+            self.db_export_service.export_all()
 
-        summary = self.executive_summary_service.build_summary(companies, best_leads)
-        self.executive_summary_service.write_summary(summary)
+            dataset = self.opportunity_dataset_service.build_dataset()
+            top_dataset = self.opportunity_dataset_service.build_top_opportunities(limit=25)
+            self.opportunity_dataset_export_service.export_dataset(dataset)
+            self.opportunity_dataset_export_service.export_top_dataset(top_dataset)
+            self.outbound_export_service.export_all()
 
-        historical_rows = self.historical_intelligence_service.build_company_hiring_history()
-        growth_rows = self.historical_intelligence_service.build_company_growth_summary()
-        self.historical_export_service.export_company_history(historical_rows)
-        self.historical_export_service.export_growth_summary(growth_rows)
-        self.historical_export_service.export_summary_json(growth_rows)
+            summary = self.executive_summary_service.build_summary(companies, best_leads)
+            self.executive_summary_service.write_summary(summary)
 
-        source_trends = self.market_trends_service.build_source_trends()
-        country_trends = self.market_trends_service.build_country_trends()
-        new_companies_trends = self.market_trends_service.build_new_companies_by_source()
-        market_summary = self.market_trends_service.build_summary()
+            historical_rows = self.historical_intelligence_service.build_company_hiring_history()
+            growth_rows = self.historical_intelligence_service.build_company_growth_summary()
+            self.historical_export_service.export_company_history(historical_rows)
+            self.historical_export_service.export_growth_summary(growth_rows)
+            self.historical_export_service.export_summary_json(growth_rows)
 
-        self.market_trends_export_service.export_source_trends(source_trends)
-        self.market_trends_export_service.export_country_trends(country_trends)
-        self.market_trends_export_service.export_new_companies_by_source(new_companies_trends)
-        self.market_trends_export_service.export_summary_json(market_summary)
+            source_trends = self.market_trends_service.build_source_trends()
+            country_trends = self.market_trends_service.build_country_trends()
+            new_companies_trends = self.market_trends_service.build_new_companies_by_source()
+            market_summary = self.market_trends_service.build_summary()
 
-        segmented_companies = self.market_segmentation_service.segment_companies(companies)
-        market_segment_summary = self.market_segmentation_service.build_segment_summary(companies)
-        self.market_segmentation_export_service.export_segmented_companies(segmented_companies)
-        self.market_segmentation_export_service.export_segment_summary(market_segment_summary)
-        self.market_segmentation_export_service.export_segment_summary_json(market_segment_summary)
+            self.market_trends_export_service.export_source_trends(source_trends)
+            self.market_trends_export_service.export_country_trends(country_trends)
+            self.market_trends_export_service.export_new_companies_by_source(new_companies_trends)
+            self.market_trends_export_service.export_summary_json(market_summary)
 
-        collector_metrics = self.collector_metrics_service.build_metrics(unique_jobs, companies)
-        self.collector_metrics_export_service.export_json(collector_metrics)
+            segmented_companies = self.market_segmentation_service.segment_companies(companies)
+            market_segment_summary = self.market_segmentation_service.build_segment_summary(companies)
+            self.market_segmentation_export_service.export_segmented_companies(segmented_companies)
+            self.market_segmentation_export_service.export_segment_summary(market_segment_summary)
+            self.market_segmentation_export_service.export_segment_summary_json(market_segment_summary)
 
-        collector_contribution = self.collector_contribution_service.build_contribution_metrics(
-            unique_jobs,
-            companies,
-            best_leads,
-        )
-        self.collector_contribution_export_service.export_csv(collector_contribution)
-        self.collector_contribution_export_service.export_json(collector_contribution)
+            collector_metrics = self.collector_metrics_service.build_metrics(unique_jobs, companies)
+            self.collector_metrics_export_service.export_json(collector_metrics)
 
-        collector_roi = self.collector_roi_service.build_roi_metrics(
-            unique_jobs=unique_jobs,
-            duplicate_jobs=duplicate_jobs,
-            companies=companies,
-            leads=best_leads,
-        )
-        self.collector_roi_export_service.export_csv(collector_roi)
-        self.collector_roi_export_service.export_json(collector_roi)
+            collector_contribution = self.collector_contribution_service.build_contribution_metrics(
+                unique_jobs,
+                companies,
+                best_leads,
+            )
+            self.collector_contribution_export_service.export_csv(collector_contribution)
+            self.collector_contribution_export_service.export_json(collector_contribution)
 
-        provider_operation_metrics = self.provider_operation_metrics_service.build_rows()
-        self.provider_operation_metrics_export_service.export_csv(provider_operation_metrics)
-        self.provider_operation_metrics_export_service.export_json(provider_operation_metrics)
+            collector_roi = self.collector_roi_service.build_roi_metrics(
+                unique_jobs=unique_jobs,
+                duplicate_jobs=duplicate_jobs,
+                companies=companies,
+                leads=best_leads,
+            )
+            self.collector_roi_export_service.export_csv(collector_roi)
+            self.collector_roi_export_service.export_json(collector_roi)
 
-        readiness_report = self.run_readiness_service.build_report(
-            jobs=unique_jobs,
-            companies=companies,
-            leads=best_leads,
-        )
-        self.run_readiness_export_service.export_json(readiness_report)
+            provider_operation_metrics = self.provider_operation_metrics_service.build_rows()
+            self.provider_operation_metrics_export_service.export_csv(provider_operation_metrics)
+            self.provider_operation_metrics_export_service.export_json(provider_operation_metrics)
 
-        self.ctx.provider_state["run_metrics_summary_counts"] = {
-            "jobs_count": len(unique_jobs),
-            "companies_count": len(companies),
-            "leads_count": len(best_leads),
-        }
+            readiness_report = self.run_readiness_service.build_report(
+                jobs=unique_jobs,
+                companies=companies,
+                leads=best_leads,
+            )
+            self.run_readiness_export_service.export_json(readiness_report)
 
-        run_metrics_summary = self.run_metrics_summary_service.build_summary()
-        self.run_metrics_summary_export_service.export_json(run_metrics_summary)
+            self.ctx.provider_state["run_metrics_summary_counts"] = {
+                "jobs_count": len(unique_jobs),
+                "companies_count": len(companies),
+                "leads_count": len(best_leads),
+            }
+
+            run_metrics_summary = self.run_metrics_summary_service.build_summary()
+            self.run_metrics_summary_export_service.export_json(run_metrics_summary)
+
+            run_analytics = self.run_analytics_service.build_analytics(
+                status=status,
+                jobs=unique_jobs,
+                companies=companies,
+                leads=best_leads,
+                duplicate_jobs=duplicate_jobs,
+                collector_metrics=collector_metrics,
+                collector_contribution=collector_contribution,
+                collector_roi=collector_roi,
+                provider_operation_metrics=provider_operation_metrics,
+                readiness_report=readiness_report,
+                run_metrics_summary=run_metrics_summary,
+                executive_summary=summary,
+            )
+            self.run_analytics_export_service.export_json(run_analytics)
+
+        except Exception as exc:
+            self.ctx.metrics["pipeline_failed"] = True
+            self.ctx.metrics["pipeline_error_type"] = exc.__class__.__name__
+            self.ctx.metrics["pipeline_error_message"] = str(exc)
+            self.ctx.provider_state["pipeline_error"] = {
+                "error_type": exc.__class__.__name__,
+                "error_message": str(exc),
+                "traceback": traceback.format_exc(),
+            }
+
+            self.ctx.add_provider_event(
+                provider="pipeline",
+                event_type="run_failed",
+                message=str(exc),
+                metadata={
+                    "error_type": exc.__class__.__name__,
+                },
+            )
+
+            try:
+                self.persistence_service.persist_run_snapshot(
+                    status=status,
+                    companies=companies,
+                    jobs=unique_jobs,
+                    leads=best_leads,
+                )
+            except Exception:
+                self.ctx.metrics["pipeline_failure_persist_snapshot_failed"] = True
+
+            raise
 
         return {
             "run_id": self.ctx.run_id,
@@ -336,5 +397,7 @@ class PipelineOrchestrator:
             "provider_operation_metrics_json": self.ctx.paths.get("provider_operation_metrics_json"),
             "run_readiness_report_json": self.ctx.paths.get("run_readiness_report_json"),
             "run_metrics_summary_json": self.ctx.paths.get("run_metrics_summary_json"),
+            "run_analytics_json": self.ctx.paths.get("run_analytics_json"),
             "run_metrics_summary": run_metrics_summary,
+            "run_analytics": run_analytics,
         }
