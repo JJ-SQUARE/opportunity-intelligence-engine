@@ -53,7 +53,17 @@ class RunAnalyticsService:
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
         items = list(leads or [])
-        items.sort(key=lambda row: row.get("lead_relevance_score", 0) or 0, reverse=True)
+        items.sort(
+            key=lambda row: (
+                row.get("lead_relevance_score", 0) or 0,
+                row.get("email_quality_score", 0) or 0,
+                row.get("lead_confidence", 0) or 0,
+                row.get("lead_score_source", 0) or 0,
+                1 if row.get("linkedin_url") else 0,
+                row.get("contact_name", "") or "",
+            ),
+            reverse=True,
+        )
 
         return [
             {
@@ -64,11 +74,15 @@ class RunAnalyticsService:
                 "linkedin_url": lead.get("linkedin_url"),
                 "lead_source": lead.get("lead_source"),
                 "lead_confidence": lead.get("lead_confidence"),
+                "email_quality_score": lead.get("email_quality_score", 0),
+                "lead_capture_reason": lead.get("lead_capture_reason", ""),
                 "lead_relevance_score": lead.get("lead_relevance_score", 0),
                 "lead_score_title": lead.get("lead_score_title", 0),
                 "lead_score_source": lead.get("lead_score_source", 0),
                 "lead_score_email": lead.get("lead_score_email", 0),
                 "lead_score_linkedin": lead.get("lead_score_linkedin", 0),
+                "lead_score_email_quality": lead.get("lead_score_email_quality", 0),
+                "lead_score_confidence": lead.get("lead_score_confidence", 0),
             }
             for lead in items[:limit]
         ]

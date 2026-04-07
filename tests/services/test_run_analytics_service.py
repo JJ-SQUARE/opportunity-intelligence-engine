@@ -60,11 +60,15 @@ def test_run_analytics_service_builds_consolidated_payload():
                 "linkedin_url": "https://linkedin.com/in/jane",
                 "lead_source": "apollo_people",
                 "lead_confidence": 0.9,
-                "lead_relevance_score": 160,
+                "email_quality_score": 95,
+                "lead_capture_reason": "apollo_match | title:CTO | email_quality:95",
+                "lead_relevance_score": 197,
                 "lead_score_title": 100,
                 "lead_score_source": 30,
                 "lead_score_email": 20,
                 "lead_score_linkedin": 10,
+                "lead_score_email_quality": 19,
+                "lead_score_confidence": 18,
             },
             {
                 "company_key": "cmp_b",
@@ -74,11 +78,15 @@ def test_run_analytics_service_builds_consolidated_payload():
                 "linkedin_url": "",
                 "lead_source": "hunter_domain_search",
                 "lead_confidence": 0.5,
-                "lead_relevance_score": 125,
+                "email_quality_score": 70,
+                "lead_capture_reason": "hunter_match | title:VP Engineering | email_quality:70",
+                "lead_relevance_score": 139,
                 "lead_score_title": 90,
                 "lead_score_source": 15,
                 "lead_score_email": 20,
                 "lead_score_linkedin": 0,
+                "lead_score_email_quality": 14,
+                "lead_score_confidence": 10,
             },
         ],
         duplicate_jobs=[
@@ -134,8 +142,10 @@ def test_run_analytics_service_builds_consolidated_payload():
     assert analytics["top_companies"][0]["score_openings"] == 16
 
     assert analytics["top_leads"][0]["contact_name"] == "Jane Doe"
-    assert analytics["top_leads"][0]["lead_relevance_score"] == 160
+    assert analytics["top_leads"][0]["lead_relevance_score"] == 197
     assert analytics["top_leads"][0]["lead_score_title"] == 100
+    assert analytics["top_leads"][0]["email_quality_score"] == 95
+    assert "apollo_match" in analytics["top_leads"][0]["lead_capture_reason"]
 
     assert analytics["provider_health"]["provider_errors"]["openai"]["execution_error"] == 1
     assert analytics["provider_health"]["provider_blocks"]["hunter"]["blocked_provider"] == 2
@@ -145,3 +155,69 @@ def test_run_analytics_service_builds_consolidated_payload():
     assert analytics["executive_summary"]["companies_count"] == 2
     assert ctx.metrics["run_analytics_generated"] is True
     assert ctx.metrics["run_analytics_top_leads_count"] == 2
+
+
+def test_run_analytics_service_prefers_higher_quality_lead_on_tie():
+    ctx = RunContext.create(config={}, flags={})
+    service = RunAnalyticsService(ctx)
+
+    analytics = service.build_analytics(
+        status="company_pipeline_completed",
+        jobs=[],
+        companies=[],
+        leads=[
+            {
+                "company_key": "cmp_a",
+                "contact_name": "Lower Quality",
+                "contact_title": "VP Engineering",
+                "email": "low@acme.com",
+                "linkedin_url": "",
+                "lead_source": "hunter_domain_search",
+                "lead_confidence": 0.5,
+                "email_quality_score": 60,
+                "lead_capture_reason": "hunter_match | title:VP Engineering | email_quality:60",
+                "lead_relevance_score": 139,
+                "lead_score_title": 90,
+                "lead_score_source": 15,
+                "lead_score_email": 20,
+                "lead_score_linkedin": 0,
+                "lead_score_email_quality": 12,
+                "lead_score_confidence": 10,
+            },
+            {
+                "company_key": "cmp_a",
+                "contact_name": "Higher Quality",
+                "contact_title": "VP Engineering",
+                "email": "high@acme.com",
+                "linkedin_url": "",
+                "lead_source": "hunter_domain_search",
+                "lead_confidence": 0.5,
+                "email_quality_score": 90,
+                "lead_capture_reason": "hunter_match | title:VP Engineering | email_quality:90",
+                "lead_relevance_score": 139,
+                "lead_score_title": 90,
+                "lead_score_source": 15,
+                "lead_score_email": 20,
+                "lead_score_linkedin": 0,
+                "lead_score_email_quality": 18,
+                "lead_score_confidence": 10,
+            },
+        ],
+        duplicate_jobs=[],
+        collector_metrics=[],
+        collector_contribution=[],
+        collector_roi=[],
+        provider_operation_metrics=[],
+        readiness_report={"is_ready_for_review": True, "warnings": []},
+        run_metrics_summary={
+            "run_readiness_ready": True,
+            "run_readiness_warnings": 0,
+            "provider_errors": {},
+            "provider_blocks": {},
+        },
+        executive_summary={},
+    )
+
+    assert analytics["top_leads"][0]["contact_name"] == "Higher Quality"
+    assert analytics["top_leads"][0]["email_quality_score"] == 90
+

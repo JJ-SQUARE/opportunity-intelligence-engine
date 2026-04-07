@@ -630,19 +630,28 @@ class LeadRepository:
         conn = get_connection(self.db_path)
         try:
             conn.execute("DELETE FROM leads WHERE run_id = ?", (run_id,))
+            def _clean(value):
+                return (value or "").strip()
+
+            def _clean_email(value):
+                return (value or "").strip().lower()
+
             rows = [
                 (
                     self._build_lead_key(lead, run_id),
                     self._build_lead_fingerprint(lead),
                     run_id,
                     run_date,
-                    lead.get("company_key"),
-                    lead.get("contact_name"),
-                    lead.get("contact_title"),
-                    lead.get("email"),
-                    lead.get("linkedin_url"),
-                    lead.get("lead_source"),
-                    lead.get("lead_confidence"),
+                    _clean(lead.get("company_key")),
+                    _clean(lead.get("contact_name")),
+                    _clean(lead.get("contact_title")),
+                    _clean_email(lead.get("email")),
+                    _clean(lead.get("linkedin_url")),
+                    _clean(lead.get("lead_source")),
+                    float(lead.get("lead_confidence") or 0),
+                    int(lead.get("email_quality_score") or 0),
+                    _clean(lead.get("lead_capture_reason")),
+                    float(lead.get("lead_relevance_score") or 0),
                 )
                 for lead in leads
             ]
@@ -660,9 +669,12 @@ class LeadRepository:
                         email,
                         linkedin_url,
                         lead_source,
-                        lead_confidence
+                        lead_confidence,
+                        email_quality_score,
+                        lead_capture_reason,
+                        lead_relevance_score
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     rows,
                 )

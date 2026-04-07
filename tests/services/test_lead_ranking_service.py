@@ -14,6 +14,9 @@ def test_lead_ranking_service_ranks_and_selects_best_per_company():
             "email": "a@acme.com",
             "linkedin_url": "https://linkedin.com/in/a",
             "lead_source": "apollo_people",
+            "lead_confidence": 0.9,
+            "email_quality_score": 95,
+            "lead_capture_reason": "apollo_match | title:CTO | email_quality:95",
         },
         {
             "company_key": "cmp_a",
@@ -22,6 +25,9 @@ def test_lead_ranking_service_ranks_and_selects_best_per_company():
             "email": "",
             "linkedin_url": "",
             "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.5,
+            "email_quality_score": 0,
+            "lead_capture_reason": "hunter_match | title:Head of Product",
         },
     ]
 
@@ -40,3 +46,73 @@ def test_lead_ranking_service_ranks_and_selects_best_per_company():
     assert top_leads[0]["lead_score_source"] == 30
     assert top_leads[0]["lead_score_email"] == 20
     assert top_leads[0]["lead_score_linkedin"] == 10
+    assert top_leads[0]["lead_score_email_quality"] == 19
+    assert top_leads[0]["lead_score_confidence"] == 18
+    assert top_leads[0]["email_quality_score"] == 95
+    assert "apollo_match" in top_leads[0]["lead_capture_reason"]
+
+
+def test_lead_ranking_service_prefers_higher_email_quality_when_relevance_ties():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Lower Quality",
+            "contact_title": "VP Engineering",
+            "email": "low@acme.com",
+            "linkedin_url": "",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.5,
+            "email_quality_score": 60,
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Higher Quality",
+            "contact_title": "VP Engineering",
+            "email": "high@acme.com",
+            "linkedin_url": "",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.5,
+            "email_quality_score": 90,
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["contact_name"] == "Higher Quality"
+    assert ranked[0]["lead_relevance_score"] >= ranked[1]["lead_relevance_score"]
+
+def test_lead_ranking_service_handles_string_numeric_fields_in_sort():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Alpha",
+            "contact_title": "VP Engineering",
+            "email": "alpha@acme.com",
+            "linkedin_url": "",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": "0.5",
+            "email_quality_score": "70",
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Beta",
+            "contact_title": "VP Engineering",
+            "email": "beta@acme.com",
+            "linkedin_url": "",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": "0.5",
+            "email_quality_score": "90",
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["contact_name"] == "Beta"
+    assert ranked[1]["contact_name"] == "Alpha"
+

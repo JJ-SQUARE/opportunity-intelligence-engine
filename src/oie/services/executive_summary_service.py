@@ -36,7 +36,14 @@ class ExecutiveSummaryService:
 
         ranked_leads = sorted(
             leads,
-            key=lambda x: x.get("lead_relevance_score", 0),
+            key=lambda x: (
+                x.get("lead_relevance_score", 0) or 0,
+                x.get("email_quality_score", 0) or 0,
+                x.get("lead_confidence", 0) or 0,
+                x.get("lead_score_source", 0) or 0,
+                1 if x.get("linkedin_url") else 0,
+                x.get("contact_name", "") or "",
+            ),
             reverse=True,
         )[:10]
 
@@ -77,6 +84,8 @@ class ExecutiveSummaryService:
                     "linkedin_url": lead.get("linkedin_url"),
                     "lead_source": lead.get("lead_source"),
                     "lead_confidence": lead.get("lead_confidence"),
+                    "email_quality_score": lead.get("email_quality_score", 0),
+                    "lead_capture_reason": lead.get("lead_capture_reason", ""),
                     "lead_relevance_score": lead.get("lead_relevance_score", 0),
                 }
                 for lead in ranked_leads

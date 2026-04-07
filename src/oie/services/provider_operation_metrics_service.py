@@ -26,6 +26,12 @@ class ProviderOperationMetricsService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
 
+    def _to_int(self, value: Any, default: int = 0) -> int:
+        try:
+            return int(value)
+        except Exception:
+            return default
+
     def _parse_metric_key(self, metric_key: str) -> Tuple[str, str, str] | None:
         for suffix in KNOWN_SUFFIXES:
             ending = f"_{suffix}"
@@ -38,6 +44,9 @@ class ProviderOperationMetricsService:
 
             provider, operation = base.split("_", 1)
             if not provider or not operation:
+                return None
+
+            if operation == "budget":
                 return None
 
             return provider, operation, suffix
@@ -73,7 +82,10 @@ class ProviderOperationMetricsService:
                     "errors_execution_error": 0,
                 }
 
-            grouped[row_key][suffix] = metric_value
+            if suffix in {"max_calls", "remaining_calls"} and metric_value is None:
+                grouped[row_key][suffix] = None
+            else:
+                grouped[row_key][suffix] = self._to_int(metric_value, 0)
 
         rows = list(grouped.values())
         rows.sort(key=lambda r: (r["provider"], r["operation"]))

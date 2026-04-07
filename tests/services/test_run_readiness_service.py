@@ -64,3 +64,28 @@ def test_run_readiness_service_includes_operational_warnings():
     assert "pendientes de revisión manual de dominio" in warnings
     assert "no se obtuvo ninguna enriquecida" in warnings
 
+def test_run_readiness_service_warns_when_lead_generation_requires_enrichment_and_skips_companies():
+    ctx = RunContext.create(
+        config={
+            "sources": {
+                "google_jobs": {"enabled": True},
+            }
+        },
+        flags={},
+    )
+    ctx.metrics["jobs_with_company_key"] = 3
+    ctx.metrics["jobs_without_company_key"] = 0
+    ctx.metrics["lead_generation_require_enrichment"] = True
+    ctx.metrics["lead_generation_skipped_missing_enrichment"] = 2
+
+    service = RunReadinessService(ctx)
+    report = service.build_report(
+        jobs=[{"title": "Backend Engineer"}],
+        companies=[{"company_key": "cmp_a"}],
+        leads=[{"company_key": "cmp_a"}],
+    )
+
+    warnings = " | ".join(report["warnings"])
+    assert "Lead generation exigió enrichment" in warnings
+    assert "2 compañías sin enrichment" in warnings
+

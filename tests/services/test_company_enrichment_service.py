@@ -206,3 +206,104 @@ def test_company_enrichment_service_does_not_retry_failed_domain_in_same_run():
     assert "same-run-fail-example.com" in service._failed_enrichment_domains
     assert ctx.metrics["companies_enriched"] == 0
 
+def test_company_enrichment_service_skips_low_opportunity_score():
+    ctx = RunContext.create(
+        config={
+            "database": {"path": ":memory:"},
+            "providers": {
+                "limits": {"apollo": 5},
+                "clients": {"apollo": {"api_key": "fake-key"}},
+            },
+            "enrichment": {
+                "apollo_company_ttl_days": 30,
+                "min_opportunity_score": 15,
+            }
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    client = control.registry.get_client("apollo")
+    calls = {"n": 0}
+
+    def fake_enrich(domain):
+        calls["n"] += 1
+        return {"organization": {"industry": "Software"}}
+
+    client.enrich_company_by_domain = fake_enrich
+
+    service = CompanyEnrichmentService(ctx, control)
+
+    companies = [
+        {
+            "company_key": "cmp_low",
+            "company_display": "Low Score Co",
+            "resolved_domain": "lowscore.com",
+            "domain_validation_status": "accepted",
+            "company_type_ai": "end_client",
+            "classification_confidence_ai": 0.95,
+            "opportunity_score": 10,
+        }
+    ]
+
+    enriched = service.enrich_companies(companies)
+
+    assert calls["n"] == 0
+    assert enriched[0].get("industry") in (None, "")
+    assert ctx.metrics["company_enrichment_candidates_total"] == 0
+    assert ctx.metrics["company_enrichment_selected_total"] == 0
+    assert ctx.metrics["company_enrichment_skipped_limit"] == 0
+    assert ctx.metrics["companies_enriched"] == 0
+
+
+def test_company_enrichment_service_skips_disallowed_company_type_with_high_confidence():
+    ctx = RunContext.create(
+        config={
+            "database": {"path": ":memory:"},
+            "providers": {
+                "limits": {"apollo": 5},
+                "clients": {"apollo": {"api_key": "fake-key"}},
+            },
+            "enrichment": {
+                "apollo_company_ttl_days": 30,
+                "allowed_company_types": ["end_client"],
+            }
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    client = control.registry.get_client("apollo")
+    calls = {"n": 0}
+
+    def fake_enrich(domain):
+        calls["n"] += 1
+        return {"organization": {"industry": "Software"}}
+
+    client.enrich_company_by_domain = fake_enrich
+
+    service = CompanyEnrichmentService(ctx, control)
+
+    companies = [
+        {
+            "company_key": "cmp_consulting",
+            "company_display": "Consulting Co",
+            "resolved_domain": "consultingco.com",
+            "domain_validation_status": "accepted",
+            "company_type_ai": "consulting",
+            "classification_confidence_ai": 0.95,
+            "opportunity_score": 30,
+        }
+    ]
+
+    enriched = service.enrich_companies(companies)
+
+    assert calls["n"] == 0
+    assert enriched[0].get("industry") in (None, "")
+    assert ctx.metrics["company_enrichment_candidates_total"] == 0
+    assert ctx.metrics["company_enrichment_selected_total"] == 0
+    assert ctx.metrics["company_enrichment_skipped_limit"] == 0
+    assert ctx.metrics["companies_enriched"] == 0
+

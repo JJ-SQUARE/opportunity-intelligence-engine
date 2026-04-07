@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Dict
 
 import requests
@@ -13,8 +14,10 @@ class HunterAdapter(ProviderClient):
 
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
         super().__init__(config=config)
-        self.api_key = (self.config or {}).get("api_key")
-        self.timeout = float((self.config or {}).get("timeout_seconds", 20))
+        cfg = self.config or {}
+        api_key_env = cfg.get("api_key_env", "HUNTER_API_KEY")
+        self.api_key = cfg.get("api_key") or os.getenv(api_key_env)
+        self.timeout = float(cfg.get("timeout_seconds", 20))
 
     def search_domain_contacts(self, domain: str) -> Dict[str, Any]:
         if not self.api_key:

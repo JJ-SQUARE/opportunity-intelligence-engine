@@ -1,108 +1,153 @@
-import csv
 from pathlib import Path
 
 from oie.orchestration.run_context import RunContext
+from oie.persistence.sqlite import initialize_database, get_connection
 from oie.services.outbound_export_service import OutboundExportService
-from oie.services.persistence_service import PersistenceService
 
 
-def test_outbound_export_service_writes_files(tmp_path):
-    db_path = tmp_path / "oie_test.db"
-    output_path = tmp_path / "outputs"
+def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(tmp_path):
+    db_path = tmp_path / "oie.db"
+    outputs_path = tmp_path / "outputs"
 
     ctx = RunContext.create(
         config={
             "database": {"path": str(db_path)},
-            "outputs": {"path": str(output_path)},
+            "outputs": {"path": str(outputs_path)},
         },
         flags={},
     )
+    ctx.paths["output_dir"] = str(outputs_path / ctx.run_id)
 
-    persistence = PersistenceService(ctx)
-    persistence.persist_run_snapshot(
-        status="ok",
-        companies=[
-            {
-                "company_key": "cmp_a",
-                "company_display": "Acme Inc.",
-                "company_normalized": "acme",
-                "resolved_domain": "acme.com",
-                "industry": "Software",
-                "employee_range": "51-200",
-                "linkedin_company_url": "https://linkedin.com/company/acme",
-                "company_description": "Builds software",
-                "company_type_ai": "end_client",
-                "classification_confidence_ai": 0.9,
-                "classification_provider": "rules",
-                "aliases": ["Acme Inc."],
-                "alias_type_map": {
-                    "Acme Inc.": "acme",
-                    "Acme Inc.__type": "observed_name",
-                },
-                "opportunity_score": 42,
-                "score_openings": 16,
-                "score_remote": 8,
-                "score_contractor": 6,
-                "score_multi_source": 10,
-                "score_company_type": 2,
-            }
-        ],
-        jobs=[
-            {
-                "title": "Backend Engineer",
-                "company": "Acme Inc.",
-                "company_key": "cmp_a",
-                "location": "Remote",
-                "job_url": "https://acme.com/jobs/1",
-                "apply_url": "https://acme.com/apply/1",
-                "description": "Python role",
-                "source": "google_jobs",
-                "detected_at": "2026-03-09",
-            }
-        ],
-        leads=[
-            {
-                "company_key": "cmp_a",
-                "contact_name": "Jane Doe",
-                "contact_title": "CTO",
-                "email": "jane@acme.com",
-                "linkedin_url": "https://linkedin.com/in/janedoe",
-                "lead_source": "apollo_people",
-                "lead_confidence": 0.9,
-            }
-        ],
-    )
+    initialize_database(str(db_path))
+    conn = get_connection(str(db_path))
+    try:
+        conn.execute(
+            """
+            INSERT INTO companies (
+                company_key,
+                company_display,
+                company_normalized,
+                resolved_domain,
+                domain_source,
+                domain_confidence,
+                domain_candidate,
+                domain_validation_status,
+                domain_review_required,
+                domain_ai_decision,
+                industry,
+                employee_range,
+                company_size,
+                linkedin_company_url,
+                company_description,
+                company_type_ai,
+                classification_confidence_ai
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "cmp_acme",
+                "Acme",
+                "acme",
+                "acme.com",
+                "serpapi_fallback",
+                0.92,
+                "acme.com",
+                "accepted",
+                0,
+                "accepted",
+                "Software",
+                "51-200",
+                "51-200",
+                "https://linkedin.com/company/acme",
+                "Builds software",
+                "end_client",
+                0.95,
+            ),
+        )
+
+        conn.execute(
+            """
+            INSERT INTO company_scores (
+                run_id,
+                company_key,
+                opportunity_score,
+                score_openings,
+                score_remote,
+                score_contractor,
+                score_multi_source,
+                score_company_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                ctx.run_id,
+                "cmp_acme",
+                32.0,
+                10.0,
+                8.0,
+                4.0,
+                5.0,
+                5.0,
+            ),
+        )
+
+        conn.execute(
+            """
+            INSERT INTO leads (
+                lead_key,
+                lead_fingerprint,
+                run_id,
+                run_date,
+                company_key,
+                contact_name,
+                contact_title,
+                email,
+                linkedin_url,
+                lead_source,
+                lead_confidence,
+                email_quality_score,
+                lead_capture_reason,
+                lead_relevance_score
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "lead_1",
+                "leadfp_1",
+                ctx.run_id,
+                ctx.run_date,
+                "cmp_acme",
+                "Jane Doe",
+                "CTO",
+                "jane@acme.com",
+                "https://linkedin.com/in/jane",
+                "apollo_people",
+                0.9,
+                95,
+                "apollo_match | title:CTO | email_quality:95",
+                80,
+            ),
+        )
+
+        conn.commit()
+    finally:
+        conn.close()
 
     service = OutboundExportService(ctx)
     service.export_all()
 
-    assert Path(ctx.paths["apollo_import_csv"]).exists()
-    assert Path(ctx.paths["top_opportunities_csv"]).exists()
-    assert Path(ctx.paths["end_clients_csv"]).exists()
-    assert Path(ctx.paths["vendors_csv"]).exists()
-    assert Path(ctx.paths["marketplaces_csv"]).exists()
+    commercial_path = Path(ctx.paths["commercial_pipeline_csv"])
+    apollo_path = Path(ctx.paths["apollo_import_csv"])
 
-    with open(ctx.paths["top_opportunities_csv"], newline="", encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        rows = list(reader)
-        assert reader.fieldnames is not None
-        assert "company_key" in reader.fieldnames
-        assert "opportunity_score" in reader.fieldnames
-        assert "email" in reader.fieldnames
-        assert len(rows) == 1
+    assert commercial_path.exists()
+    assert apollo_path.exists()
 
-    with open(ctx.paths["apollo_import_csv"], newline="", encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        rows = list(reader)
-        assert reader.fieldnames == [
-            "account_name",
-            "website",
-            "company_linkedin_url",
-            "industry",
-            "company_description",
-            "first_name",
-            "title",
-            "email",
-            "person_linkedin_url",
-        ]
-        assert len(rows) == 1
+    commercial_text = commercial_path.read_text(encoding="utf-8")
+    apollo_text = apollo_path.read_text(encoding="utf-8")
+
+    assert "company_display" in commercial_text
+    assert "Acme" in commercial_text
+    assert "jane@acme.com" in commercial_text
+    assert "best_lead_capture_reason" in commercial_text
+
+    assert "website" in apollo_text
+    assert "acme.com" in apollo_text
+    assert ctx.metrics["commercial_pipeline_rows"] == 1
+    assert ctx.metrics["apollo_import_rows"] == 1

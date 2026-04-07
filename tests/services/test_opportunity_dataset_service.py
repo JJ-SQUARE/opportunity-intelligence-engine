@@ -68,6 +68,9 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
                 "linkedin_url": "https://linkedin.com/in/janedoe",
                 "lead_source": "apollo_people",
                 "lead_confidence": 0.9,
+                "email_quality_score": 95,
+                "lead_capture_reason": "apollo_match | title:CTO | email_quality:95",
+                "lead_relevance_score": 197,
             }
         ],
     )
@@ -88,6 +91,9 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
     assert dataset[0]["opportunity_score"] == 42
     assert dataset[0]["industry"] == "Software"
     assert dataset[0]["lead_source"] == "apollo_people"
+    assert dataset[0]["email_quality_score"] == 95
+    assert "apollo_match" in dataset[0]["lead_capture_reason"]
+    assert dataset[0]["lead_relevance_score"] == 197
     assert Path(ctx.paths["opportunities_export"]).exists()
     assert Path(ctx.paths["top_opportunities_export"]).exists()
 
@@ -97,3 +103,6 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
         assert "company_key" in reader.fieldnames
         assert "opportunity_score" in reader.fieldnames
         assert "lead_confidence" in reader.fieldnames
+        assert "email_quality_score" in reader.fieldnames
+        assert "lead_capture_reason" in reader.fieldnames
+        assert "lead_relevance_score" in reader.fieldnames

@@ -38,6 +38,9 @@ OPPORTUNITY_DATASET_HEADERS = [
     "linkedin_url",
     "lead_source",
     "lead_confidence",
+    "email_quality_score",
+    "lead_capture_reason",
+    "lead_relevance_score",
 ]
 
 

@@ -21,6 +21,13 @@ class ProviderRegistry:
 
     def register_default_clients(self, config: Dict[str, Any] | None = None) -> None:
         config = config or {}
+
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except Exception:
+            pass
+
         self.register_client("openai", OpenAIAdapter(config=config.get("openai", {})))
         self.register_client("serpapi", SerpAPIAdapter(config=config.get("serpapi", {})))
         self.register_client("apollo", ApolloAdapter(config=config.get("apollo", {})))

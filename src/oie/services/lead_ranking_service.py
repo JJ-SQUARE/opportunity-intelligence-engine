@@ -41,6 +41,22 @@ class LeadRankingService:
     def _linkedin_score(self, linkedin_url: str) -> int:
         return 10 if (linkedin_url or "").strip() else 0
 
+    def _email_quality_component(self, email_quality_score: Any) -> int:
+        try:
+            value = int(email_quality_score or 0)
+        except Exception:
+            value = 0
+        value = max(0, min(value, 100))
+        return value // 5
+
+    def _confidence_component(self, lead_confidence: Any) -> int:
+        try:
+            value = float(lead_confidence or 0)
+        except Exception:
+            value = 0.0
+        value = max(0.0, min(value, 1.0))
+        return int(round(value * 20))
+
     def rank_leads(self, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         ranked: List[Dict[str, Any]] = []
 
@@ -49,8 +65,17 @@ class LeadRankingService:
             source_score = self._source_score(lead.get("lead_source", ""))
             email_score = self._email_score(lead.get("email", ""))
             linkedin_score = self._linkedin_score(lead.get("linkedin_url", ""))
+            email_quality_score = self._email_quality_component(lead.get("email_quality_score", 0))
+            confidence_score = self._confidence_component(lead.get("lead_confidence", 0))
 
-            lead_relevance_score = title_score + source_score + email_score + linkedin_score
+            lead_relevance_score = (
+                title_score
+                + source_score
+                + email_score
+                + linkedin_score
+                + email_quality_score
+                + confidence_score
+            )
 
             enriched = dict(lead)
             enriched["lead_relevance_score"] = lead_relevance_score
@@ -58,9 +83,21 @@ class LeadRankingService:
             enriched["lead_score_source"] = source_score
             enriched["lead_score_email"] = email_score
             enriched["lead_score_linkedin"] = linkedin_score
+            enriched["lead_score_email_quality"] = email_quality_score
+            enriched["lead_score_confidence"] = confidence_score
             ranked.append(enriched)
 
-        ranked.sort(key=lambda x: x.get("lead_relevance_score", 0), reverse=True)
+        ranked.sort(
+            key=lambda x: (
+                int(x.get("lead_relevance_score", 0) or 0),
+                self._email_quality_component(x.get("email_quality_score", 0)),
+                self._confidence_component(x.get("lead_confidence", 0)),
+                self._source_score(x.get("lead_source", "")),
+                1 if (x.get("linkedin_url") or "").strip() else 0,
+                (x.get("contact_name") or "").strip().lower(),
+            ),
+            reverse=True,
+        )
         self.ctx.metrics["leads_ranked"] = len(ranked)
         return ranked
 
@@ -91,11 +128,15 @@ class LeadRankingService:
                 "linkedin_url": lead.get("linkedin_url"),
                 "lead_source": lead.get("lead_source"),
                 "lead_confidence": lead.get("lead_confidence"),
+                "email_quality_score": lead.get("email_quality_score", 0),
+                "lead_capture_reason": lead.get("lead_capture_reason", ""),
                 "lead_relevance_score": lead.get("lead_relevance_score", 0),
                 "lead_score_title": lead.get("lead_score_title", 0),
                 "lead_score_source": lead.get("lead_score_source", 0),
                 "lead_score_email": lead.get("lead_score_email", 0),
                 "lead_score_linkedin": lead.get("lead_score_linkedin", 0),
+                "lead_score_email_quality": lead.get("lead_score_email_quality", 0),
+                "lead_score_confidence": lead.get("lead_score_confidence", 0),
             }
             for lead in ranked[:limit]
         ]

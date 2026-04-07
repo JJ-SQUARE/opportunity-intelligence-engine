@@ -26,15 +26,25 @@ class CompanyEnrichmentService:
         self.provider_control_service = provider_control_service
         self.provider_execution_service = ProviderExecutionService(ctx, provider_control_service)
         self.cached_provider_service = CachedProviderService(ctx)
+
         failed_enrichment_domains = self.ctx.provider_state.get("failed_enrichment_domains")
         if not isinstance(failed_enrichment_domains, set):
             failed_enrichment_domains = set()
             self.ctx.provider_state["failed_enrichment_domains"] = failed_enrichment_domains
         self._failed_enrichment_domains = failed_enrichment_domains
+
         self.db_path = self.ctx.config.get("database", {}).get("path", "data/oie.db")
-        self.ttl_days = int(
-            self.ctx.config.get("enrichment", {}).get("apollo_company_ttl_days", 30)
-        )
+
+        enrichment_cfg = self.ctx.config.get("enrichment", {}) or {}
+        self.ttl_days = int(enrichment_cfg.get("apollo_company_ttl_days", 30))
+        self.max_companies_per_run = int(enrichment_cfg.get("max_companies_per_run", 5))
+        self.min_opportunity_score = float(enrichment_cfg.get("min_opportunity_score", 15))
+        self.require_accepted_domain = bool(enrichment_cfg.get("require_accepted_domain", True))
+        self.allowed_company_types = {
+            str(v).strip().lower()
+            for v in enrichment_cfg.get("allowed_company_types", ["end_client", "unknown", ""])
+        }
+
         initialize_database(self.db_path)
 
     def _is_recently_enriched(self, company_key: str) -> bool:
@@ -70,25 +80,49 @@ class CompanyEnrichmentService:
 
         return (now - enriched_at) <= timedelta(days=self.ttl_days)
 
-
     def _should_attempt_enrichment(self, company: Dict[str, Any]) -> bool:
         company_key = company.get("company_key")
         domain = (company.get("resolved_domain") or "").strip().lower()
         validation_status = (company.get("domain_validation_status") or "").strip().lower()
+        company_type = (company.get("company_type_ai") or "").strip().lower()
+        classification_confidence = float(company.get("classification_confidence_ai") or 0.0)
+        opportunity_score = float(company.get("opportunity_score") or 0.0)
 
         if not company_key or not domain:
-            return False
-
-        if validation_status == "review":
             return False
 
         if is_job_board_domain(domain):
             return False
 
+        if self.require_accepted_domain and validation_status and validation_status != "accepted":
+            return False
+
+        if validation_status == "review":
+            return False
+
         if domain in self._failed_enrichment_domains:
             return False
 
+        if company_type and company_type not in self.allowed_company_types and classification_confidence >= 0.75:
+            return False
+
+        if opportunity_score > 0 and opportunity_score < self.min_opportunity_score:
+            return False
+
         return True
+
+    def _priority(self, company: Dict[str, Any]) -> tuple:
+        opportunity_score = float(company.get("opportunity_score") or 0.0)
+        company_type = (company.get("company_type_ai") or "").strip().lower()
+        validation_status = (company.get("domain_validation_status") or "").strip().lower()
+        recently_enriched = self._is_recently_enriched(company.get("company_key") or "")
+
+        return (
+            1 if validation_status == "accepted" else 0,
+            1 if company_type == "end_client" else 0,
+            0 if recently_enriched else 1,
+            opportunity_score,
+        )
 
     def _map_apollo_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         organization = payload.get("organization") or payload
@@ -117,17 +151,32 @@ class CompanyEnrichmentService:
         enriched_count = 0
         skipped_ttl_count = 0
 
-        for company in companies:
+        eligible_indexes = [
+            idx for idx, company in enumerate(companies)
+            if self._should_attempt_enrichment(company)
+        ]
+        eligible_indexes.sort(key=lambda idx: self._priority(companies[idx]), reverse=True)
+        selected_indexes = set(eligible_indexes[: self.max_companies_per_run])
+
+        self.ctx.metrics["company_enrichment_candidates_total"] = len(eligible_indexes)
+        self.ctx.metrics["company_enrichment_selected_total"] = len(selected_indexes)
+        self.ctx.metrics["company_enrichment_skipped_limit"] = max(len(eligible_indexes) - len(selected_indexes), 0)
+
+        for idx, company in enumerate(companies):
             record = dict(company)
             company_key = record.get("company_key")
             domain = (record.get("resolved_domain") or "").strip().lower()
 
-            if not self._should_attempt_enrichment(record):
+            if idx not in selected_indexes:
                 enriched_companies.append(record)
                 continue
 
             if self._is_recently_enriched(company_key):
                 skipped_ttl_count += 1
+                enriched_companies.append(record)
+                continue
+
+            if domain in self._failed_enrichment_domains:
                 enriched_companies.append(record)
                 continue
 

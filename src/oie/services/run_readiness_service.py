@@ -111,6 +111,15 @@ class RunReadinessService:
                 "Se intentó enrichment de compañías pero no se obtuvo ninguna enriquecida."
             )
 
+        if bool(metrics.get("lead_generation_require_enrichment", False)):
+            skipped_missing_enrichment = int(
+                metrics.get("lead_generation_skipped_missing_enrichment", 0) or 0
+            )
+            if skipped_missing_enrichment > 0:
+                warnings.append(
+                    f"Lead generation exigió enrichment y dejó fuera {skipped_missing_enrichment} compañías sin enrichment."
+                )
+
         is_ready = len(jobs) > 0 and len(companies) > 0
 
         report = {

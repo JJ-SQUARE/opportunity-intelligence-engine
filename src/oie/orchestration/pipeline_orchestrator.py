@@ -192,9 +192,9 @@ class PipelineOrchestrator:
         companies = self.hiring_signals_service.aggregate_by_company(unique_jobs)
         companies = self.domain_resolution_service.resolve_domains(companies)
         companies = self.company_identity_service.enrich_company_identity(companies)
-        companies = self.company_enrichment_service.enrich_companies(companies)
         companies = self.company_classification_service.classify_companies(companies)
         companies = self.opportunity_scoring_service.score_companies(companies)
+        companies = self.company_enrichment_service.enrich_companies(companies)
 
         jobs_with_company_keys = self._attach_company_keys_to_jobs(unique_jobs, companies)
         return jobs_with_company_keys, companies, duplicate_jobs

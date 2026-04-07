@@ -35,7 +35,9 @@ def test_executive_summary_service_builds_and_writes_summary(tmp_path):
             "linkedin_url": "https://linkedin.com/in/jane",
             "lead_source": "apollo_people",
             "lead_confidence": 0.9,
-            "lead_relevance_score": 160,
+            "email_quality_score": 95,
+            "lead_capture_reason": "apollo_match | title:CTO | email_quality:95",
+            "lead_relevance_score": 197,
         }
     ]
     ctx.metrics["jobs_after_dedupe"] = 5
@@ -51,8 +53,68 @@ def test_executive_summary_service_builds_and_writes_summary(tmp_path):
     assert summary["top_companies"][0]["classification_confidence_ai"] == 0.9
     assert summary["top_companies"][0]["score_breakdown"]["score_openings"] == 16
     assert summary["top_leads"][0]["contact_name"] == "Jane Doe"
-    assert summary["top_leads"][0]["lead_relevance_score"] == 160
+    assert summary["top_leads"][0]["lead_relevance_score"] == 197
+    assert summary["top_leads"][0]["email_quality_score"] == 95
+    assert "apollo_match" in summary["top_leads"][0]["lead_capture_reason"]
     assert ctx.paths["executive_summary_json"] == output_path
     assert "output_dir" in ctx.paths
     assert Path(output_path).exists()
     assert Path(output_path).parent == Path(ctx.paths["output_dir"])
+
+
+def test_executive_summary_service_prefers_higher_quality_lead_on_tie(tmp_path):
+    ctx = RunContext.create(
+        config={"outputs": {"path": str(tmp_path / "outputs")}},
+        flags={},
+    )
+    service = ExecutiveSummaryService(ctx)
+
+    companies = [
+        {
+            "company_key": "cmp_a",
+            "company_display": "Acme Inc.",
+            "opportunity_score": 42,
+            "company_type_ai": "end_client",
+            "classification_confidence_ai": 0.9,
+            "resolved_domain": "acme.com",
+            "score_openings": 16,
+            "score_remote": 8,
+            "score_contractor": 6,
+            "score_multi_source": 10,
+            "score_company_type": 2,
+        }
+    ]
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Lower Quality",
+            "contact_title": "VP Engineering",
+            "email": "low@acme.com",
+            "linkedin_url": "",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.5,
+            "email_quality_score": 60,
+            "lead_capture_reason": "hunter_match | title:VP Engineering | email_quality:60",
+            "lead_relevance_score": 139,
+            "lead_score_source": 15,
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Higher Quality",
+            "contact_title": "VP Engineering",
+            "email": "high@acme.com",
+            "linkedin_url": "",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.5,
+            "email_quality_score": 90,
+            "lead_capture_reason": "hunter_match | title:VP Engineering | email_quality:90",
+            "lead_relevance_score": 139,
+            "lead_score_source": 15,
+        },
+    ]
+
+    summary = service.build_summary(companies, leads)
+
+    assert summary["top_leads"][0]["contact_name"] == "Higher Quality"
+    assert summary["top_leads"][0]["email_quality_score"] == 90
+

@@ -298,6 +298,9 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
             "lead_source": "TEXT",
             "lead_confidence": "REAL",
             "lead_fingerprint": "TEXT",
+            "email_quality_score": "INTEGER DEFAULT 0",
+            "lead_capture_reason": "TEXT",
+            "lead_relevance_score": "REAL DEFAULT 0",
         }
         for column_name, column_type in required_lead_columns.items():
             if column_name not in lead_columns:

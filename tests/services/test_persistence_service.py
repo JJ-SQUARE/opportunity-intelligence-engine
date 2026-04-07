@@ -219,3 +219,123 @@ def test_persistence_service_persist_run_snapshot_allows_optional_entities(tmp_p
         assert run_row["status"] == "partial"
     finally:
         conn.close()
+
+
+def test_persistence_service_persist_run_snapshot_writes_scored_lead_fields(tmp_path):
+    db_path = tmp_path / "oie_test_scored_leads.db"
+
+    ctx = RunContext.create(
+        config={"database": {"path": str(db_path)}},
+        flags={},
+    )
+
+    service = PersistenceService(ctx)
+    service.persist_run_snapshot(
+        status="ok",
+        leads=[
+            {
+                "company_key": "cmp_a",
+                "contact_name": "Jane Doe",
+                "contact_title": "CTO",
+                "email": "Jane@Acme.com",
+                "linkedin_url": "https://linkedin.com/in/jane",
+                "lead_source": "apollo_people",
+                "lead_confidence": 0.9,
+                "email_quality_score": 95,
+                "lead_capture_reason": "apollo_match | title:CTO | email_quality:95",
+                "lead_relevance_score": 197,
+            }
+        ],
+    )
+
+    conn = get_connection(str(db_path))
+    try:
+        lead = conn.execute(
+            """
+            SELECT
+                company_key,
+                contact_name,
+                contact_title,
+                email,
+                linkedin_url,
+                lead_source,
+                lead_confidence,
+                email_quality_score,
+                lead_capture_reason,
+                lead_relevance_score
+            FROM leads
+            WHERE run_id = ?
+            """,
+            (ctx.run_id,),
+        ).fetchone()
+
+        assert lead is not None
+        assert lead["company_key"] == "cmp_a"
+        assert lead["contact_name"] == "Jane Doe"
+        assert lead["contact_title"] == "CTO"
+        assert lead["email"] == "jane@acme.com"
+        assert lead["linkedin_url"] == "https://linkedin.com/in/jane"
+        assert lead["lead_source"] == "apollo_people"
+        assert lead["lead_confidence"] == 0.9
+        assert lead["email_quality_score"] == 95
+        assert lead["lead_capture_reason"] == "apollo_match | title:CTO | email_quality:95"
+        assert lead["lead_relevance_score"] == 197
+    finally:
+        conn.close()
+
+
+def test_persistence_service_persist_run_snapshot_normalizes_lead_fields(tmp_path):
+    db_path = tmp_path / "oie_test_normalized_leads.db"
+
+    ctx = RunContext.create(
+        config={"database": {"path": str(db_path)}},
+        flags={},
+    )
+
+    service = PersistenceService(ctx)
+    service.persist_run_snapshot(
+        status="ok",
+        leads=[
+            {
+                "company_key": "  cmp_a  ",
+                "contact_name": "  Jane Doe  ",
+                "contact_title": "  CTO  ",
+                "email": "  Jane.Doe@Acme.com  ",
+                "linkedin_url": "  https://linkedin.com/in/jane  ",
+                "lead_source": "  apollo_people  ",
+                "lead_confidence": 0.9,
+                "email_quality_score": 95,
+                "lead_capture_reason": "  apollo_match | title:CTO | email_quality:95  ",
+                "lead_relevance_score": 197,
+            }
+        ],
+    )
+
+    conn = get_connection(str(db_path))
+    try:
+        lead = conn.execute(
+            """
+            SELECT
+                company_key,
+                contact_name,
+                contact_title,
+                email,
+                linkedin_url,
+                lead_source,
+                lead_capture_reason
+            FROM leads
+            WHERE run_id = ?
+            """,
+            (ctx.run_id,),
+        ).fetchone()
+
+        assert lead is not None
+        assert lead["company_key"] == "cmp_a"
+        assert lead["contact_name"] == "Jane Doe"
+        assert lead["contact_title"] == "CTO"
+        assert lead["email"] == "jane.doe@acme.com"
+        assert lead["linkedin_url"] == "https://linkedin.com/in/jane"
+        assert lead["lead_source"] == "apollo_people"
+        assert lead["lead_capture_reason"] == "apollo_match | title:CTO | email_quality:95"
+    finally:
+        conn.close()

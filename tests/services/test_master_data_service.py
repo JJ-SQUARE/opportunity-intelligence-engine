@@ -54,3 +54,36 @@ def test_master_data_service_skips_write_on_schema_mismatch(tmp_path):
 
     assert count == 0
     assert ctx.metrics["master_jobs_write_skipped_schema_error"] is True
+
+
+def test_master_data_service_appends_leads_with_scored_fields(tmp_path):
+    ctx = RunContext.create(
+        config={"masters": {"path": str(tmp_path / "masters")}},
+        flags={},
+    )
+    service = MasterDataService(ctx)
+
+    count = service.append_leads(
+        [
+            {
+                "company_key": "cmp_a",
+                "contact_name": "Jane Doe",
+                "contact_title": "CTO",
+                "email": "jane@acme.com",
+                "linkedin_url": "https://linkedin.com/in/jane",
+                "email_quality_score": 95,
+                "lead_capture_reason": "apollo_match | title:CTO | email_quality:95",
+                "lead_relevance_score": 197,
+            }
+        ]
+    )
+
+    rows = service.read_master_rows("leads")
+
+    assert count == 1
+    assert rows[0]["company_key"] == "cmp_a"
+    assert rows[0]["email"] == "jane@acme.com"
+    assert rows[0]["email_quality_score"] == "95"
+    assert rows[0]["lead_capture_reason"] == "apollo_match | title:CTO | email_quality:95"
+    assert rows[0]["lead_relevance_score"] == "197"
+    assert rows[0]["run_id"] == ctx.run_id

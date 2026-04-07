@@ -49,18 +49,25 @@ class OpportunityDatasetService:
                         COALESCE(l.linkedin_url, '') AS linkedin_url,
                         COALESCE(l.lead_source, '') AS lead_source,
                         COALESCE(l.lead_confidence, 0) AS lead_confidence,
+                        COALESCE(l.email_quality_score, 0) AS email_quality_score,
+                        COALESCE(l.lead_capture_reason, '') AS lead_capture_reason,
+                        COALESCE(l.lead_relevance_score, 0) AS lead_relevance_score,
                         ROW_NUMBER() OVER (
                             PARTITION BY l.company_key
                             ORDER BY
-                                CASE WHEN COALESCE(l.email, '') <> '' THEN 1 ELSE 0 END DESC,
+                                COALESCE(l.lead_relevance_score, 0) DESC,
+                                COALESCE(l.email_quality_score, 0) DESC,
+                                COALESCE(l.lead_confidence, 0) DESC,
+                                COALESCE(l.lead_source, '') DESC,
+                                COALESCE(l.lead_confidence, 0) DESC,
                                 CASE LOWER(COALESCE(l.lead_source, ''))
                                     WHEN 'apollo_people' THEN 3
                                     WHEN 'hunter_domain_search' THEN 2
                                     WHEN 'stub_generation' THEN 1
                                     ELSE 0
                                 END DESC,
-                                COALESCE(l.lead_confidence, 0) DESC,
                                 CASE WHEN COALESCE(l.linkedin_url, '') <> '' THEN 1 ELSE 0 END DESC,
+                                COALESCE(l.contact_name, '') ASC,
                                 l.rowid DESC
                         ) AS rn
                     FROM leads l
@@ -74,7 +81,10 @@ class OpportunityDatasetService:
                         email,
                         linkedin_url,
                         lead_source,
-                        lead_confidence
+                        lead_confidence,
+                        email_quality_score,
+                        lead_capture_reason,
+                        lead_relevance_score
                     FROM ranked_leads
                     WHERE rn = 1
                 )
@@ -108,7 +118,10 @@ class OpportunityDatasetService:
                     COALESCE(bl.email, '') AS email,
                     COALESCE(bl.linkedin_url, '') AS linkedin_url,
                     COALESCE(bl.lead_source, '') AS lead_source,
-                    COALESCE(bl.lead_confidence, 0) AS lead_confidence
+                    COALESCE(bl.lead_confidence, 0) AS lead_confidence,
+                    COALESCE(bl.email_quality_score, 0) AS email_quality_score,
+                    COALESCE(bl.lead_capture_reason, '') AS lead_capture_reason,
+                    COALESCE(bl.lead_relevance_score, 0) AS lead_relevance_score
                 FROM companies c
                 LEFT JOIN jobs_agg j
                     ON j.company_key = c.company_key
