@@ -52,3 +52,5 @@ temp/
 data/masters_fresh_validation/master_companies.csv
 data/masters_fresh_validation/master_jobs.csv
 data/masters_fresh_validation/master_leads.csv
+# Local Claude worktrees
+.claude/
