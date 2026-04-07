@@ -11,7 +11,7 @@ from oie.providers.base import ProviderClient
 class ApolloAdapter(ProviderClient):
     provider_name = "apollo"
     enrich_url = "https://api.apollo.io/api/v1/organizations/enrich"
-    people_search_url = "https://api.apollo.io/api/v1/mixed_people/search"
+    people_search_url = "https://api.apollo.io/api/v1/mixed_people/api_search"
 
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
         super().__init__(config=config)
@@ -20,18 +20,24 @@ class ApolloAdapter(ProviderClient):
         self.api_key = cfg.get("api_key") or os.getenv(api_key_env)
         self.timeout = float(cfg.get("timeout_seconds", 20))
 
+    def _headers(self) -> Dict[str, str]:
+        return {
+            "accept": "application/json",
+            "x-api-key": self.api_key,
+        }
+
     def enrich_company_by_domain(self, domain: str) -> Dict[str, Any]:
         if not self.api_key:
             raise ValueError("Missing Apollo api_key")
         if not domain:
             raise ValueError("Domain is required for Apollo enrichment")
 
-        response = requests.post(
+        response = requests.get(
             self.enrich_url,
-            json={
-                "api_key": self.api_key,
+            params={
                 "domain": domain,
             },
+            headers=self._headers(),
             timeout=self.timeout,
         )
         response.raise_for_status()
@@ -46,11 +52,14 @@ class ApolloAdapter(ProviderClient):
         response = requests.post(
             self.people_search_url,
             json={
-                "api_key": self.api_key,
-                "q_organization_domains": [domain],
+                "q_organization_domains_list": [domain],
                 "person_titles": titles,
                 "page": 1,
                 "per_page": 10,
+            },
+            headers={
+                **self._headers(),
+                "Content-Type": "application/json",
             },
             timeout=self.timeout,
         )

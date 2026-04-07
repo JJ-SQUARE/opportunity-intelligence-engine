@@ -174,9 +174,9 @@ class OutboundExportService:
             COALESCE(bl.best_lead_relevance_score, 0) AS best_lead_relevance_score,
             COALESCE(bl.best_email_quality_score, 0) AS best_email_quality_score,
             COALESCE(bl.best_lead_capture_reason, '') AS best_lead_capture_reason
-        FROM companies c
-        LEFT JOIN run_scores s
-            ON s.company_key = c.company_key
+        FROM run_scores s
+        INNER JOIN companies c
+            ON c.company_key = s.company_key
         LEFT JOIN best_leads bl
             ON bl.company_key = c.company_key
         ORDER BY

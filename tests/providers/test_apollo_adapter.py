@@ -16,16 +16,17 @@ class DummyResponse:
         }
 
 
-def test_apollo_adapter_calls_requests_post(monkeypatch):
+def test_apollo_adapter_calls_requests_get(monkeypatch):
     captured = {}
 
-    def fake_post(url, json=None, timeout=None):
+    def fake_get(url, params=None, headers=None, timeout=None):
         captured["url"] = url
-        captured["json"] = json
+        captured["params"] = params
+        captured["headers"] = headers
         captured["timeout"] = timeout
         return DummyResponse()
 
-    monkeypatch.setattr("oie.providers.adapters.apollo_adapter.requests.post", fake_post)
+    monkeypatch.setattr("oie.providers.adapters.apollo_adapter.requests.get", fake_get)
 
     adapter = ApolloAdapter(
         config={
@@ -37,6 +38,8 @@ def test_apollo_adapter_calls_requests_post(monkeypatch):
     result = adapter.enrich_company_by_domain("acme.com")
 
     assert result["organization"]["industry"] == "Software"
-    assert captured["json"]["domain"] == "acme.com"
-    assert captured["json"]["api_key"] == "apollo-test-key"
+    assert captured["url"] == adapter.enrich_url
+    assert captured["params"]["domain"] == "acme.com"
+    assert captured["headers"]["x-api-key"] == "apollo-test-key"
+    assert captured["headers"]["accept"] == "application/json"
     assert captured["timeout"] == 12.0
