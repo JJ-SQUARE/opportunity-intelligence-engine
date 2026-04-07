@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from typing import Any, Dict, List
 
 from oie.collectors.base import BaseJobCollector
@@ -8,23 +9,51 @@ from oie.collectors.base import BaseJobCollector
 class WorkableATSCollector(BaseJobCollector):
     collector_name = "workable"
 
-    def _load_legacy_collector(self):
-        candidates = [
+    def _load_legacy_callable(self):
+        function_candidates = [
             ("collectors.ats.workable", "collect_jobs"),
             ("collectors.ats.workable_collector", "collect_jobs"),
             ("collectors.workable", "collect_jobs"),
         ]
 
-        for module_name, function_name in candidates:
+        for module_name, function_name in function_candidates:
             try:
-                module = __import__(module_name, fromlist=[function_name])
+                module = importlib.import_module(module_name)
                 fn = getattr(module, function_name, None)
-                if fn:
-                    return fn
+                if callable(fn):
+                    return ("function", fn)
+            except Exception:
+                continue
+
+        class_candidates = [
+            ("collectors.ats.workable", "WorkableCollector"),
+        ]
+
+        for module_name, class_name in class_candidates:
+            try:
+                module = importlib.import_module(module_name)
+                cls = getattr(module, class_name, None)
+                if cls is not None:
+                    instance = cls()
+                    collect_method = getattr(instance, "collect", None)
+                    if callable(collect_method):
+                        return ("method", collect_method)
             except Exception:
                 continue
 
         return None
+
+    def _load_legacy_collector(self):
+        legacy_target = self._load_legacy_callable()
+        if legacy_target is None:
+            return None
+
+        target_type, target = legacy_target
+
+        if target_type == "method":
+            return lambda payload: target(payload)
+
+        return target
 
     def _normalize_job(self, raw_job: Dict[str, Any]) -> Dict[str, Any]:
         return {
@@ -37,6 +66,7 @@ class WorkableATSCollector(BaseJobCollector):
             "source": self.collector_name,
             "detected_at": raw_job.get("detected_at", ""),
             "url": raw_job.get("url", ""),
+            "source_meta": raw_job.get("source_meta", {}) or {},
         }
 
     def collect(self) -> List[Dict[str, Any]]:
@@ -47,6 +77,12 @@ class WorkableATSCollector(BaseJobCollector):
         queries = self.config.get("queries", []) or []
         run = self.config.get("run", {}) or {}
         source_config = self.config.get("source_config", {}) or {}
+        payload = {
+            "queries": queries,
+            "run": run,
+            "source_config": source_config,
+            "collector_cfg": source_config,
+        }
 
         try:
             raw_jobs = legacy_collect_fn(
@@ -57,11 +93,7 @@ class WorkableATSCollector(BaseJobCollector):
             ) or []
         except TypeError:
             try:
-                raw_jobs = legacy_collect_fn(
-                    queries=queries,
-                    source_config=source_config,
-                    run=run,
-                ) or []
+                raw_jobs = legacy_collect_fn(payload) or []
             except TypeError:
                 raw_jobs = legacy_collect_fn() or []
 

@@ -60,13 +60,30 @@ class CollectionService:
 
         return enabled
 
+    def _normalize_queries(self, queries: List[Any]) -> List[Dict[str, str]]:
+        normalized: List[Dict[str, str]] = []
+
+        for idx, q in enumerate(queries or [], start=1):
+            if isinstance(q, dict):
+                q_name = str(q.get("name") or f"query_{idx}")
+                q_text = str(q.get("q") or q.get("query") or "").strip()
+                if q_text:
+                    normalized.append({"name": q_name, "q": q_text})
+                continue
+
+            q_text = str(q).strip()
+            if q_text:
+                normalized.append({"name": f"query_{idx}", "q": q_text})
+
+        return normalized
+
     def _build_collectors(self) -> None:
         if self._collectors_built:
             return
 
         sources = self.ctx.config.get("sources", {}) or {}
         run_config = self.ctx.config.get("run", {}) or {}
-        queries = self.ctx.config.get("queries", []) or []
+        queries = self._normalize_queries(self.ctx.config.get("queries", []) or [])
 
         static_jobs_config = (
             (self.ctx.config.get("collectors", {}) or {}).get("static_jobs", {}) or {}

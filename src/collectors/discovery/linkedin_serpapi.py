@@ -105,14 +105,24 @@ class LinkedInSerpApiCollector:
             # Public discovery query (no login)
             search_q = f'site:linkedin.com/jobs/view "{q_text}"'
 
-            results = fetch_google_search_serpapi(
-                query=search_q,
-                api_key_env=api_key_env,
-                gl=gl,
-                hl=hl,
-                num_pages=num_pages,
-                sleep_s=sleep_s,
-            )
+            try:
+                results = fetch_google_search_serpapi(
+                    query=search_q,
+                    api_key_env=api_key_env,
+                    gl=gl,
+                    hl=hl,
+                    num_pages=num_pages,
+                    sleep_s=sleep_s,
+                )
+            except TypeError:
+                results = fetch_google_search_serpapi(
+                    search_q,
+                    api_key_env=api_key_env,
+                    gl=gl,
+                    hl=hl,
+                    num_pages=num_pages,
+                    sleep_s=sleep_s,
+                )
 
             for it in results:
                 title = (it.get("title") or "").strip()
