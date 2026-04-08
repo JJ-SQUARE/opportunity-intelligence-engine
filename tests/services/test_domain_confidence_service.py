@@ -76,3 +76,35 @@ def test_score_candidate_accepts_legit_brand_domain_with_extra_wording():
 
     assert result["validation_status"] in {"accepted", "review"}
     assert result["score"] >= 0.40
+
+
+def test_score_candidate_rejects_known_job_board_brand_domain():
+    svc = DomainConfidenceService()
+
+    result = svc.score_candidate(
+        company_name="HIRELINE",
+        domain="hireline.com",
+        source="serpapi_fallback",
+        serp_rank=1,
+        title="Hireline México - Empleos de tecnología",
+        snippet="Bolsa de trabajo para vacantes tech",
+    )
+
+    assert result["validation_status"] == "rejected"
+    assert result["score"] < svc.review_threshold
+
+
+def test_score_candidate_forces_review_for_suspicious_beta_subdomain():
+    svc = DomainConfidenceService()
+
+    result = svc.score_candidate(
+        company_name="Rimutee",
+        domain="beta.rimutee.com",
+        source="serpapi_fallback",
+        serp_rank=1,
+        title="Rimutee - Official Website",
+        snippet="Remote talent platform",
+    )
+
+    assert result["validation_status"] == "review"
+    assert result["review_required"] is True

@@ -102,6 +102,30 @@ class OpenAIAdapter(ProviderClient):
             ]
         ).lower()
 
+    def _is_suspicious_subdomain(self, domain: str) -> bool:
+        normalized = str(domain or "").strip().lower()
+        if not normalized:
+            return False
+
+        parts = [p for p in normalized.split(".") if p]
+        if len(parts) < 3:
+            return False
+
+        suspicious_prefixes = {
+            "beta",
+            "staging",
+            "stage",
+            "dev",
+            "test",
+            "qa",
+            "sandbox",
+            "preview",
+            "demo",
+            "internal",
+        }
+
+        return parts[0] in suspicious_prefixes
+
     def validate_domain_candidates(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         company_name = str(payload.get("company_name") or "").strip()
         candidates = payload.get("candidates") or []
@@ -162,6 +186,14 @@ class OpenAIAdapter(ProviderClient):
                 "decision": "rejected",
                 "confidence": 0.05,
                 "reason": "aggregator_domain",
+            }
+
+        if self._is_suspicious_subdomain(domain):
+            return {
+                "selected_domain": domain,
+                "decision": "review",
+                "confidence": 0.45,
+                "reason": "suspicious_subdomain",
             }
 
         if domain_hits >= 1 and text_hits >= 1:

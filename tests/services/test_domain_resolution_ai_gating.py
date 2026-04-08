@@ -110,6 +110,68 @@ def test_ai_not_called_for_low_score_candidate():
     assert len(fake_ai.calls) == 0
 
 
+def test_ai_called_for_rejected_serpapi_candidate_with_soft_brand_signal():
+    ctx = RunContext.create(
+        config={
+            "domain_resolution": {
+                "review_threshold": 0.45,
+                "auto_accept_threshold": 0.80,
+            }
+        }
+    )
+    service = DomainResolutionService(ctx, provider_control_service=None)
+    fake_ai = _FakeAIService()
+    service.domain_ai_validation_service = fake_ai
+
+    should_send = service._should_send_candidate_to_ai(
+        "Inmediatum Technology Services",
+        {
+            "domain": "inetum.com",
+            "source": "serpapi_fallback",
+            "serp_rank": 1,
+            "title": "Inetum - digital services",
+            "snippet": "Official technology services company site",
+            "confidence_brand_match": False,
+            "confidence_reasons": ["text_core_hits_1", "serp_rank_1", "source_serpapi_fallback"],
+        },
+        "rejected",
+        0.34,
+    )
+
+    assert should_send is True
+
+
+def test_ai_not_called_for_rejected_serpapi_candidate_without_soft_signal():
+    ctx = RunContext.create(
+        config={
+            "domain_resolution": {
+                "review_threshold": 0.45,
+                "auto_accept_threshold": 0.80,
+            }
+        }
+    )
+    service = DomainResolutionService(ctx, provider_control_service=None)
+    fake_ai = _FakeAIService()
+    service.domain_ai_validation_service = fake_ai
+
+    should_send = service._should_send_candidate_to_ai(
+        "Generic Company",
+        {
+            "domain": "random-example.com",
+            "source": "serpapi_fallback",
+            "serp_rank": 1,
+            "title": "Welcome",
+            "snippet": "Official website",
+            "confidence_brand_match": False,
+            "confidence_reasons": ["source_serpapi_fallback", "serp_rank_1"],
+        },
+        "rejected",
+        0.34,
+    )
+
+    assert should_send is False
+
+
 def test_ai_not_called_for_high_score_candidate():
     ctx = RunContext.create(
         config={
@@ -135,3 +197,29 @@ def test_ai_not_called_for_high_score_candidate():
 
     assert should_send is False
     assert len(fake_ai.calls) == 0
+
+def test_ai_called_for_suspicious_high_score_subdomain_review():
+    ctx = RunContext.create(
+        config={
+            "domain_resolution": {
+                "review_threshold": 0.45,
+                "auto_accept_threshold": 0.80,
+            }
+        }
+    )
+    service = DomainResolutionService(ctx, provider_control_service=None)
+    fake_ai = _FakeAIService()
+    service.domain_ai_validation_service = fake_ai
+
+    should_send = service._should_send_candidate_to_ai(
+        "Rimutee",
+        {
+            "domain": "beta.rimutee.com",
+            "source": "serpapi_fallback",
+        },
+        "review",
+        0.83,
+    )
+
+    assert should_send is True
+

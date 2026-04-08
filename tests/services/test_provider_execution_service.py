@@ -320,3 +320,104 @@ def test_provider_execution_service_records_status_code_in_http_error_event():
     assert rate_limit_events
     assert rate_limit_events[0]["status_code"] == 429
 
+def test_provider_execution_service_blocks_only_failing_operation_on_auth_error():
+    import requests
+
+    ctx = RunContext.create(
+        config={
+            "providers": {
+                "limits": {"apollo": 5},
+                "retry_policy": {
+                    "apollo": {
+                        "max_attempts": 3,
+                        "base_delay_seconds": 0.0,
+                        "backoff_multiplier": 1.0,
+                    }
+                },
+            }
+        }
+    )
+    provider_control_service = ProviderControlService(ctx)
+    provider_control_service.initialize()
+
+    service = ProviderExecutionService(ctx, provider_control_service)
+
+    class _FakeResponse:
+        status_code = 401
+
+    attempts = {"auth_fail": 0, "other_ok": 0}
+
+    def _auth_fail():
+        attempts["auth_fail"] += 1
+        raise requests.exceptions.HTTPError(
+            "401 Client Error: Unauthorized",
+            response=_FakeResponse(),
+        )
+
+    def _other_ok():
+        attempts["other_ok"] += 1
+        return {"ok": True}
+
+    try:
+        service.execute("apollo", "enrich_company_by_domain", _auth_fail, cost=1)
+        assert False, "Expected ProviderExecutionError"
+    except ProviderExecutionError:
+        pass
+
+    assert attempts["auth_fail"] == 1
+    assert ctx.metrics["apollo_enrich_company_by_domain_errors_auth"] == 1
+    assert ctx.metrics.get("apollo_enrich_company_by_domain_retry_count", 0) == 0
+    assert ctx.metrics.get("apollo_errors_execution_error", 0) == 0
+    assert ctx.provider_state.get("apollo_circuit_open") is not True
+
+    result = service.execute("apollo", "search_people_by_domain_and_titles", _other_ok, cost=1)
+
+    assert result["ok"] is True
+    assert attempts["other_ok"] == 1
+    assert ctx.metrics["apollo_search_people_by_domain_and_titles_success"] == 1
+
+
+def test_provider_execution_service_records_permission_metric_on_403():
+    import requests
+
+    ctx = RunContext.create(
+        config={
+            "providers": {
+                "limits": {"apollo": 5},
+                "retry_policy": {
+                    "apollo": {
+                        "max_attempts": 3,
+                        "base_delay_seconds": 0.0,
+                        "backoff_multiplier": 1.0,
+                    }
+                },
+            }
+        }
+    )
+    provider_control_service = ProviderControlService(ctx)
+    provider_control_service.initialize()
+
+    service = ProviderExecutionService(ctx, provider_control_service)
+
+    class _FakeResponse:
+        status_code = 403
+
+    attempts = {"n": 0}
+
+    def _forbidden():
+        attempts["n"] += 1
+        raise requests.exceptions.HTTPError(
+            "403 Client Error: Forbidden",
+            response=_FakeResponse(),
+        )
+
+    try:
+        service.execute("apollo", "enrich_company_by_domain", _forbidden, cost=1)
+        assert False, "Expected ProviderExecutionError"
+    except ProviderExecutionError:
+        pass
+
+    assert attempts["n"] == 1
+    assert ctx.metrics["apollo_enrich_company_by_domain_errors_auth"] == 1
+    assert ctx.metrics["apollo_enrich_company_by_domain_errors_permission"] == 1
+    assert ctx.metrics.get("apollo_enrich_company_by_domain_retry_count", 0) == 0

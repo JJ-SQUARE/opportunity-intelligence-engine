@@ -102,3 +102,80 @@ def test_reject_suspicious_serpapi_domain_for_generic_name():
     assert result[0]["resolved_domain"] is None
     assert result[0]["domain_source"] is None
     assert result[0]["domain_confidence"] == 0.0
+
+
+def test_resolve_domain_rejects_hireline_as_job_board_domain():
+    ctx = RunContext.create(
+        config={
+            "domain_resolution": {
+                "serpapi_fallback_limit": 25,
+                "review_threshold": 0.45,
+                "auto_accept_threshold": 0.80,
+            }
+        }
+    )
+    service = DomainResolutionService(ctx, provider_control_service=object())
+    service.serpapi_search_service = _FakeSerpAPISearchService(
+        {
+            "organic_results": [
+                {
+                    "link": "https://hireline.com/",
+                    "title": "Hireline México - Empleos de tecnología",
+                    "snippet": "Vacantes tech y bolsa de trabajo",
+                }
+            ]
+        }
+    )
+
+    companies = [
+        {
+            "company_display": "HIRELINE",
+            "apply_url": "https://hireline.io/mx/empleos/desarrollador-fullstack-sr/113370",
+            "url": None,
+        }
+    ]
+
+    result = service.resolve_domains(companies)
+
+    assert result[0]["resolved_domain"] is None
+    assert result[0]["domain_candidate"] is None or result[0]["domain_candidate"] == "hireline.com"
+    assert result[0]["domain_validation_status"] == "rejected"
+
+
+def test_resolve_domain_sends_beta_subdomain_to_review_not_accept():
+    ctx = RunContext.create(
+        config={
+            "domain_resolution": {
+                "serpapi_fallback_limit": 25,
+                "review_threshold": 0.45,
+                "auto_accept_threshold": 0.80,
+            }
+        }
+    )
+    service = DomainResolutionService(ctx, provider_control_service=object())
+    service.serpapi_search_service = _FakeSerpAPISearchService(
+        {
+            "organic_results": [
+                {
+                    "link": "https://beta.rimutee.com/",
+                    "title": "Rimutee - Official Website",
+                    "snippet": "Remote talent platform",
+                }
+            ]
+        }
+    )
+
+    companies = [
+        {
+            "company_display": "Rimutee",
+            "apply_url": "https://www.google.com/search?ibp=htl;jobs&q=test",
+            "url": None,
+        }
+    ]
+
+    result = service.resolve_domains(companies)
+
+    assert result[0]["resolved_domain"] is None
+    assert result[0]["domain_candidate"] == "beta.rimutee.com"
+    assert result[0]["domain_validation_status"] == "review"
+    assert result[0]["domain_review_required"] == 1

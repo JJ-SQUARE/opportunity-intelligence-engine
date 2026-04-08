@@ -18,6 +18,14 @@ class ProviderExecutionBlockedError(ProviderExecutionError):
     pass
 
 
+def _is_auth_or_permission_status(status_code: Any) -> bool:
+    try:
+        value = int(status_code)
+    except (TypeError, ValueError):
+        return False
+    return value in {401, 403}
+
+
 def _operation_metric_key(provider_name: str, operation_name: str, suffix: str) -> str:
     safe_provider = str(provider_name or "unknown").strip().lower().replace("-", "_").replace(" ", "_")
     safe_operation = str(operation_name or "unknown").strip().lower().replace("-", "_").replace(" ", "_")
@@ -211,6 +219,34 @@ class ProviderExecutionService:
                 last_exception = exc
                 response = getattr(exc, "response", None)
                 status_code = getattr(response, "status_code", None)
+
+                if _is_auth_or_permission_status(status_code):
+                    self._blocked_operations.add(operation_key)
+
+                    self.ctx.add_provider_event(
+                        provider=provider_name,
+                        event_type="auth_error",
+                        status_code=status_code,
+                        message=str(exc),
+                        metadata={
+                            "operation_name": operation_name,
+                            "attempt": attempt,
+                            "status_code": status_code,
+                        },
+                    )
+
+                    auth_metric_key = _operation_metric_key(provider_name, operation_name, "errors_auth")
+                    self.ctx.metrics[auth_metric_key] = (
+                        int(self.ctx.metrics.get(auth_metric_key, 0)) + 1
+                    )
+
+                    if int(status_code) == 403:
+                        perms_metric_key = _operation_metric_key(provider_name, operation_name, "errors_permission")
+                        self.ctx.metrics[perms_metric_key] = (
+                            int(self.ctx.metrics.get(perms_metric_key, 0)) + 1
+                        )
+
+                    break
 
                 if status_code == 429:
                     self.provider_control_service.register_provider_failure(provider_name, "rate_limit")

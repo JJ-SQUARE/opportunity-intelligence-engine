@@ -65,3 +65,26 @@ def test_validate_domain_candidates_reviews_partial_match():
     )
 
     assert result["decision"] in {"review", "accepted"}
+
+def test_validate_domain_candidates_reviews_suspicious_beta_subdomain():
+    adapter = OpenAIAdapter()
+
+    result = adapter.validate_domain_candidates(
+        {
+            "company_name": "Rimutee",
+            "candidates": [
+                {
+                    "domain": "beta.rimutee.com",
+                    "source": "serpapi_fallback",
+                    "title": "Rimutee - Official Website",
+                    "snippet": "Remote talent platform",
+                    "serp_rank": 1,
+                }
+            ],
+        }
+    )
+
+    assert result["decision"] == "review"
+    assert result["selected_domain"] == "beta.rimutee.com"
+    assert result["reason"] == "suspicious_subdomain"
+

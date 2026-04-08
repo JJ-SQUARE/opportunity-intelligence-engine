@@ -120,6 +120,13 @@ class LeadGenerationService:
         self.require_accepted_domain = bool(lead_cfg.get("require_accepted_domain", True))
         self.enable_stub_leads = bool(lead_cfg.get("enable_stub_leads", False))
         self.max_hunter_results_per_company = int(lead_cfg.get("max_hunter_results_per_company", 2))
+        self.max_apollo_results_per_company = int(lead_cfg.get("max_apollo_results_per_company", 3))
+        self.max_leads_per_company = int(
+            lead_cfg.get(
+                "max_leads_per_company",
+                max(self.max_hunter_results_per_company, self.max_apollo_results_per_company),
+            )
+        )
         self.hunter_min_email_quality = int(lead_cfg.get("hunter_min_email_quality", 40))
 
         failed_apollo_lead_domains = self.ctx.provider_state.get("failed_apollo_lead_domains")
@@ -258,6 +265,41 @@ class LeadGenerationService:
 
         return " | ".join(parts)
 
+    def _lead_sort_key(self, lead: Dict[str, Any]) -> tuple:
+        title = lead.get("contact_title") or ""
+        email_quality = int(lead.get("email_quality_score") or 0)
+        linkedin_present = 1 if (lead.get("linkedin_url") or "").strip() else 0
+        email_present = 1 if (lead.get("email") or "").strip() else 0
+        confidence = float(lead.get("lead_confidence") or 0.0)
+        source = lead.get("lead_source") or ""
+        source_priority = 1 if source == "hunter_domain_search" else 0
+
+        return (
+            self._lead_title_score(title),
+            email_quality,
+            email_present,
+            linkedin_present,
+            source_priority,
+            confidence,
+        )
+
+    def _apollo_has_strong_contact_signal(self, leads: List[Dict[str, Any]]) -> bool:
+        for lead in leads:
+            if int(lead.get("email_quality_score") or 0) >= self.hunter_min_email_quality:
+                return True
+            if (lead.get("linkedin_url") or "").strip():
+                return True
+        return False
+
+    def _combine_company_leads(
+        self,
+        apollo_leads: List[Dict[str, Any]],
+        hunter_leads: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        combined = self._dedupe_leads([*apollo_leads, *hunter_leads])
+        combined.sort(key=self._lead_sort_key, reverse=True)
+        return combined[: self.max_leads_per_company]
+
     def _dedupe_leads(self, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen = set()
         deduped: List[Dict[str, Any]] = []
@@ -306,7 +348,9 @@ class LeadGenerationService:
                 }
             )
 
-        return self._dedupe_leads(leads)
+        leads = self._dedupe_leads(leads)
+        leads.sort(key=self._lead_sort_key, reverse=True)
+        return leads[: self.max_apollo_results_per_company]
 
     def _map_hunter_people(self, company_key: str, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         data = payload.get("data") or {}
@@ -517,13 +561,20 @@ class LeadGenerationService:
                 continue
 
             apollo_leads = self._search_apollo_people(company)
-            if apollo_leads:
-                leads.extend(apollo_leads)
-                continue
 
-            hunter_leads = self._search_hunter_fallback(company)
-            if hunter_leads:
-                leads.extend(hunter_leads)
+            should_attempt_hunter = (
+                not apollo_leads
+                or len(apollo_leads) < self.max_leads_per_company
+                or not self._apollo_has_strong_contact_signal(apollo_leads)
+            )
+
+            hunter_leads: List[Dict[str, Any]] = []
+            if should_attempt_hunter:
+                hunter_leads = self._search_hunter_fallback(company)
+
+            company_leads = self._combine_company_leads(apollo_leads, hunter_leads)
+            if company_leads:
+                leads.extend(company_leads)
                 continue
 
             company_key = company.get("company_key")

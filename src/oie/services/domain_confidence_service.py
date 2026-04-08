@@ -219,6 +219,9 @@ class DomainConfidenceService:
         snippet = self._normalize_text(candidate.get("snippet"))
 
         blocked = self._is_blocked_domain(normalized_domain)
+        subdomain_parts = normalized_domain.split(".")[:-2] if normalized_domain.count(".") >= 2 else []
+        suspicious_subdomain_tokens = {"beta", "staging", "stage", "dev", "test", "qa", "uat", "sandbox", "preview"}
+        suspicious_subdomain = any(part in suspicious_subdomain_tokens for part in subdomain_parts)
         generic_name = self.is_generic_company_name(company_name)
         brand_info = self._domain_brand_match_details(company_name, normalized_domain)
 
@@ -287,6 +290,10 @@ class DomainConfidenceService:
             raw_score -= 0.20
             reasons.append("edu_domain_penalty")
 
+        if suspicious_subdomain:
+            raw_score -= 0.35
+            reasons.append("suspicious_subdomain_penalty")
+
         text = f"{title} {snippet}".strip()
         core_tokens = brand_info["core_tokens"]
         if core_tokens and text:
@@ -302,10 +309,10 @@ class DomainConfidenceService:
             raw_score = max(raw_score, 0.80)
             reasons.append("direct_url_brand_floor")
 
-        if not blocked and source == "serpapi_fallback" and full_join_match:
+        if not blocked and not suspicious_subdomain and source == "serpapi_fallback" and full_join_match:
             raw_score = max(raw_score, 0.90)
             reasons.append("serp_brand_floor_full")
-        elif not blocked and source == "serpapi_fallback" and core_hits >= 1 and "official" in text:
+        elif not blocked and not suspicious_subdomain and source == "serpapi_fallback" and core_hits >= 1 and "official" in text:
             raw_score = max(raw_score, 0.85)
             reasons.append("serp_brand_floor_official")
 
@@ -316,13 +323,17 @@ class DomainConfidenceService:
             and not generic_name
             and (core_hits >= 1 or primary_token_match or core_join_match)
         ):
-            raw_score = max(raw_score, self.review_threshold)
+            review_floor = self.review_threshold + (0.05 if suspicious_subdomain else 0.0)
+            raw_score = max(raw_score, review_floor)
             reasons.append("serp_honest_brand_review_floor")
 
         score = max(0.0, min(1.0, round(raw_score, 4)))
 
         if blocked:
             validation_status = "rejected"
+        elif suspicious_subdomain and score >= self.review_threshold:
+            validation_status = "review"
+            reasons.append("suspicious_subdomain_forced_review")
         elif score >= self.auto_accept_threshold:
             validation_status = "accepted"
         elif score >= self.review_threshold:

@@ -17,10 +17,12 @@ JOB_BOARD_DOMAINS = {
     "occ.com.mx",
     "elempleo.com",
     "hireline.io",
+    "hireline.com",
     "whatjobs.com",
     "expertini.com",
     "jobijoba.com",
     "jobgether.com",
+    "pangian.com",
 }
 
 

@@ -1,5 +1,5 @@
 run:
-  num_pages: 1
+  num_pages: 3
   sleep_s: 1.0
 
 runs:
@@ -18,24 +18,26 @@ sources:
     enabled: true
     location_mode: "matrix"
     locations:
+      - "Ecuador"
       - "Mexico"
+      - "Colombia"
 
   discovery:
     linkedin_serpapi:
       enabled: false
-      num_pages: 1
+      num_pages: 3
       sleep_s: 1.0
       gl: "us"
       hl: "en"
 
     indeed_serpapi:
       enabled: false
-      num_pages: 1
+      num_pages: 3
       sleep_s: 1.0
 
     career_pages_serpapi:
       enabled: false
-      num_pages: 1
+      num_pages: 3
       sleep_s: 1.0
 
   ats:
@@ -71,8 +73,23 @@ llm:
   cache_path: "data/processed/company_ai_cache.json"
 
 queries:
+  - name: "Broad ES Dev"
+    q: "desarrollador remoto"
+
+  - name: "Broad ES Software"
+    q: "ingeniero de software remoto"
+
+  - name: "Broad ES Programador"
+    q: "programador remoto"
+
+  - name: "Broad ES Sistemas"
+    q: "trabajo remoto sistemas"
+
   - name: "Focused Python ES"
     q: "desarrollador python remoto"
+
+  - name: "Focused Data ES"
+    q: "ingeniero de datos remoto"
 
   - name: "Focused QA ES"
     q: "qa automation remoto"
@@ -80,10 +97,16 @@ queries:
   - name: "Focused Fullstack ES"
     q: "desarrollador full stack remoto"
 
+  - name: "Focused React EN"
+    q: "react remote"
+
+  - name: "Focused DevOps EN"
+    q: "devops remote"
+
 domain_resolution:
   enabled: true
   mode: "serpapi"
-  top_n: 25
+  top_n: 50
 
 sales_intel:
   enabled: true
@@ -119,18 +142,6 @@ providers:
   clients:
     serpapi:
       api_key_env: "SERPAPI_KEY"
-    apollo:
-      api_key_env: "APOLLO_API_KEY"
-    hunter:
-      api_key_env: "HUNTER_API_KEY"
-    openai:
-      api_key_env: "OPENAI_API_KEY"
-
-  limits:
-    serpapi: 25
-    apollo: 5
-    hunter: 5
-    openai: 80
 
   operation_limits:
     openai:
@@ -138,26 +149,29 @@ providers:
       domain_ai_validation: 20
     serpapi:
       search_google: 25
-    apollo:
-      enrich_company_by_domain: 5
-      search_people_by_domain_and_titles: 5
-    hunter:
-      search_domain_contacts: 5
 
 enrichment:
-  apollo_company_ttl_days: 30
-  max_companies_per_run: 5
-  min_opportunity_score: 15
-  require_accepted_domain: true
-  allowed_company_types: ["end_client", "unknown", ""]
+  enabled: false
 
-lead_generation:
-  max_companies_per_run: 5
-  min_opportunity_score: 15
-  require_accepted_domain: true
-  enable_stub_leads: false
-  max_hunter_results_per_company: 2
-  hunter_min_email_quality: 40
+  providers:
+
+    hunter:
+      enabled: true
+      api_key_env: "HUNTER_API_KEY"
+      rate_limit_sleep_s: 1.0
+
+    apollo:
+      enabled: false
+      api_key_env: "APOLLO_API_KEY"
+      rate_limit_sleep_s: 1.0
+
+  filters:
+    min_score: 10
+    vendor_prob_min: 55
+    require_not_us_only: true
+
+  limits:
+    max_companies: 5
 
 outputs:
   path: "data/outputs"

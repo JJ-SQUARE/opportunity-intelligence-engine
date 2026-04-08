@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import hashlib
 from typing import Any, Dict, List, Tuple
 
 from oie.orchestration.run_context import RunContext
+from oie.persistence.repositories import JobRepository
 from oie.services.master_data_service import MasterDataService
 
 
@@ -11,24 +11,10 @@ class MasterDedupService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
         self.master_data_service = MasterDataService(ctx)
+        self.job_repository = JobRepository()
 
-    def _job_dedupe_key(self, job: Dict[str, Any]) -> Tuple[str, str, str]:
-        job_url = (job.get("job_url") or "").strip()
-        apply_url = (job.get("apply_url") or "").strip()
-
-        if job_url:
-            return ("job_url", job_url, "")
-        if apply_url:
-            return ("apply_url", apply_url, "")
-
-        raw = "|".join(
-            [
-                (job.get("title") or "").strip().lower(),
-                (job.get("company") or "").strip().lower(),
-                (job.get("description") or "").strip().lower(),
-            ]
-        )
-        return ("job_hash", hashlib.sha1(raw.encode("utf-8")).hexdigest(), "")
+    def _job_dedupe_key(self, job: Dict[str, Any]) -> Tuple[str, str]:
+        return ("job_fingerprint", self.job_repository._build_job_fingerprint(job))
 
     def _lead_dedupe_key(self, lead: Dict[str, Any]) -> Tuple[str, str]:
         email = (lead.get("email") or "").strip().lower()

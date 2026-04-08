@@ -129,6 +129,25 @@ class DomainResolutionService:
             apply_url=company.get("apply_url"),
         )
 
+    def _is_suspicious_subdomain_candidate(self, candidate: Dict[str, Any]) -> bool:
+        domain = str(candidate.get("domain") or "").strip().lower()
+        if not domain:
+            return False
+
+        suspicious_subdomain_markers = (
+            "beta.",
+            "staging.",
+            "stage.",
+            "dev.",
+            "test.",
+            "qa.",
+            "sandbox.",
+            "preview.",
+            "demo.",
+            "internal.",
+        )
+        return any(domain.startswith(marker) for marker in suspicious_subdomain_markers)
+
     def _should_send_candidate_to_ai(
         self,
         company_name: Optional[str],
@@ -136,7 +155,7 @@ class DomainResolutionService:
         validation_status: str,
         score: float,
     ) -> bool:
-        if validation_status != "review":
+        if validation_status not in {"review", "rejected"}:
             return False
 
         if not self._can_attempt_domain_resolution(company_name):
@@ -153,14 +172,56 @@ class DomainResolutionService:
         if is_aggregator and source in {"apply_url", "url"}:
             return False
 
-        # Mantener AI solo para zona gris útil
-        if score < self.review_threshold:
+        if self.domain_ai_validation_service is None:
             return False
 
-        if score > 0.75:
+        # Camino normal: review en zona gris útil.
+        # Excepción: subdominios sospechosos tipo beta/staging/dev/qa pueden venir
+        # con score alto por match de marca, pero igual queremos validarlos con AI.
+        if validation_status == "review":
+            if score < self.review_threshold:
+                return False
+
+            is_suspicious_subdomain = self._is_suspicious_subdomain_candidate(candidate)
+
+            if score > 0.75 and not is_suspicious_subdomain:
+                return False
+            return True
+
+        # Camino extendido: rechazados SERPAPI con señales mínimas de marca/contexto.
+        # Esto abre una segunda oportunidad a falsos negativos tipo marca↔dominio no triviales,
+        # sin mandar todo a OpenAI.
+        if source != "serpapi_fallback":
             return False
 
-        return self.domain_ai_validation_service is not None
+        if is_aggregator:
+            return False
+
+        serp_rank = candidate.get("serp_rank")
+        if isinstance(serp_rank, int) and serp_rank > 3:
+            return False
+
+        if score < 0.20 or score > 0.75:
+            return False
+
+        title = str(candidate.get("title") or "").strip()
+        snippet = str(candidate.get("snippet") or "").strip()
+        if not (title or snippet):
+            return False
+
+        brand_match = bool(candidate.get("confidence_brand_match", False))
+        reasons = set(candidate.get("confidence_reasons") or [])
+        has_soft_signal = bool(
+            brand_match
+            or "token_hits_1" in reasons
+            or "text_core_hits_1" in reasons
+            or "text_core_hits_2plus" in reasons
+            or "primary_token_match" in reasons
+            or "core_hits_1" in reasons
+            or "core_hits_2plus" in reasons
+        )
+
+        return has_soft_signal
 
     def _is_aggregator_candidate(self, candidate: Dict[str, Any]) -> bool:
         domain = candidate.get("domain")

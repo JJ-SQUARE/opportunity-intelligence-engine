@@ -499,3 +499,86 @@ def test_lead_generation_service_hunter_sets_quality_reason_and_confidence(tmp_p
     assert "title:VP Engineering" in leads[0]["lead_capture_reason"]
     assert 0.45 <= leads[0]["lead_confidence"] <= 0.85
 
+
+def test_lead_generation_service_supplements_weak_apollo_with_hunter(tmp_path):
+    ctx = RunContext.create(
+        config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
+            "lead_generation": {
+                "max_leads_per_company": 3,
+                "max_hunter_results_per_company": 2,
+                "max_apollo_results_per_company": 2,
+            },
+            "providers": {
+                "limits": {"apollo": 5, "hunter": 5},
+                "clients": {
+                    "apollo": {"api_key": "fake-apollo"},
+                    "hunter": {"api_key": "fake-hunter"},
+                },
+            },
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    calls = {"apollo": 0, "hunter": 0}
+
+    apollo_client = control.registry.get_client("apollo")
+    def fake_apollo(domain, titles):
+        calls["apollo"] += 1
+        return {
+            "people": [
+                {
+                    "name": "Chris Weak",
+                    "first_name": "Chris",
+                    "last_name": "Weak",
+                    "title": "Head of Engineering",
+                    "email": "",
+                    "linkedin_url": "",
+                }
+            ]
+        }
+    apollo_client.search_people_by_domain_and_titles = fake_apollo
+
+    hunter_client = control.registry.get_client("hunter")
+    def fake_hunter(domain):
+        calls["hunter"] += 1
+        return {
+            "data": {
+                "emails": [
+                    {
+                        "value": "jane.strong@acme.com",
+                        "position": "VP Engineering",
+                        "first_name": "Jane",
+                        "last_name": "Strong",
+                        "linkedin": "https://linkedin.com/in/janestrong",
+                    }
+                ]
+            }
+        }
+    hunter_client.search_domain_contacts = fake_hunter
+
+    service = LeadGenerationService(ctx, control)
+    leads = service.generate_leads(
+        [
+            {
+                "company_key": "cmp_acme",
+                "resolved_domain": "acme.com",
+                "domain_validation_status": "accepted",
+                "company_type_ai": "end_client",
+                "classification_confidence_ai": 0.95,
+                "opportunity_score": 25,
+                "industry": "software",
+                "enrichment_source": "apollo",
+            }
+        ]
+    )
+
+    assert calls["apollo"] == 1
+    assert calls["hunter"] == 1
+    assert len(leads) == 2
+    assert leads[0]["lead_source"] == "hunter_domain_search"
+    assert leads[0]["email"] == "jane.strong@acme.com"
+    assert {lead["lead_source"] for lead in leads} == {"apollo_people", "hunter_domain_search"}
+
