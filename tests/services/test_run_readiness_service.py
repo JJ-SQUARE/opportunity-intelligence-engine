@@ -32,6 +32,8 @@ def test_run_readiness_service_builds_report():
     assert report["jobs_without_company_key"] == 1
     assert "collector_metrics_json" in report["outputs"]
     assert "run_metrics_summary_json" in report["outputs"]
+    assert "commercial_pipeline_csv" in report["outputs"]
+    assert "apollo_import_csv" in report["outputs"]
     assert len(report["warnings"]) >= 1
 
 def test_run_readiness_service_includes_operational_warnings():

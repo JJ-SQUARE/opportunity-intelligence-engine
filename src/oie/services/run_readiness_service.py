@@ -141,6 +141,8 @@ class RunReadinessService:
                 "leads_export": paths.get("leads_export"),
                 "opportunities_export": paths.get("opportunities_export"),
                 "top_opportunities_export": paths.get("top_opportunities_export"),
+                "commercial_pipeline_csv": paths.get("commercial_pipeline_csv"),
+                "apollo_import_csv": paths.get("apollo_import_csv"),
                 "domain_review_queue_csv": paths.get("domain_review_queue_csv"),
                 "provider_operation_metrics_json": paths.get("provider_operation_metrics_json"),
                 "provider_operation_metrics_csv": paths.get("provider_operation_metrics_csv"),
