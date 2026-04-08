@@ -71,6 +71,18 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
                 "email_quality_score": 95,
                 "lead_capture_reason": "apollo_match | title:CTO | email_quality:95",
                 "lead_relevance_score": 197,
+            },
+            {
+                "company_key": "cmp_a",
+                "contact_name": "John Roe",
+                "contact_title": "VP Engineering",
+                "email": "",
+                "linkedin_url": "https://linkedin.com/in/johnroe",
+                "lead_source": "hunter_domain_search",
+                "lead_confidence": 0.7,
+                "email_quality_score": 70,
+                "lead_capture_reason": "hunter_match | title:VP Engineering | email_quality:70",
+                "lead_relevance_score": 160,
             }
         ],
     )
@@ -94,6 +106,11 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
     assert dataset[0]["email_quality_score"] == 95
     assert "apollo_match" in dataset[0]["lead_capture_reason"]
     assert dataset[0]["lead_relevance_score"] == 197
+    assert dataset[0]["lead_count"] == 2
+    assert dataset[0]["apollo_leads_count"] == 1
+    assert dataset[0]["hunter_leads_count"] == 1
+    assert dataset[0]["contacts_with_email_count"] == 1
+    assert dataset[0]["contacts_with_linkedin_count"] == 2
     assert Path(ctx.paths["opportunities_export"]).exists()
     assert Path(ctx.paths["top_opportunities_export"]).exists()
 
@@ -106,3 +123,8 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
         assert "email_quality_score" in reader.fieldnames
         assert "lead_capture_reason" in reader.fieldnames
         assert "lead_relevance_score" in reader.fieldnames
+        assert "lead_count" in reader.fieldnames
+        assert "apollo_leads_count" in reader.fieldnames
+        assert "hunter_leads_count" in reader.fieldnames
+        assert "contacts_with_email_count" in reader.fieldnames
+        assert "contacts_with_linkedin_count" in reader.fieldnames

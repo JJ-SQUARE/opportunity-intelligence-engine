@@ -126,6 +126,43 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
             ),
         )
 
+        conn.execute(
+            """
+            INSERT INTO leads (
+                lead_key,
+                lead_fingerprint,
+                run_id,
+                run_date,
+                company_key,
+                contact_name,
+                contact_title,
+                email,
+                linkedin_url,
+                lead_source,
+                lead_confidence,
+                email_quality_score,
+                lead_capture_reason,
+                lead_relevance_score
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "lead_2",
+                "leadfp_2",
+                ctx.run_id,
+                ctx.run_date,
+                "cmp_acme",
+                "John Roe",
+                "VP Engineering",
+                "",
+                "https://linkedin.com/in/johnroe",
+                "hunter_domain_search",
+                0.7,
+                70,
+                "hunter_match | title:VP Engineering | email_quality:70",
+                60,
+            ),
+        )
+
         conn.commit()
     finally:
         conn.close()
@@ -149,8 +186,14 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
     assert "suggested_outreach_channel" in commercial_text
     assert "outreach_status" in commercial_text
     assert "commercial_priority_score" in commercial_text
+    assert "lead_count" in commercial_text
+    assert "apollo_leads_count" in commercial_text
+    assert "hunter_leads_count" in commercial_text
+    assert "contacts_with_email_count" in commercial_text
+    assert "contacts_with_linkedin_count" in commercial_text
     assert "ready_email" in commercial_text
     assert "email" in commercial_text
+    assert ",2," in commercial_text
 
     assert "website" in apollo_text
     assert "acme.com" in apollo_text

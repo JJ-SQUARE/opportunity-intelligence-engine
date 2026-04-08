@@ -73,6 +73,18 @@ class OpportunityDatasetService:
                     FROM leads l
                     WHERE l.run_id = ?
                 ),
+                lead_stats AS (
+                    SELECT
+                        l.company_key,
+                        COUNT(*) AS lead_count,
+                        SUM(CASE WHEN LOWER(COALESCE(l.lead_source, '')) = 'apollo_people' THEN 1 ELSE 0 END) AS apollo_leads_count,
+                        SUM(CASE WHEN LOWER(COALESCE(l.lead_source, '')) = 'hunter_domain_search' THEN 1 ELSE 0 END) AS hunter_leads_count,
+                        SUM(CASE WHEN COALESCE(l.email, '') <> '' THEN 1 ELSE 0 END) AS contacts_with_email_count,
+                        SUM(CASE WHEN COALESCE(l.linkedin_url, '') <> '' THEN 1 ELSE 0 END) AS contacts_with_linkedin_count
+                    FROM leads l
+                    WHERE l.run_id = ?
+                    GROUP BY l.company_key
+                ),
                 best_lead AS (
                     SELECT
                         company_key,
@@ -113,6 +125,11 @@ class OpportunityDatasetService:
                     COALESCE(s.score_contractor, 0) AS score_contractor,
                     COALESCE(s.score_multi_source, 0) AS score_multi_source,
                     COALESCE(s.score_company_type, 0) AS score_company_type,
+                    COALESCE(ls.lead_count, 0) AS lead_count,
+                    COALESCE(ls.apollo_leads_count, 0) AS apollo_leads_count,
+                    COALESCE(ls.hunter_leads_count, 0) AS hunter_leads_count,
+                    COALESCE(ls.contacts_with_email_count, 0) AS contacts_with_email_count,
+                    COALESCE(ls.contacts_with_linkedin_count, 0) AS contacts_with_linkedin_count,
                     COALESCE(bl.contact_name, '') AS contact_name,
                     COALESCE(bl.contact_title, '') AS contact_title,
                     COALESCE(bl.email, '') AS email,
@@ -127,6 +144,8 @@ class OpportunityDatasetService:
                     ON j.company_key = c.company_key
                 LEFT JOIN scores_agg s
                     ON s.company_key = c.company_key
+                LEFT JOIN lead_stats ls
+                    ON ls.company_key = c.company_key
                 LEFT JOIN best_lead bl
                     ON bl.company_key = c.company_key
                 WHERE COALESCE(j.jobs_count, 0) > 0
@@ -135,7 +154,7 @@ class OpportunityDatasetService:
                     COALESCE(j.jobs_count, 0) DESC,
                     c.company_display ASC
                 """,
-                (self.ctx.run_id, self.ctx.run_id, self.ctx.run_id),
+                (self.ctx.run_id, self.ctx.run_id, self.ctx.run_id, self.ctx.run_id),
             ).fetchall()
         finally:
             conn.close()

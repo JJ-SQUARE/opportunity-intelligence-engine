@@ -32,6 +32,11 @@ COMMERCIAL_PIPELINE_FIELDS = [
     "score_contractor",
     "score_multi_source",
     "score_company_type",
+    "lead_count",
+    "apollo_leads_count",
+    "hunter_leads_count",
+    "contacts_with_email_count",
+    "contacts_with_linkedin_count",
     "best_contact_name",
     "best_contact_title",
     "best_contact_email",
@@ -117,6 +122,18 @@ class OutboundExportService:
             FROM leads l
             WHERE l.run_id = ?
         ),
+        lead_stats AS (
+            SELECT
+                l.company_key,
+                COUNT(*) AS lead_count,
+                SUM(CASE WHEN LOWER(COALESCE(l.lead_source, '')) = 'apollo_people' THEN 1 ELSE 0 END) AS apollo_leads_count,
+                SUM(CASE WHEN LOWER(COALESCE(l.lead_source, '')) = 'hunter_domain_search' THEN 1 ELSE 0 END) AS hunter_leads_count,
+                SUM(CASE WHEN COALESCE(l.email, '') <> '' THEN 1 ELSE 0 END) AS contacts_with_email_count,
+                SUM(CASE WHEN COALESCE(l.linkedin_url, '') <> '' THEN 1 ELSE 0 END) AS contacts_with_linkedin_count
+            FROM leads l
+            WHERE l.run_id = ?
+            GROUP BY l.company_key
+        ),
         best_leads AS (
             SELECT
                 company_key,
@@ -168,6 +185,11 @@ class OutboundExportService:
             COALESCE(s.score_contractor, 0) AS score_contractor,
             COALESCE(s.score_multi_source, 0) AS score_multi_source,
             COALESCE(s.score_company_type, 0) AS score_company_type,
+            COALESCE(ls.lead_count, 0) AS lead_count,
+            COALESCE(ls.apollo_leads_count, 0) AS apollo_leads_count,
+            COALESCE(ls.hunter_leads_count, 0) AS hunter_leads_count,
+            COALESCE(ls.contacts_with_email_count, 0) AS contacts_with_email_count,
+            COALESCE(ls.contacts_with_linkedin_count, 0) AS contacts_with_linkedin_count,
             COALESCE(bl.best_contact_name, '') AS best_contact_name,
             COALESCE(bl.best_contact_title, '') AS best_contact_title,
             COALESCE(bl.best_contact_email, '') AS best_contact_email,
@@ -211,6 +233,8 @@ class OutboundExportService:
         FROM run_scores s
         LEFT JOIN companies c
             ON c.company_key = s.company_key
+        LEFT JOIN lead_stats ls
+            ON ls.company_key = s.company_key
         LEFT JOIN best_leads bl
             ON bl.company_key = s.company_key
         ORDER BY
@@ -221,7 +245,7 @@ class OutboundExportService:
             CASE WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 1 ELSE 0 END DESC,
             c.company_display ASC
         """
-        return self._query_rows(query, (self.ctx.run_id, self.ctx.run_id))
+        return self._query_rows(query, (self.ctx.run_id, self.ctx.run_id, self.ctx.run_id))
 
     def export_commercial_pipeline(self) -> str:
         rows = self._build_commercial_pipeline_rows()
