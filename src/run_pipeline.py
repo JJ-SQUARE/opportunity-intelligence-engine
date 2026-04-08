@@ -6,6 +6,7 @@ import os
 from typing import Any, Sequence
 
 import yaml
+from dotenv import load_dotenv
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
@@ -60,6 +61,8 @@ def run(config: dict[str, Any], flags: dict[str, Any] | None = None) -> dict[str
 
 
 def main() -> int:
+    load_dotenv(override=False)
+
     args = parse_args()
     config = load_config(args.config)
     flags = build_runtime_flags(args)

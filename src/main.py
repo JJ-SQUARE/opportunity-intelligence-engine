@@ -5,7 +5,7 @@ from run_pipeline import run
 
 
 def main():
-    load_dotenv()
+    load_dotenv(override=False)
     cfg = load_config()
     result = run(cfg)
 
