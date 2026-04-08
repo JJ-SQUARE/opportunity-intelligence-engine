@@ -146,6 +146,11 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
     assert "Acme" in commercial_text
     assert "jane@acme.com" in commercial_text
     assert "best_lead_capture_reason" in commercial_text
+    assert "suggested_outreach_channel" in commercial_text
+    assert "outreach_status" in commercial_text
+    assert "commercial_priority_score" in commercial_text
+    assert "ready_email" in commercial_text
+    assert "email" in commercial_text
 
     assert "website" in apollo_text
     assert "acme.com" in apollo_text

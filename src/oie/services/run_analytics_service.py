@@ -148,6 +148,7 @@ class RunAnalyticsService:
                 "opportunities_export": self.ctx.paths.get("opportunities_export"),
                 "top_opportunities_export": self.ctx.paths.get("top_opportunities_export"),
                 "top_opportunities_csv": self.ctx.paths.get("top_opportunities_csv"),
+                "commercial_pipeline_csv": self.ctx.paths.get("commercial_pipeline_csv"),
                 "apollo_import_csv": self.ctx.paths.get("apollo_import_csv"),
                 "executive_summary_json": self.ctx.paths.get("executive_summary_json"),
                 "run_readiness_report_json": self.ctx.paths.get("run_readiness_report_json"),

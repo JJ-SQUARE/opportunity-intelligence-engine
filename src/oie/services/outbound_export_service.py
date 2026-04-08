@@ -41,6 +41,9 @@ COMMERCIAL_PIPELINE_FIELDS = [
     "best_lead_relevance_score",
     "best_email_quality_score",
     "best_lead_capture_reason",
+    "suggested_outreach_channel",
+    "outreach_status",
+    "commercial_priority_score",
 ]
 
 
@@ -142,9 +145,9 @@ class OutboundExportService:
             WHERE cs.run_id = ?
         )
         SELECT
-            c.company_key,
-            c.company_display,
-            c.company_normalized,
+            s.company_key,
+            COALESCE(c.company_display, '') AS company_display,
+            COALESCE(c.company_normalized, '') AS company_normalized,
             COALESCE(c.resolved_domain, '') AS resolved_domain,
             COALESCE(c.domain_source, '') AS domain_source,
             COALESCE(c.domain_confidence, 0) AS domain_confidence,
@@ -173,16 +176,49 @@ class OutboundExportService:
             COALESCE(bl.best_lead_confidence, 0) AS best_lead_confidence,
             COALESCE(bl.best_lead_relevance_score, 0) AS best_lead_relevance_score,
             COALESCE(bl.best_email_quality_score, 0) AS best_email_quality_score,
-            COALESCE(bl.best_lead_capture_reason, '') AS best_lead_capture_reason
+            COALESCE(bl.best_lead_capture_reason, '') AS best_lead_capture_reason,
+            CASE
+                WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 'email'
+                WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 'linkedin'
+                WHEN COALESCE(c.linkedin_company_url, '') <> '' THEN 'company_linkedin'
+                WHEN COALESCE(c.resolved_domain, '') <> '' THEN 'website_only'
+                ELSE 'no_channel'
+            END AS suggested_outreach_channel,
+            CASE
+                WHEN COALESCE(c.domain_validation_status, '') = 'review' THEN 'review_domain'
+                WHEN COALESCE(c.domain_validation_status, '') <> 'accepted' THEN 'pending_domain'
+                WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 'ready_email'
+                WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 'ready_linkedin'
+                WHEN COALESCE(c.linkedin_company_url, '') <> '' OR COALESCE(c.resolved_domain, '') <> '' THEN 'research_needed'
+                ELSE 'insufficient_data'
+            END AS outreach_status,
+            (
+                COALESCE(s.opportunity_score, 0)
+                + CASE WHEN COALESCE(c.domain_validation_status, '') = 'accepted' THEN 20 ELSE 0 END
+                + CASE WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 25 ELSE 0 END
+                + CASE WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 10 ELSE 0 END
+                + CASE WHEN COALESCE(bl.best_email_quality_score, 0) >= 80 THEN 10
+                       WHEN COALESCE(bl.best_email_quality_score, 0) >= 50 THEN 5
+                       ELSE 0 END
+                + CASE WHEN COALESCE(bl.best_lead_source, '') = 'apollo_people' THEN 10
+                       WHEN COALESCE(bl.best_lead_source, '') = 'hunter_domain_search' THEN 5
+                       ELSE 0 END
+                + CASE WHEN COALESCE(c.company_type_ai, '') = 'end_client' THEN 10 ELSE 0 END
+                + CASE WHEN COALESCE(c.linkedin_company_url, '') <> '' THEN 5 ELSE 0 END
+                - CASE WHEN COALESCE(c.domain_validation_status, '') = 'review' THEN 40 ELSE 0 END
+                - CASE WHEN COALESCE(c.domain_validation_status, '') NOT IN ('', 'accepted', 'review') THEN 20 ELSE 0 END
+            ) AS commercial_priority_score
         FROM run_scores s
-        INNER JOIN companies c
+        LEFT JOIN companies c
             ON c.company_key = s.company_key
         LEFT JOIN best_leads bl
-            ON bl.company_key = c.company_key
+            ON bl.company_key = s.company_key
         ORDER BY
+            commercial_priority_score DESC,
             COALESCE(s.opportunity_score, 0) DESC,
             CASE WHEN COALESCE(c.domain_validation_status, '') = 'accepted' THEN 1 ELSE 0 END DESC,
             CASE WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 1 ELSE 0 END DESC,
+            CASE WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 1 ELSE 0 END DESC,
             c.company_display ASC
         """
         return self._query_rows(query, (self.ctx.run_id, self.ctx.run_id))

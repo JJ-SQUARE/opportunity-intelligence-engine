@@ -123,6 +123,7 @@ class MasterDataService:
     def append_jobs(self, jobs: List[Dict[str, Any]]) -> int:
         rows = self._with_run_metadata(jobs)
         fieldnames = [
+            "company_key",
             "title",
             "company",
             "location",
@@ -131,6 +132,11 @@ class MasterDataService:
             "description",
             "source",
             "detected_at",
+            "is_remote",
+            "is_contractor",
+            "is_full_time",
+            "nearshore_friendly",
+            "us_only",
             "run_id",
             "run_date",
         ]
@@ -146,6 +152,15 @@ class MasterDataService:
             "resolved_domain",
             "domain_source",
             "domain_confidence",
+            "domain_validation_status",
+            "domain_candidate",
+            "company_type_ai",
+            "classification_confidence_ai",
+            "classification_provider",
+            "industry",
+            "employee_range",
+            "linkedin_company_url",
+            "enrichment_source",
             "total_openings",
             "remote_jobs",
             "contractor_jobs",
@@ -168,6 +183,12 @@ class MasterDataService:
             "email_quality_score",
             "lead_capture_reason",
             "lead_relevance_score",
+            "lead_score_title",
+            "lead_score_source",
+            "lead_score_email",
+            "lead_score_linkedin",
+            "lead_score_email_quality",
+            "lead_score_confidence",
             "run_id",
             "run_date",
         ]
