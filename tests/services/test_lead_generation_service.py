@@ -582,3 +582,53 @@ def test_lead_generation_service_supplements_weak_apollo_with_hunter(tmp_path):
     assert leads[0]["email"] == "jane.strong@acme.com"
     assert {lead["lead_source"] for lead in leads} == {"apollo_people", "hunter_domain_search"}
 
+def test_is_relevant_title_accepts_founder_with_technical_scope(tmp_path):
+    ctx = RunContext.create(
+        config={"cache": {"base_dir": str(tmp_path / "http_cache")}, "providers": {"limits": {}, "clients": {}}},
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    service = LeadGenerationService(ctx, control)
+
+    assert service._is_relevant_title("Founder & CTO") is True
+    assert service._is_relevant_title("CEO / Head of Technology") is True
+
+
+def test_is_relevant_title_rejects_senior_non_technical_titles(tmp_path):
+    ctx = RunContext.create(
+        config={"cache": {"base_dir": str(tmp_path / "http_cache")}, "providers": {"limits": {}, "clients": {}}},
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    service = LeadGenerationService(ctx, control)
+
+    assert service._is_relevant_title("VP Sales") is False
+    assert service._is_relevant_title("Director of Marketing") is False
+    assert service._is_relevant_title("Chief People Officer") is False
+
+
+def test_is_relevant_title_rejects_technical_but_low_signal_individual_titles(tmp_path):
+    ctx = RunContext.create(
+        config={"cache": {"base_dir": str(tmp_path / "http_cache")}, "providers": {"limits": {}, "clients": {}}},
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    service = LeadGenerationService(ctx, control)
+
+    assert service._is_relevant_title("Junior Software Developer") is False
+    assert service._is_relevant_title("Support Engineer") is False
+    assert service._is_relevant_title("QA Analyst") is False
+
+
+def test_is_relevant_title_accepts_common_buyer_titles(tmp_path):
+    ctx = RunContext.create(
+        config={"cache": {"base_dir": str(tmp_path / "http_cache")}, "providers": {"limits": {}, "clients": {}}},
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    service = LeadGenerationService(ctx, control)
+
+    assert service._is_relevant_title("VP of Engineering") is True
+    assert service._is_relevant_title("Director of Software Engineering") is True
+    assert service._is_relevant_title("Head of Platform Engineering") is True
+    assert service._is_relevant_title("IT Director") is True

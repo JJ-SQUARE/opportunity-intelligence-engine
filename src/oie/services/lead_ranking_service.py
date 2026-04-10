@@ -6,13 +6,37 @@ from oie.orchestration.run_context import RunContext
 
 
 TITLE_WEIGHTS = {
+    "chief technology officer": 100,
     "cto": 100,
     "vp engineering": 90,
+    "vice president engineering": 90,
     "head of engineering": 85,
+    "director of engineering": 80,
     "engineering director": 80,
     "head of product": 70,
+    "head of software": 70,
+    "software director": 65,
+    "product director": 60,
+    "technical lead": 55,
+    "engineering manager": 50,
+    "software manager": 45,
 }
 
+NEGATIVE_TITLE_TERMS = {
+    "compliance": -45,
+    "operations": -35,
+    "operating officer": -35,
+    "human resources": -50,
+    "hr": -50,
+    "recruit": -60,
+    "talent": -60,
+    "people": -40,
+    "finance": -35,
+    "accounting": -35,
+    "legal": -35,
+    "marketing": -20,
+    "sales": -20,
+}
 
 SOURCE_WEIGHTS = {
     "apollo_people": 30,
@@ -27,10 +51,28 @@ class LeadRankingService:
 
     def _title_score(self, title: str) -> int:
         value = (title or "").strip().lower()
+        if not value:
+            return 0
+
+        base_score = 0
         for known_title, score in TITLE_WEIGHTS.items():
             if known_title in value:
-                return score
-        return 10 if value else 0
+                base_score = max(base_score, score)
+
+        if base_score == 0:
+            if any(token in value for token in ("engineering", "technology", "product", "software", "developer")):
+                base_score = 25
+            elif any(token in value for token in ("director", "head", "vp", "chief")):
+                base_score = 15
+            else:
+                base_score = 5
+
+        penalty = 0
+        for term, amount in NEGATIVE_TITLE_TERMS.items():
+            if term in value:
+                penalty += amount
+
+        return max(0, base_score + penalty)
 
     def _source_score(self, source: str) -> int:
         return SOURCE_WEIGHTS.get((source or "").strip().lower(), 0)
@@ -90,6 +132,7 @@ class LeadRankingService:
         ranked.sort(
             key=lambda x: (
                 int(x.get("lead_relevance_score", 0) or 0),
+                self._title_score(x.get("contact_title", "")),
                 self._email_quality_component(x.get("email_quality_score", 0)),
                 self._confidence_component(x.get("lead_confidence", 0)),
                 self._source_score(x.get("lead_source", "")),

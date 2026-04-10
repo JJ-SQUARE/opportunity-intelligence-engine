@@ -116,3 +116,37 @@ def test_lead_ranking_service_handles_string_numeric_fields_in_sort():
     assert ranked[0]["contact_name"] == "Beta"
     assert ranked[1]["contact_name"] == "Alpha"
 
+
+
+def test_lead_ranking_service_penalizes_non_technical_titles():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Technical",
+            "contact_title": "Director of Engineering",
+            "email": "tech@acme.com",
+            "linkedin_url": "https://linkedin.com/in/tech",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.85,
+            "email_quality_score": 100,
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Non Technical",
+            "contact_title": "Compliance Director",
+            "email": "compliance@acme.com",
+            "linkedin_url": "https://linkedin.com/in/compliance",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.85,
+            "email_quality_score": 100,
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["contact_name"] == "Technical"
+    assert ranked[0]["lead_score_title"] > ranked[1]["lead_score_title"]
+    assert ranked[0]["lead_relevance_score"] > ranked[1]["lead_relevance_score"]

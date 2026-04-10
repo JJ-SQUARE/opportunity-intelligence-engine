@@ -185,6 +185,49 @@ class PipelineOrchestrator:
         self.ctx.metrics["jobs_without_company_key"] = max(len(jobs) - matched_jobs, 0)
         return enriched_jobs
 
+    def _limit_companies_for_run(
+        self,
+        companies: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        raw_limit = self.ctx.flags.get("limit")
+        if raw_limit in (None, "", 0, "0", False):
+            self.ctx.metrics["companies_limit_requested"] = 0
+            self.ctx.metrics["companies_limit_applied"] = 0
+            self.ctx.metrics["companies_limit_truncated"] = 0
+            return companies
+
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            self.ctx.metrics["companies_limit_invalid"] = True
+            self.ctx.metrics["companies_limit_requested"] = 0
+            self.ctx.metrics["companies_limit_applied"] = 0
+            self.ctx.metrics["companies_limit_truncated"] = 0
+            return companies
+
+        if limit <= 0:
+            self.ctx.metrics["companies_limit_requested"] = limit
+            self.ctx.metrics["companies_limit_applied"] = 0
+            self.ctx.metrics["companies_limit_truncated"] = 0
+            return companies
+
+        sorted_companies = sorted(
+            companies,
+            key=lambda c: (
+                float(c.get("opportunity_score") or 0.0),
+                1 if (c.get("domain_validation_status") or "").strip().lower() == "accepted" else 0,
+                float(c.get("classification_confidence_ai") or 0.0),
+                (c.get("company_display") or c.get("company") or "").strip().lower(),
+            ),
+            reverse=True,
+        )
+
+        limited = sorted_companies[:limit]
+        self.ctx.metrics["companies_limit_requested"] = limit
+        self.ctx.metrics["companies_limit_applied"] = len(limited)
+        self.ctx.metrics["companies_limit_truncated"] = max(len(sorted_companies) - len(limited), 0)
+        return limited
+
     def run_company_pipeline(self) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         jobs = self.run_initial_stages()
         unique_jobs, duplicate_jobs = self.master_dedup_service.dedupe_jobs_against_master(jobs)
@@ -195,8 +238,21 @@ class PipelineOrchestrator:
         companies = self.company_classification_service.classify_companies(companies)
         companies = self.opportunity_scoring_service.score_companies(companies)
         companies = self.company_enrichment_service.enrich_companies(companies)
+        companies = self._limit_companies_for_run(companies)
 
         jobs_with_company_keys = self._attach_company_keys_to_jobs(unique_jobs, companies)
+
+        allowed_company_keys = {
+            company.get("company_key")
+            for company in companies
+            if company.get("company_key")
+        }
+        jobs_with_company_keys = [
+            job for job in jobs_with_company_keys
+            if job.get("company_key") in allowed_company_keys
+        ]
+        self.ctx.metrics["jobs_after_company_limit"] = len(jobs_with_company_keys)
+
         return jobs_with_company_keys, companies, duplicate_jobs
 
     def run(self) -> Dict[str, Any]:
@@ -328,6 +384,63 @@ class PipelineOrchestrator:
             )
             self.run_analytics_export_service.export_json(run_analytics)
 
+            return {
+                "run_id": self.ctx.run_id,
+                "run_date": self.ctx.run_date,
+                "status": status,
+                "jobs_count": len(unique_jobs),
+                "companies_count": len(companies),
+                "leads_count": len(best_leads),
+                "top_companies": companies[:5],
+                "metrics": self.ctx.metrics,
+                "budgets": self.ctx.budgets,
+                "provider_events_count": len(self.ctx.provider_events),
+
+                "db_path": self.ctx.paths.get("db_path"),
+
+                "suspected_duplicates_report": self.ctx.paths.get("suspected_duplicates_report"),
+                "domain_review_queue_csv": self.ctx.paths.get("domain_review_queue_csv"),
+                "companies_export": self.ctx.paths.get("companies_export"),
+                "jobs_export": self.ctx.paths.get("jobs_export"),
+                "leads_export": self.ctx.paths.get("leads_export"),
+                "opportunities_export": self.ctx.paths.get("opportunities_export"),
+                "top_opportunities_export": self.ctx.paths.get("top_opportunities_export"),
+                "commercial_pipeline_csv": self.ctx.paths.get("commercial_pipeline_csv"),
+                "apollo_import_csv": self.ctx.paths.get("apollo_import_csv"),
+                "top_opportunities_csv": self.ctx.paths.get("top_opportunities_csv"),
+
+                "executive_summary_json": self.ctx.paths.get("executive_summary_json"),
+                "run_readiness_report_json": self.ctx.paths.get("run_readiness_report_json"),
+                "run_metrics_summary_json": self.ctx.paths.get("run_metrics_summary_json"),
+                "run_analytics_json": self.ctx.paths.get("run_analytics_json"),
+
+                "historical_company_hiring_csv": self.ctx.paths.get("historical_company_hiring_csv"),
+                "historical_growth_summary_csv": self.ctx.paths.get("historical_growth_summary_csv"),
+                "historical_summary_json": self.ctx.paths.get("historical_summary_json"),
+
+                "market_trends_by_source_csv": self.ctx.paths.get("market_trends_by_source_csv"),
+                "market_trends_by_location_csv": self.ctx.paths.get("market_trends_by_location_csv"),
+                "market_new_companies_by_source_csv": self.ctx.paths.get("market_new_companies_by_source_csv"),
+                "market_trends_summary_json": self.ctx.paths.get("market_trends_summary_json"),
+
+                "market_segmented_companies_csv": self.ctx.paths.get("market_segmented_companies_csv"),
+                "market_segment_summary_csv": self.ctx.paths.get("market_segment_summary_csv"),
+                "market_segment_summary_json": self.ctx.paths.get("market_segment_summary_json"),
+
+                "collector_metrics_json": self.ctx.paths.get("collector_metrics_json"),
+                "collector_contribution_metrics_csv": self.ctx.paths.get("collector_contribution_metrics_csv"),
+                "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
+                "collector_roi_metrics_csv": self.ctx.paths.get("collector_roi_metrics_csv"),
+                "collector_roi_metrics_json": self.ctx.paths.get("collector_roi_metrics_json"),
+
+                "provider_operation_metrics_csv": self.ctx.paths.get("provider_operation_metrics_csv"),
+                "provider_operation_metrics_json": self.ctx.paths.get("provider_operation_metrics_json"),
+
+                "run_metrics_summary": run_metrics_summary,
+                "executive_summary": executive_summary,
+                "run_analytics": run_analytics,
+            }
+
         except Exception as exc:
             self.ctx.metrics["pipeline_failed"] = True
             self.ctx.metrics["pipeline_error_type"] = exc.__class__.__name__
@@ -358,50 +471,3 @@ class PipelineOrchestrator:
                 self.ctx.metrics["pipeline_failure_persist_snapshot_failed"] = True
 
             raise
-
-        return {
-            "run_id": self.ctx.run_id,
-            "run_date": self.ctx.run_date,
-            "status": status,
-            "jobs_count": len(unique_jobs),
-            "companies_count": len(companies),
-            "leads_count": len(best_leads),
-            "top_companies": companies[:5],
-            "metrics": self.ctx.metrics,
-            "budgets": self.ctx.budgets,
-            "provider_events_count": len(self.ctx.provider_events),
-            "db_path": self.ctx.paths.get("db_path"),
-            "suspected_duplicates_report": self.ctx.paths.get("suspected_duplicates_report"),
-            "domain_review_queue_csv": self.ctx.paths.get("domain_review_queue_csv"),
-            "companies_export": self.ctx.paths.get("companies_export"),
-            "jobs_export": self.ctx.paths.get("jobs_export"),
-            "leads_export": self.ctx.paths.get("leads_export"),
-            "opportunities_export": self.ctx.paths.get("opportunities_export"),
-            "top_opportunities_export": self.ctx.paths.get("top_opportunities_export"),
-            "apollo_import_csv": self.ctx.paths.get("apollo_import_csv"),
-            "top_opportunities_csv": self.ctx.paths.get("top_opportunities_csv"),
-            "executive_summary_json": self.ctx.paths.get("executive_summary_json"),
-            "historical_company_hiring_csv": self.ctx.paths.get("historical_company_hiring_csv"),
-            "historical_growth_summary_csv": self.ctx.paths.get("historical_growth_summary_csv"),
-            "historical_summary_json": self.ctx.paths.get("historical_summary_json"),
-            "market_trends_by_source_csv": self.ctx.paths.get("market_trends_by_source_csv"),
-            "market_trends_by_location_csv": self.ctx.paths.get("market_trends_by_location_csv"),
-            "market_new_companies_by_source_csv": self.ctx.paths.get("market_new_companies_by_source_csv"),
-            "market_trends_summary_json": self.ctx.paths.get("market_trends_summary_json"),
-            "market_segmented_companies_csv": self.ctx.paths.get("market_segmented_companies_csv"),
-            "market_segment_summary_csv": self.ctx.paths.get("market_segment_summary_csv"),
-            "market_segment_summary_json": self.ctx.paths.get("market_segment_summary_json"),
-            "collector_metrics_json": self.ctx.paths.get("collector_metrics_json"),
-            "collector_contribution_metrics_csv": self.ctx.paths.get("collector_contribution_metrics_csv"),
-            "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
-            "collector_roi_metrics_csv": self.ctx.paths.get("collector_roi_metrics_csv"),
-            "collector_roi_metrics_json": self.ctx.paths.get("collector_roi_metrics_json"),
-            "provider_operation_metrics_csv": self.ctx.paths.get("provider_operation_metrics_csv"),
-            "provider_operation_metrics_json": self.ctx.paths.get("provider_operation_metrics_json"),
-            "run_readiness_report_json": self.ctx.paths.get("run_readiness_report_json"),
-            "run_metrics_summary_json": self.ctx.paths.get("run_metrics_summary_json"),
-            "run_analytics_json": self.ctx.paths.get("run_analytics_json"),
-            "run_metrics_summary": run_metrics_summary,
-            "executive_summary": executive_summary,
-            "run_analytics": run_analytics,
-        }

@@ -114,6 +114,15 @@ class RunAnalyticsService:
                 "leads": len(leads),
                 "duplicate_jobs": len(duplicate_jobs),
             },
+            "counts_original": {
+                "jobs_collected_raw": self.ctx.metrics.get("jobs_collected_raw", 0),
+                "jobs_after_dedupe": self.ctx.metrics.get("jobs_after_dedupe", 0),
+                "master_jobs_unique_to_append": self.ctx.metrics.get("master_jobs_unique_to_append", 0),
+                "companies_detected": self.ctx.metrics.get("companies_detected", 0),
+                "companies_after_identity_dedupe": self.ctx.metrics.get("companies_after_identity_dedupe", 0),
+                "leads_generated": self.ctx.metrics.get("leads_generated", 0),
+                "best_leads_selected": self.ctx.metrics.get("best_leads_selected", 0),
+            },
             "quality": {
                 "jobs_with_company_key": self.ctx.metrics.get("jobs_with_company_key", 0),
                 "jobs_without_company_key": self.ctx.metrics.get("jobs_without_company_key", 0),

@@ -17,16 +17,23 @@ class RunMetricsSummaryService:
         except Exception:
             return 0
 
-    def _int_metric_or_snapshot(self, key: str, snapshot_key: str) -> int:
-        if key in self.ctx.metrics:
-            return self._int_metric(key)
-
+    def _snapshot_int(self, key: str) -> int:
         snapshot = self.ctx.provider_state.get("run_metrics_summary_counts", {}) or {}
-        value = snapshot.get(snapshot_key, 0)
+        value = snapshot.get(key, 0)
         try:
             return int(value)
         except Exception:
             return 0
+
+    def _int_metric_or_snapshot(self, key: str, snapshot_key: str) -> int:
+        snapshot = self.ctx.provider_state.get("run_metrics_summary_counts", {}) or {}
+        if snapshot_key in snapshot:
+            return self._snapshot_int(snapshot_key)
+
+        if key in self.ctx.metrics:
+            return self._int_metric(key)
+
+        return 0
 
     def _bool_metric(self, key: str) -> bool:
         value = self.ctx.metrics.get(key, False)
@@ -91,18 +98,18 @@ class RunMetricsSummaryService:
             jobs_after_dedupe=self._int_metric_or_snapshot("jobs_after_dedupe", "jobs_count"),
             jobs_deduplicated=self._int_metric("jobs_deduplicated"),
             jobs_duplicates_detected=self._int_metric("master_jobs_duplicates_detected"),
-            jobs_unique_to_append=self._int_metric("master_jobs_unique_to_append"),
+            jobs_unique_to_append=self._int_metric_or_snapshot("master_jobs_unique_to_append", "jobs_count"),
             companies_detected=self._int_metric_or_snapshot("companies_detected", "companies_count"),
-            companies_after_identity_dedupe=self._int_metric("companies_after_identity_dedupe"),
+            companies_after_identity_dedupe=self._int_metric_or_snapshot("companies_after_identity_dedupe", "companies_count"),
             companies_with_domain=self._int_metric("companies_with_domain"),
             companies_enriched=self._int_metric("companies_enriched"),
             companies_classified=self._int_metric("companies_classified"),
             companies_scored=self._int_metric("companies_scored"),
             leads_generated=self._int_metric_or_snapshot("leads_generated", "leads_count"),
-            leads_ranked=self._int_metric("leads_ranked"),
+            leads_ranked=self._int_metric_or_snapshot("leads_ranked", "leads_count"),
             best_leads_selected=self._int_metric_or_snapshot("best_leads_selected", "leads_count"),
             leads_duplicates_detected=self._int_metric("master_leads_duplicates_detected"),
-            leads_unique_to_append=self._int_metric("master_leads_unique_to_append"),
+            leads_unique_to_append=self._int_metric_or_snapshot("master_leads_unique_to_append", "leads_count"),
             domain_resolution_accepted=self._int_metric("domain_resolution_accepted"),
             domain_resolution_review=self._int_metric("domain_resolution_review"),
             domain_resolution_rejected=self._int_metric("domain_resolution_rejected"),
@@ -114,4 +121,20 @@ class RunMetricsSummaryService:
             provider_blocks=self._build_provider_blocks(),
         )
 
-        return summary.to_dict()
+        data = summary.to_dict()
+        data["counts_original"] = {
+            "jobs_collected_raw": self._int_metric("jobs_collected_raw"),
+            "jobs_after_dedupe": self._int_metric("jobs_after_dedupe"),
+            "master_jobs_unique_to_append": self._int_metric("master_jobs_unique_to_append"),
+            "companies_detected": self._int_metric("companies_detected"),
+            "companies_after_identity_dedupe": self._int_metric("companies_after_identity_dedupe"),
+            "leads_generated": self._int_metric("leads_generated"),
+            "best_leads_selected": self._int_metric("best_leads_selected"),
+            "master_leads_unique_to_append": self._int_metric("master_leads_unique_to_append"),
+        }
+        data["counts_effective"] = {
+            "jobs": self._snapshot_int("jobs_count"),
+            "companies": self._snapshot_int("companies_count"),
+            "leads": self._snapshot_int("leads_count"),
+        }
+        return data

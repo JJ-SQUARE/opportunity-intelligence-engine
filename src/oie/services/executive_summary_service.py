@@ -47,13 +47,19 @@ class ExecutiveSummaryService:
             reverse=True,
         )[:10]
 
+        snapshot_counts = self.ctx.provider_state.get("run_metrics_summary_counts", {}) or {}
+        effective_jobs_count = self.ctx.metrics.get(
+            "jobs_after_company_limit",
+            snapshot_counts.get("jobs_count", self.ctx.metrics.get("jobs_after_dedupe", 0)),
+        )
+
         summary = {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
             "mode": self.ctx.mode,
-            "jobs_count": self.ctx.metrics.get("jobs_after_dedupe", 0),
-            "companies_count": len(companies),
-            "leads_count": len(leads),
+            "jobs_count": effective_jobs_count,
+            "companies_count": snapshot_counts.get("companies_count", len(companies)),
+            "leads_count": snapshot_counts.get("leads_count", len(leads)),
             "companies_enriched": self.ctx.metrics.get("companies_enriched", 0),
             "duplicates_detected": self.ctx.metrics.get("suspected_duplicates_report_count", 0),
             "provider_events_count": len(self.ctx.provider_events),
