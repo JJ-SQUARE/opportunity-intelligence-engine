@@ -22,6 +22,22 @@ def _expand_env_vars(value: Any) -> Any:
     return value
 
 
+
+
+def _str2bool(value: str | bool | None) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return True
+
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(f"Booleano inválido: {value}")
+
+
 def load_config(path: str) -> dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
@@ -31,13 +47,15 @@ def load_config(path: str) -> dict[str, Any]:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config/queries.yaml")
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--cache-only", action="store_true")
-    parser.add_argument("--no-llm", action="store_true")
+    parser.add_argument("--dry-run", nargs="?", const=True, default=False, type=_str2bool)
+    parser.add_argument("--cache-only", nargs="?", const=True, default=False, type=_str2bool)
+    parser.add_argument("--no-llm", nargs="?", const=True, default=False, type=_str2bool)
+    parser.add_argument("--no-enrichment", nargs="?", const=True, default=False, type=_str2bool)
+    parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--stage", default=None)
     parser.add_argument("--stop-after", default=None)
     parser.add_argument("--resume-from", default=None)
-    parser.add_argument("--orchestrator-preview", action="store_true")
+    parser.add_argument("--orchestrator-preview", nargs="?", const=True, default=False, type=_str2bool)
     return parser.parse_args(argv)
 
 
@@ -46,6 +64,8 @@ def build_runtime_flags(args: argparse.Namespace) -> dict[str, Any]:
         "dry_run": bool(getattr(args, "dry_run", False)),
         "cache_only": bool(getattr(args, "cache_only", False)),
         "no_llm": bool(getattr(args, "no_llm", False)),
+        "no_enrichment": bool(getattr(args, "no_enrichment", False)),
+        "limit": getattr(args, "limit", None),
         "config_path": getattr(args, "config", None),
         "stage": getattr(args, "stage", None),
         "stop_after": getattr(args, "stop_after", None),

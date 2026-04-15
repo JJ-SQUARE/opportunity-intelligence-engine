@@ -96,6 +96,24 @@ class RunReadinessService:
                 f"Se detectaron bloqueos por provider/circuit breaker: {', '.join(sorted(blocked_provider_keys))}."
             )
 
+        auth_error_keys = [
+            key for key, value in metrics.items()
+            if key.endswith("_errors_auth") and int(value or 0) > 0
+        ]
+        if auth_error_keys:
+            warnings.append(
+                f"Se detectaron errores de autenticación/permisos en providers: {', '.join(sorted(auth_error_keys))}."
+            )
+
+        permission_error_keys = [
+            key for key, value in metrics.items()
+            if key.endswith("_errors_permission") and int(value or 0) > 0
+        ]
+        if permission_error_keys:
+            warnings.append(
+                f"Se detectaron errores explícitos de permisos en providers: {', '.join(sorted(permission_error_keys))}."
+            )
+
         domain_review_queue_count = int(metrics.get("domain_review_queue_count", 0) or 0)
         if domain_review_queue_count > 0:
             warnings.append(

@@ -28,6 +28,9 @@ class HiringSignalsService:
                     "apply_url": None,
                     "job_url": None,
                     "url": None,
+                    "title": None,
+                    "description": None,
+                    "source_meta": {},
                 }
 
             grouped[company]["jobs"].append(job)
@@ -53,6 +56,15 @@ class HiringSignalsService:
 
             if not grouped[company]["url"] and job.get("url"):
                 grouped[company]["url"] = job.get("url")
+
+            if not grouped[company]["title"] and job.get("title"):
+                grouped[company]["title"] = job.get("title")
+
+            if not grouped[company]["description"] and job.get("description"):
+                grouped[company]["description"] = job.get("description")
+
+            if not grouped[company]["source_meta"] and job.get("source_meta"):
+                grouped[company]["source_meta"] = job.get("source_meta") or {}
 
         companies = []
         for company_data in grouped.values():

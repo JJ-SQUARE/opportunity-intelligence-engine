@@ -238,9 +238,10 @@ class PipelineOrchestrator:
         companies = self.company_classification_service.classify_companies(companies)
         companies = self.opportunity_scoring_service.score_companies(companies)
         companies = self.company_enrichment_service.enrich_companies(companies)
-        companies = self._limit_companies_for_run(companies)
 
         jobs_with_company_keys = self._attach_company_keys_to_jobs(unique_jobs, companies)
+
+        companies = self._limit_companies_for_run(companies)
 
         allowed_company_keys = {
             company.get("company_key")
@@ -251,6 +252,9 @@ class PipelineOrchestrator:
             job for job in jobs_with_company_keys
             if job.get("company_key") in allowed_company_keys
         ]
+
+        self.ctx.metrics["jobs_with_company_key"] = len(jobs_with_company_keys)
+        self.ctx.metrics["jobs_without_company_key"] = 0
         self.ctx.metrics["jobs_after_company_limit"] = len(jobs_with_company_keys)
 
         return jobs_with_company_keys, companies, duplicate_jobs

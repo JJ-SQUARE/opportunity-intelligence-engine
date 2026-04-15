@@ -19,11 +19,13 @@ sources:
     location_mode: "matrix"
     locations:
       - "Mexico"
+    num_pages: 2
+    sleep_s: 1.0
 
   discovery:
     linkedin_serpapi:
-      enabled: false
-      num_pages: 1
+      enabled: true
+      num_pages: 2
       sleep_s: 1.0
       gl: "us"
       hl: "en"
@@ -67,18 +69,27 @@ llm:
   provider: "openai"
   model: "gpt-4.1-mini"
   temperature: 0.2
-  top_n: 20
+  top_n: 40
   cache_path: "data/processed/company_ai_cache.json"
 
 queries:
+  - name: "Focused Fullstack ES"
+    q: "desarrollador full stack remoto"
+
+  - name: "Focused Backend ES"
+    q: "desarrollador backend remoto"
+
   - name: "Focused Python ES"
     q: "desarrollador python remoto"
 
   - name: "Focused QA ES"
     q: "qa automation remoto"
 
-  - name: "Focused Fullstack ES"
-    q: "desarrollador full stack remoto"
+  - name: "Focused Software Engineer EN"
+    q: "software engineer remote latam"
+
+  - name: "Focused Backend Engineer EN"
+    q: "backend engineer remote latam"
 
 domain_resolution:
   enabled: true
@@ -127,36 +138,38 @@ providers:
       api_key_env: "OPENAI_API_KEY"
 
   limits:
-    serpapi: 25
-    apollo: 5
-    hunter: 5
-    openai: 80
+    serpapi: 60
+    apollo: 40
+    hunter: 20
+    openai: 120
 
   operation_limits:
     openai:
-      classify_company: 80
-      domain_ai_validation: 20
+      classify_company: 120
+      domain_ai_validation: 30
     serpapi:
-      search_google: 25
+      search_google: 60
     apollo:
-      enrich_company_by_domain: 5
-      search_people_by_domain_and_titles: 5
+      enrich_company_by_domain: 40
+      search_people_by_domain_and_titles: 40
     hunter:
-      search_domain_contacts: 5
+      search_domain_contacts: 20
 
 enrichment:
   apollo_company_ttl_days: 30
-  max_companies_per_run: 5
-  min_opportunity_score: 15
+  max_companies_per_run: 50
+  min_opportunity_score: 10
   require_accepted_domain: true
   allowed_company_types: ["end_client", "unknown", ""]
 
 lead_generation:
-  max_companies_per_run: 5
-  min_opportunity_score: 15
+  max_companies_per_run: 50
+  min_opportunity_score: 10
   require_accepted_domain: true
   enable_stub_leads: false
   max_hunter_results_per_company: 2
+  max_apollo_results_per_company: 5
+  max_leads_per_company: 5
   hunter_min_email_quality: 40
 
 outputs:

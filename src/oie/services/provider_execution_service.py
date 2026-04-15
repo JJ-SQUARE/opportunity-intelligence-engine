@@ -240,7 +240,7 @@ class ProviderExecutionService:
                         int(self.ctx.metrics.get(auth_metric_key, 0)) + 1
                     )
 
-                    if int(status_code) == 403:
+                    if int(status_code) in {401, 403}:
                         perms_metric_key = _operation_metric_key(provider_name, operation_name, "errors_permission")
                         self.ctx.metrics[perms_metric_key] = (
                             int(self.ctx.metrics.get(perms_metric_key, 0)) + 1

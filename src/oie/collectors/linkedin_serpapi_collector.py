@@ -1,9 +1,28 @@
 from __future__ import annotations
 
 import importlib
+import re
 from typing import Any, Dict, List
+from urllib.parse import unquote, urlparse
 
 from oie.collectors.base import BaseJobCollector
+
+
+PLACEHOLDER_COMPANIES = {
+    "",
+    "unknown",
+    "confidential",
+    "stealth",
+    "undisclosed",
+    "n/a",
+    "na",
+}
+
+TITLE_COMPANY_PATTERNS = [
+    re.compile(r"^(?P<company>.+?)\s+hiring\s+.+$", re.IGNORECASE),
+    re.compile(r"^(?P<title>.+?)\s+at\s+(?P<company>.+)$", re.IGNORECASE),
+    re.compile(r"^(?P<company>.+?)\s+is\s+hiring\s+.+$", re.IGNORECASE),
+]
 
 
 class LinkedInSerpAPICollector(BaseJobCollector):
@@ -53,10 +72,94 @@ class LinkedInSerpAPICollector(BaseJobCollector):
             return lambda payload: target(payload)
         return target
 
+    def _clean_company_candidate(self, value: str) -> str:
+        candidate = (value or "").strip()
+        if not candidate:
+            return ""
+
+        candidate = re.sub(r"\s+", " ", candidate).strip(" -|,.;:")
+        lowered = candidate.lower()
+
+        if lowered in PLACEHOLDER_COMPANIES:
+            return ""
+
+        # Limpia ruido típico de títulos
+        candidate = re.sub(r"\b(remote|remoto|latam|latin america)\b", "", candidate, flags=re.IGNORECASE)
+        candidate = re.sub(r"\s+", " ", candidate).strip(" -|,.;:")
+
+        lowered = candidate.lower()
+        if lowered in PLACEHOLDER_COMPANIES:
+            return ""
+
+        if len(candidate) <= 4 and candidate.isalpha():
+            return candidate.upper()
+
+        return candidate
+
+    def _company_from_title(self, title: str) -> str:
+        value = (title or "").strip()
+        if not value:
+            return ""
+
+        for pattern in TITLE_COMPANY_PATTERNS:
+            match = pattern.match(value)
+            if match:
+                company = match.groupdict().get("company", "")
+                cleaned = self._clean_company_candidate(company)
+                if cleaned:
+                    return cleaned
+
+        return ""
+
+    def _company_from_url(self, url: str) -> str:
+        value = (url or "").strip()
+        if not value:
+            return ""
+
+        try:
+            parsed = urlparse(value)
+            slug = unquote(parsed.path.rsplit("/", 1)[-1])
+        except Exception:
+            return ""
+
+        if not slug:
+            return ""
+
+        match = re.search(r"-at-([a-z0-9\-]+?)(?:-\d+)?$", slug, flags=re.IGNORECASE)
+        if not match:
+            return ""
+
+        raw_company = match.group(1).replace("-", " ").strip()
+        cleaned = self._clean_company_candidate(raw_company)
+        if not cleaned:
+            return ""
+
+        if len(cleaned) <= 4 and cleaned.replace(" ", "").isalpha():
+            return cleaned.upper()
+
+        return " ".join(part.capitalize() if len(part) > 3 else part.upper() for part in cleaned.split())
+
+    def _best_company(self, raw_job: Dict[str, Any]) -> str:
+        direct = self._clean_company_candidate(raw_job.get("company", ""))
+        if direct:
+            return direct
+
+        from_title = self._company_from_title(raw_job.get("title", ""))
+        if from_title:
+            return from_title
+
+        from_job_url = self._company_from_url(raw_job.get("job_url", "") or raw_job.get("url", ""))
+        if from_job_url:
+            return from_job_url
+
+        return ""
+
     def _normalize_job(self, raw_job: Dict[str, Any]) -> Dict[str, Any]:
+        company = self._best_company(raw_job)
+
         return {
             "title": raw_job.get("title", ""),
-            "company": raw_job.get("company", ""),
+            "company": company,
             "location": raw_job.get("location", ""),
             "job_url": raw_job.get("job_url", "") or raw_job.get("url", ""),
             "apply_url": raw_job.get("apply_url", ""),
@@ -65,6 +168,7 @@ class LinkedInSerpAPICollector(BaseJobCollector):
             "detected_at": raw_job.get("detected_at", ""),
             "url": raw_job.get("url", ""),
             "source_meta": raw_job.get("source_meta", {}) or {},
+            "raw": raw_job,
         }
 
     def collect(self) -> List[Dict[str, Any]]:

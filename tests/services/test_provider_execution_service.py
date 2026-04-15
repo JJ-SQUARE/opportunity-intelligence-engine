@@ -74,7 +74,7 @@ def test_provider_execution_service_respects_dry_run_mode():
     assert ctx.budgets["openai"]["used_calls"] == 0
 
 
-def test_execute_records_operation_specific_success_metrics():
+def test_execute_records_operation_specific_success_metrics_basic():
     ctx = RunContext.create(config={})
     pcs = ProviderControlService(ctx)
     pcs.initialize()
@@ -150,7 +150,7 @@ def test_execute_records_operation_specific_success_metrics():
     assert ctx.metrics["openai_domain_ai_validation_success"] == 1
 
 
-def test_execute_records_operation_specific_execution_error_metrics():
+def test_execute_records_operation_specific_execution_error_metrics_basic():
     ctx = RunContext.create(config={})
     provider_control_service = ProviderControlService(ctx)
     provider_control_service.initialize()
@@ -421,3 +421,48 @@ def test_provider_execution_service_records_permission_metric_on_403():
     assert ctx.metrics["apollo_enrich_company_by_domain_errors_auth"] == 1
     assert ctx.metrics["apollo_enrich_company_by_domain_errors_permission"] == 1
     assert ctx.metrics.get("apollo_enrich_company_by_domain_retry_count", 0) == 0
+
+
+def test_provider_execution_service_records_auth_and_permission_metrics():
+    import requests
+
+    ctx = RunContext.create(
+        config={
+            "providers": {
+                "limits": {"apollo": 3},
+                "retry_policy": {
+                    "apollo": {
+                        "max_attempts": 1,
+                        "base_delay_seconds": 0.0,
+                        "backoff_multiplier": 1.0,
+                    }
+                },
+            }
+        }
+    )
+    provider_control_service = ProviderControlService(ctx)
+    provider_control_service.initialize()
+
+    service = ProviderExecutionService(ctx, provider_control_service)
+
+    class _FakeResponse:
+        status_code = 403
+
+    def _fail():
+        raise requests.exceptions.HTTPError("403 Forbidden", response=_FakeResponse())
+
+    try:
+        service.execute("apollo", "search_people_by_domain_and_titles", _fail, cost=1)
+        assert False, "Expected ProviderExecutionError"
+    except ProviderExecutionError:
+        pass
+
+    assert ctx.metrics["apollo_search_people_by_domain_and_titles_errors_auth"] == 1
+    assert ctx.metrics["apollo_search_people_by_domain_and_titles_errors_permission"] == 1
+
+    auth_events = [
+        event for event in ctx.provider_events
+        if event.get("provider") == "apollo" and event.get("event_type") == "auth_error"
+    ]
+    assert auth_events
+    assert auth_events[0]["status_code"] == 403

@@ -16,6 +16,17 @@ from oie.services.provider_execution_service import (
 from oie.utils.domain_filters import is_job_board_domain
 
 
+PLACEHOLDER_COMPANY_VALUES = {
+    "",
+    "unknown",
+    "confidential",
+    "stealth",
+    "undisclosed",
+    "n/a",
+    "na",
+}
+
+
 class CompanyEnrichmentService:
     def __init__(
         self,
@@ -46,6 +57,14 @@ class CompanyEnrichmentService:
         }
 
         initialize_database(self.db_path)
+
+    def _is_placeholder_company_name(self, company: Dict[str, Any]) -> bool:
+        values = [
+            str(company.get("company_display") or "").strip().lower(),
+            str(company.get("company") or "").strip().lower(),
+            str(company.get("company_normalized") or "").strip().lower(),
+        ]
+        return any(value in PLACEHOLDER_COMPANY_VALUES for value in values if value)
 
     def _is_recently_enriched(self, company_key: str) -> bool:
         conn = sqlite3.connect(self.db_path)
@@ -89,6 +108,9 @@ class CompanyEnrichmentService:
         opportunity_score = float(company.get("opportunity_score") or 0.0)
 
         if not company_key or not domain:
+            return False
+
+        if self._is_placeholder_company_name(company):
             return False
 
         if is_job_board_domain(domain):

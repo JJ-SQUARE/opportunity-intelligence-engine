@@ -14,6 +14,16 @@ from oie.services.domain_ai_validation_service import DomainAIValidationService
 from oie.utils.company_name_extraction import extract_actionable_company_name
 
 
+PLACEHOLDER_COMPANY_VALUES = {
+    "",
+    "unknown",
+    "confidential",
+    "stealth",
+    "undisclosed",
+    "n/a",
+    "na",
+}
+
 BLOCKED_DOMAINS = {
     "linkedin.com",
     "www.linkedin.com",
@@ -119,15 +129,22 @@ class DomainResolutionService:
         return self._is_blocked_domain(domain)
 
     def _can_attempt_domain_resolution(self, company_name: Optional[str]) -> bool:
+        value = (company_name or "").strip().lower()
+        if value in PLACEHOLDER_COMPANY_VALUES:
+            return False
         return is_actionable_company_name(company_name)
 
     def _resolve_effective_company_name(self, company: Dict[str, Any]) -> Optional[str]:
-        return extract_actionable_company_name(
+        candidate = extract_actionable_company_name(
             company_display=company.get("company_display") or company.get("company"),
             title=company.get("title"),
             snippet=company.get("snippet") or company.get("description"),
             apply_url=company.get("apply_url"),
         )
+        value = (candidate or "").strip().lower()
+        if value in PLACEHOLDER_COMPANY_VALUES:
+            return None
+        return candidate
 
     def _is_suspicious_subdomain_candidate(self, candidate: Dict[str, Any]) -> bool:
         domain = str(candidate.get("domain") or "").strip().lower()

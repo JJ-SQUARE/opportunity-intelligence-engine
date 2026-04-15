@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List
@@ -58,6 +59,13 @@ APOLLO_IMPORT_FIELDS = [
     "linkedin_url",
 ]
 
+TECH_HINTS = [
+    ".net", "react", "angular", "vue", "node", "node.js", "python", "fastapi",
+    "java", "spring", "aws", "azure", "gcp", "sql", "mysql", "postgres",
+    "graphql", "rest", "microservices", "docker", "kubernetes", "aem",
+    "javascript", "typescript", "php", "c#", "ai", "gemini", "codex"
+]
+
 
 class OutboundExportService:
     def __init__(self, ctx: RunContext) -> None:
@@ -88,6 +96,10 @@ class OutboundExportService:
             writer.writeheader()
             for row in rows:
                 writer.writerow({field: row.get(field, "") for field in fieldnames})
+        return str(path)
+
+    def _write_text(self, path: Path, content: str) -> str:
+        path.write_text(content, encoding="utf-8")
         return str(path)
 
     def _build_commercial_pipeline_rows(self) -> List[Dict[str, Any]]:
@@ -247,6 +259,146 @@ class OutboundExportService:
         """
         return self._query_rows(query, (self.ctx.run_id, self.ctx.run_id, self.ctx.run_id))
 
+    def _build_company_jobs(self, company_key: str) -> List[Dict[str, Any]]:
+        queries = [
+            """
+            SELECT
+                title,
+                location,
+                COALESCE(job_url, '') AS job_url,
+                COALESCE(apply_url, '') AS apply_url,
+                COALESCE(description, '') AS description,
+                COALESCE(source, '') AS source,
+                COALESCE(is_remote, 0) AS is_remote,
+                COALESCE(is_full_time, 0) AS is_full_time,
+                COALESCE(is_contractor, 0) AS is_contractor
+            FROM jobs
+            WHERE run_id = ? AND company_key = ?
+            ORDER BY title ASC
+            """,
+            """
+            SELECT
+                title,
+                location,
+                COALESCE(job_url, '') AS job_url,
+                COALESCE(apply_url, '') AS apply_url,
+                COALESCE(description, '') AS description,
+                COALESCE(source, '') AS source,
+                COALESCE(remote_flag, 0) AS is_remote,
+                COALESCE(is_full_time, 0) AS is_full_time,
+                COALESCE(contractor_flag, 0) AS is_contractor
+            FROM jobs
+            WHERE run_id = ? AND company_key = ?
+            ORDER BY title ASC
+            """,
+            """
+            SELECT
+                title,
+                location,
+                COALESCE(job_url, '') AS job_url,
+                COALESCE(apply_url, '') AS apply_url,
+                COALESCE(description, '') AS description,
+                COALESCE(source, '') AS source,
+                0 AS is_remote,
+                0 AS is_full_time,
+                0 AS is_contractor
+            FROM jobs
+            WHERE run_id = ? AND company_key = ?
+            ORDER BY title ASC
+            """,
+        ]
+
+        last_error = None
+        for query in queries:
+            try:
+                return self._query_rows(query, (self.ctx.run_id, company_key))
+            except sqlite3.OperationalError as exc:
+                last_error = exc
+
+        if last_error is not None:
+            raise last_error
+        return []
+
+    def _build_company_contacts(self, company_key: str) -> List[Dict[str, Any]]:
+        query = """
+        SELECT
+            COALESCE(contact_name, '') AS contact_name,
+            COALESCE(contact_title, '') AS contact_title,
+            COALESCE(email, '') AS email,
+            COALESCE(linkedin_url, '') AS linkedin_url,
+            COALESCE(lead_source, '') AS lead_source,
+            COALESCE(lead_confidence, 0) AS lead_confidence,
+            COALESCE(email_quality_score, 0) AS email_quality_score,
+            COALESCE(lead_relevance_score, 0) AS lead_relevance_score
+        FROM leads
+        WHERE run_id = ? AND company_key = ?
+        ORDER BY
+            COALESCE(lead_relevance_score, 0) DESC,
+            COALESCE(email_quality_score, 0) DESC,
+            COALESCE(lead_confidence, 0) DESC,
+            contact_name ASC
+        """
+        return self._query_rows(query, (self.ctx.run_id, company_key))
+
+    def _extract_budget(self, text: str) -> str:
+        value = (text or "").replace("\n", " ")
+        patterns = [
+            r"(USD\s?\$?\s?[\d,]+(?:\s?-\s?USD\s?\$?\s?[\d,]+)?)",
+            r"(\$\s?[\d,]+(?:\s?-\s?\$\s?[\d,]+)?)",
+            r"(MXN\s?\$?\s?[\d,]+(?:\s?-\s?MXN\s?\$?\s?[\d,]+)?)",
+            r"(S/\.\s?[\d,]+(?:\s?-\s?S/\.\s?[\d,]+)?)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, value, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        return ""
+
+    def _extract_techs(self, text: str, limit: int = 6) -> str:
+        lowered = (text or "").lower()
+        found = []
+        for hint in TECH_HINTS:
+            if hint.lower() in lowered:
+                found.append(hint)
+        deduped = []
+        seen = set()
+        for item in found:
+            key = item.lower()
+            if key not in seen:
+                seen.add(key)
+                deduped.append(item)
+        return ", ".join(deduped[:limit])
+
+    def _truncate(self, text: str, limit: int = 260) -> str:
+        value = " ".join((text or "").split())
+        if len(value) <= limit:
+            return value
+        return value[: limit - 3].rstrip() + "..."
+
+    def _job_summary(self, job: Dict[str, Any]) -> str:
+        workplace = []
+        if job.get("is_remote"):
+            workplace.append("remote")
+        if job.get("is_full_time"):
+            workplace.append("full-time")
+        if job.get("is_contractor"):
+            workplace.append("contractor")
+        workplace_text = ", ".join(workplace) if workplace else "N/D"
+
+        description = job.get("description", "")
+        budget = self._extract_budget(description) or "No detectado"
+        techs = self._extract_techs(" ".join([job.get("title", ""), description])) or "No detectadas"
+
+        summary = (
+            f"{job.get('title', 'Sin título')}. "
+            f"Ubicación: {job.get('location') or 'N/D'}. "
+            f"Modalidad: {workplace_text}. "
+            f"Budget: {budget}. "
+            f"Skills/stack detectados: {techs}. "
+            f"Resumen: {self._truncate(description)}"
+        )
+        return summary
+
     def export_commercial_pipeline(self) -> str:
         rows = self._build_commercial_pipeline_rows()
         path = self._output_dir() / "commercial_pipeline.csv"
@@ -284,6 +436,72 @@ class OutboundExportService:
         self.ctx.metrics["apollo_import_rows"] = len(apollo_rows)
         return output
 
+    def export_commercial_report_markdown(self) -> str:
+        rows = self._build_commercial_pipeline_rows()
+        lines: List[str] = []
+        lines.append(f"# Commercial report - run {self.ctx.run_id}")
+        lines.append("")
+
+        for row in rows:
+            company_key = row.get("company_key", "")
+            company_name = row.get("company_display") or "Unknown"
+            website = row.get("resolved_domain") or ""
+            company_linkedin = row.get("linkedin_company_url") or ""
+            industry = row.get("industry") or "N/D"
+            size = row.get("company_size") or row.get("employee_range") or "N/D"
+            outreach_status = row.get("outreach_status") or "N/D"
+            priority = row.get("commercial_priority_score") or 0
+
+            jobs = self._build_company_jobs(company_key)
+            contacts = self._build_company_contacts(company_key)
+
+            lines.append(f"## {company_name}")
+            lines.append(f"- Website: {'https://' + website if website else 'N/D'}")
+            lines.append(f"- LinkedIn company: {company_linkedin or 'N/D'}")
+            lines.append(f"- Industry: {industry}")
+            lines.append(f"- Size: {size}")
+            lines.append(f"- Opportunity score: {row.get('opportunity_score', 0)}")
+            lines.append(f"- Commercial priority score: {priority}")
+            lines.append(f"- Outreach status: {outreach_status}")
+            lines.append("")
+
+            lines.append("### Posiciones")
+            if jobs:
+                for idx, job in enumerate(jobs, start=1):
+                    lines.append(f"{idx}. {self._job_summary(job)}")
+                    if job.get("job_url"):
+                        lines.append(f"   - Job URL: {job.get('job_url')}")
+                    if job.get("apply_url"):
+                        lines.append(f"   - Apply URL: {job.get('apply_url')}")
+            else:
+                lines.append("Sin posiciones registradas en este run.")
+            lines.append("")
+
+            lines.append("### Contactos")
+            if contacts:
+                for idx, contact in enumerate(contacts, start=1):
+                    lines.append(
+                        f"{idx}. Nombre: {contact.get('contact_name') or 'N/D'} | "
+                        f"Puesto: {contact.get('contact_title') or 'N/D'} | "
+                        f"Email: {contact.get('email') or 'N/D'} | "
+                        f"LinkedIn: {contact.get('linkedin_url') or 'N/D'} | "
+                        f"Source: {contact.get('lead_source') or 'N/D'} | "
+                        f"Confidence: {contact.get('lead_confidence') or 0} | "
+                        f"Email quality: {contact.get('email_quality_score') or 0}"
+                    )
+            else:
+                lines.append("Sin contactos relevantes todavía.")
+            lines.append("")
+            lines.append("---")
+            lines.append("")
+
+        path = self._output_dir() / "commercial_report.md"
+        output = self._write_text(path, "\n".join(lines).rstrip() + "\n")
+        self.ctx.paths["commercial_report_md"] = output
+        self.ctx.metrics["commercial_report_rows"] = len(rows)
+        return output
+
     def export_all(self) -> None:
         self.export_commercial_pipeline()
         self.export_apollo_import()
+        self.export_commercial_report_markdown()

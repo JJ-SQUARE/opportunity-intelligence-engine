@@ -53,6 +53,22 @@ STOP_ROOT_TOKENS = {
     "and",
 }
 
+PLACEHOLDER_COMPANY_VALUES = {
+    "",
+    "unknown",
+    "confidential",
+    "stealth",
+    "undisclosed",
+    "n/a",
+    "na",
+}
+
+LINKEDIN_TITLE_COMPANY_PATTERNS = [
+    re.compile(r"^(?P<company>.+?)\s+hiring\s+.+$", re.IGNORECASE),
+    re.compile(r"^(?P<title>.+?)\s+at\s+(?P<company>.+)$", re.IGNORECASE),
+    re.compile(r"^(?P<company>.+?)\s+is\s+hiring\s+.+$", re.IGNORECASE),
+]
+
 
 class CompanyIdentityService:
     def __init__(self, ctx: RunContext) -> None:
@@ -62,6 +78,97 @@ class CompanyIdentityService:
         initialize_database(self.db_path)
         self.company_repository = CompanyRepository(db_path)
         self.company_alias_repository = CompanyAliasRepository(db_path)
+
+    def _clean_company_candidate(self, value: str) -> str:
+        candidate = (value or "").strip()
+        if not candidate:
+            return ""
+
+        candidate = re.sub(r"\s+", " ", candidate).strip(" -|,.;:")
+        lowered = candidate.lower()
+
+        if lowered in PLACEHOLDER_COMPANY_VALUES:
+            return ""
+
+        candidate = re.sub(
+            r"\b(remote|remoto|latam|latin america)\b",
+            "",
+            candidate,
+            flags=re.IGNORECASE,
+        )
+        candidate = re.sub(r"\s+", " ", candidate).strip(" -|,.;:")
+        lowered = candidate.lower()
+
+        if lowered in PLACEHOLDER_COMPANY_VALUES:
+            return ""
+
+        if len(candidate) <= 4 and candidate.isalpha():
+            return candidate.upper()
+
+        return candidate
+
+    def _company_from_linkedin_title(self, title: str) -> str:
+        value = (title or "").strip()
+        if not value:
+            return ""
+
+        for pattern in LINKEDIN_TITLE_COMPANY_PATTERNS:
+            match = pattern.match(value)
+            if not match:
+                continue
+
+            company = match.groupdict().get("company", "")
+            cleaned = self._clean_company_candidate(company)
+            if cleaned:
+                return cleaned
+
+        return ""
+
+    def _company_from_linkedin_url(self, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            return ""
+
+        match = re.search(r"-at-([a-z0-9\-]+?)(?:-\d+)?$", value, flags=re.IGNORECASE)
+        if not match:
+            return ""
+
+        raw_company = match.group(1).replace("-", " ").strip()
+        cleaned = self._clean_company_candidate(raw_company)
+        if not cleaned:
+            return ""
+
+        if len(cleaned) <= 4 and cleaned.replace(" ", "").isalpha():
+            return cleaned.upper()
+
+        return " ".join(
+            part.capitalize() if len(part) > 3 else part.upper()
+            for part in cleaned.split()
+        )
+
+    def _infer_company_display(self, company: Dict[str, Any]) -> str:
+        direct = self._clean_company_candidate(company.get("company") or "")
+        if direct:
+            return direct
+
+        source = (company.get("source") or "").strip().lower()
+        if source != "linkedin_serpapi":
+            return "unknown"
+
+        title = company.get("title") or ""
+        inferred = self._company_from_linkedin_title(title)
+        if inferred:
+            return inferred
+
+        inferred = self._company_from_linkedin_url(company.get("job_url") or "")
+        if inferred:
+            return inferred
+
+        inferred = self._company_from_linkedin_url(company.get("url") or "")
+        if inferred:
+            return inferred
+
+        return "unknown"
 
     def normalize_company_name(self, company_name: str) -> str:
         value = (company_name or "").strip().lower()
@@ -156,6 +263,19 @@ class CompanyIdentityService:
 
         return None
 
+
+    def _build_placeholder_identity_seed(self, company: Dict[str, Any]) -> str:
+        parts = [
+            str(company.get("title") or "").strip().lower(),
+            str(company.get("job_url") or "").strip().lower(),
+            str(company.get("apply_url") or "").strip().lower(),
+            str(company.get("url") or "").strip().lower(),
+            str(company.get("description") or "").strip().lower()[:200],
+        ]
+        raw = "|".join(parts)
+        if not raw.strip("|"):
+            raw = str(company.get("source_meta") or "")
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
     def _tokenize_identity_value(self, value: str | None) -> set[str]:
         if not value:
@@ -334,10 +454,17 @@ class CompanyIdentityService:
         unique: Dict[tuple[str, str], Dict[str, Any]] = {}
 
         for company in companies:
-            dedupe_key = (
-                company.get("company_normalized") or "unknown",
-                company.get("resolved_domain") or "",
-            )
+            normalized = company.get("company_normalized") or "unknown"
+            if normalized in PLACEHOLDER_COMPANY_VALUES:
+                dedupe_key = (
+                    company.get("company_key") or f"placeholder::{self._build_placeholder_identity_seed(company)}",
+                    "",
+                )
+            else:
+                dedupe_key = (
+                    normalized,
+                    company.get("resolved_domain") or "",
+                )
 
             if dedupe_key not in unique:
                 unique[dedupe_key] = dict(company)
@@ -383,7 +510,7 @@ class CompanyIdentityService:
         enriched: List[Dict[str, Any]] = []
 
         for company in companies:
-            display = (company.get("company") or "").strip() or "unknown"
+            display = self._infer_company_display(company)
             normalized = self.normalize_company_name(display)
             root = self.normalize_company_root(display)
             resolved_domain = company.get("resolved_domain")
@@ -401,7 +528,13 @@ class CompanyIdentityService:
             record["company_display"] = display
             record["company_normalized"] = normalized
             record["company_root"] = root
-            record["company_key"] = existing_company_key or self.build_company_key(normalized, resolved_domain)
+
+            if normalized in PLACEHOLDER_COMPANY_VALUES:
+                placeholder_seed = self._build_placeholder_identity_seed(record)
+                record["company_key"] = f"cmp_placeholder_{placeholder_seed}"
+            else:
+                record["company_key"] = existing_company_key or self.build_company_key(normalized, resolved_domain)
+
             record["aliases"] = aliases
             record["alias_type_map"] = alias_type_map
 

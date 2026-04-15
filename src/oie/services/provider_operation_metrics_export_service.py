@@ -43,6 +43,8 @@ class ProviderOperationMetricsExportService:
             "errors_rate_limit",
             "errors_http_5xx",
             "errors_execution_error",
+            "errors_auth",
+            "errors_permission",
         ]
 
         with out_path.open("w", newline="", encoding="utf-8") as f:

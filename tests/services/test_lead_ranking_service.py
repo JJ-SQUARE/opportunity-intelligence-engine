@@ -150,3 +150,69 @@ def test_lead_ranking_service_penalizes_non_technical_titles():
     assert ranked[0]["contact_name"] == "Technical"
     assert ranked[0]["lead_score_title"] > ranked[1]["lead_score_title"]
     assert ranked[0]["lead_relevance_score"] > ranked[1]["lead_relevance_score"]
+
+def test_lead_ranking_service_penalizes_contacts_without_email_and_linkedin():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Weak CEO",
+            "contact_title": "CEO",
+            "email": "",
+            "linkedin_url": "",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.9,
+            "email_quality_score": 0,
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Strong Director",
+            "contact_title": "Director of Engineering",
+            "email": "director@acme.com",
+            "linkedin_url": "https://linkedin.com/in/director",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.85,
+            "email_quality_score": 100,
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["contact_name"] == "Strong Director"
+    assert ranked[1]["contact_name"] == "Weak CEO"
+    assert ranked[1]["lead_score_completeness_penalty"] < 0
+
+
+def test_lead_ranking_service_penalizes_generic_director_against_technical_director():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Generic",
+            "contact_title": "Director",
+            "email": "generic@acme.com",
+            "linkedin_url": "https://linkedin.com/in/generic",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.85,
+            "email_quality_score": 100,
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Technical",
+            "contact_title": "Director of Engineering",
+            "email": "technical@acme.com",
+            "linkedin_url": "https://linkedin.com/in/technical",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.85,
+            "email_quality_score": 100,
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["contact_name"] == "Technical"
+    assert ranked[0]["lead_score_title"] > ranked[1]["lead_score_title"]

@@ -19,6 +19,8 @@ KNOWN_SUFFIXES = [
     "errors_rate_limit",
     "errors_http_5xx",
     "errors_execution_error",
+    "errors_auth",
+    "errors_permission",
 ]
 
 
@@ -80,6 +82,8 @@ class ProviderOperationMetricsService:
                     "errors_rate_limit": 0,
                     "errors_http_5xx": 0,
                     "errors_execution_error": 0,
+                    "errors_auth": 0,
+                    "errors_permission": 0,
                 }
 
             if suffix in {"max_calls", "remaining_calls"} and metric_value is None:

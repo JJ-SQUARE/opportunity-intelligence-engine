@@ -13,6 +13,9 @@ TITLE_WEIGHTS = {
     "head of engineering": 85,
     "director of engineering": 80,
     "engineering director": 80,
+    "head of technology": 80,
+    "vp technology": 78,
+    "director of technology": 76,
     "head of product": 70,
     "head of software": 70,
     "software director": 65,
@@ -20,6 +23,9 @@ TITLE_WEIGHTS = {
     "technical lead": 55,
     "engineering manager": 50,
     "software manager": 45,
+    "ceo": 20,
+    "chief executive officer": 20,
+    "director": 15,
 }
 
 NEGATIVE_TITLE_TERMS = {
@@ -36,6 +42,18 @@ NEGATIVE_TITLE_TERMS = {
     "legal": -35,
     "marketing": -20,
     "sales": -20,
+    "customer success": -25,
+    "support": -20,
+}
+
+GENERIC_EXACT_TITLE_SCORES = {
+    "chief": 30,
+    "vp": 25,
+    "vice president": 25,
+    "head": 22,
+    "director": 18,
+    "manager": 12,
+    "lead": 10,
 }
 
 SOURCE_WEIGHTS = {
@@ -49,10 +67,17 @@ class LeadRankingService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
 
+    def _normalized_title(self, title: str) -> str:
+        return " ".join((title or "").strip().lower().replace("/", " ").replace("-", " ").split())
+
     def _title_score(self, title: str) -> int:
-        value = (title or "").strip().lower()
+        value = self._normalized_title(title)
         if not value:
             return 0
+
+        exact_generic_score = GENERIC_EXACT_TITLE_SCORES.get(value)
+        if exact_generic_score is not None:
+            return exact_generic_score
 
         base_score = 0
         for known_title, score in TITLE_WEIGHTS.items():
@@ -83,6 +108,16 @@ class LeadRankingService:
     def _linkedin_score(self, linkedin_url: str) -> int:
         return 10 if (linkedin_url or "").strip() else 0
 
+    def _contact_completeness_penalty(self, email: str, linkedin_url: str) -> int:
+        has_email = bool((email or "").strip())
+        has_linkedin = bool((linkedin_url or "").strip())
+
+        if has_email:
+            return 0
+        if has_linkedin:
+            return -15
+        return -35
+
     def _email_quality_component(self, email_quality_score: Any) -> int:
         try:
             value = int(email_quality_score or 0)
@@ -109,6 +144,10 @@ class LeadRankingService:
             linkedin_score = self._linkedin_score(lead.get("linkedin_url", ""))
             email_quality_score = self._email_quality_component(lead.get("email_quality_score", 0))
             confidence_score = self._confidence_component(lead.get("lead_confidence", 0))
+            completeness_penalty = self._contact_completeness_penalty(
+                lead.get("email", ""),
+                lead.get("linkedin_url", ""),
+            )
 
             lead_relevance_score = (
                 title_score
@@ -117,6 +156,7 @@ class LeadRankingService:
                 + linkedin_score
                 + email_quality_score
                 + confidence_score
+                + completeness_penalty
             )
 
             enriched = dict(lead)
@@ -127,6 +167,7 @@ class LeadRankingService:
             enriched["lead_score_linkedin"] = linkedin_score
             enriched["lead_score_email_quality"] = email_quality_score
             enriched["lead_score_confidence"] = confidence_score
+            enriched["lead_score_completeness_penalty"] = completeness_penalty
             ranked.append(enriched)
 
         ranked.sort(
@@ -180,6 +221,7 @@ class LeadRankingService:
                 "lead_score_linkedin": lead.get("lead_score_linkedin", 0),
                 "lead_score_email_quality": lead.get("lead_score_email_quality", 0),
                 "lead_score_confidence": lead.get("lead_score_confidence", 0),
+                "lead_score_completeness_penalty": lead.get("lead_score_completeness_penalty", 0),
             }
             for lead in ranked[:limit]
         ]
