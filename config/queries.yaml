@@ -147,6 +147,10 @@ providers:
     openai:
       classify_company: 120
       domain_ai_validation: 30
+      score_company: 120
+      score_company_opportunity: 120
+      score_opportunity: 120
+      score_lead: 160
     serpapi:
       search_google: 60
     apollo:

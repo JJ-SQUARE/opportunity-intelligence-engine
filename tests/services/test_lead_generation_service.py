@@ -49,6 +49,10 @@ def test_lead_generation_service_uses_apollo_people_search(tmp_path):
     assert len(leads) == 1
     assert leads[0]["lead_source"] == "apollo_people"
     assert leads[0]["email"] == "jane@acme.com"
+    assert leads[0]["company_display"] == ""
+    assert leads[0]["resolved_domain"] == "acme.com"
+    assert leads[0]["company_type_ai"] == "end_client"
+    assert leads[0]["opportunity_score"] == 25
     assert ctx.metrics["leads_generated"] == 1
 
 

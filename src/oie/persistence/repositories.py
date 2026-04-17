@@ -165,9 +165,11 @@ class ProviderOperationMetricsRepository:
                         errors_timeout,
                         errors_rate_limit,
                         errors_http_5xx,
-                        errors_execution_error
+                        errors_execution_error,
+                        errors_auth,
+                        errors_permission
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         (
@@ -186,6 +188,8 @@ class ProviderOperationMetricsRepository:
                             row.get("errors_rate_limit", 0),
                             row.get("errors_http_5xx", 0),
                             row.get("errors_execution_error", 0),
+                            row.get("errors_auth", 0),
+                            row.get("errors_permission", 0),
                         )
                         for row in rows
                     ],
@@ -652,6 +656,15 @@ class LeadRepository:
                     int(lead.get("email_quality_score") or 0),
                     _clean(lead.get("lead_capture_reason")),
                     float(lead.get("lead_relevance_score") or 0),
+                    _clean(lead.get("lead_priority_label")),
+                    float(lead.get("lead_decision_maker_score") or 0),
+                    float(lead.get("lead_icp_fit_score") or 0),
+                    float(lead.get("lead_contact_completeness_score") or 0),
+                    float(lead.get("lead_penalty_negative_title") or 0),
+                    _clean(lead.get("lead_score_reason")),
+                    _clean(lead.get("lead_scoring_provider")),
+                    _clean(lead.get("lead_scoring_model")),
+                    _clean(lead.get("lead_scoring_mode")),
                 )
                 for lead in leads
             ]
@@ -672,9 +685,18 @@ class LeadRepository:
                         lead_confidence,
                         email_quality_score,
                         lead_capture_reason,
-                        lead_relevance_score
+                        lead_relevance_score,
+                        lead_priority_label,
+                        lead_decision_maker_score,
+                        lead_icp_fit_score,
+                        lead_contact_completeness_score,
+                        lead_penalty_negative_title,
+                        lead_score_reason,
+                        lead_scoring_provider,
+                        lead_scoring_model,
+                        lead_scoring_mode
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     rows,
                 )
@@ -712,11 +734,25 @@ class CompanyScoreRepository:
                     run_id,
                     company.get("company_key"),
                     company.get("opportunity_score"),
+                    company.get("opportunity_label"),
                     company.get("score_openings"),
                     company.get("score_remote"),
                     company.get("score_contractor"),
                     company.get("score_multi_source"),
                     company.get("score_company_type"),
+                    company.get("score_icp_fit"),
+                    company.get("score_pain_urgency"),
+                    company.get("score_region_fit"),
+                    company.get("score_company_scale"),
+                    company.get("score_role_seniority_mix"),
+                    company.get("score_penalty_competitor"),
+                    company.get("score_penalty_negative_signals"),
+                    company.get("primary_service_fit"),
+                    company.get("buyer_persona_fit"),
+                    company.get("opportunity_score_reason"),
+                    company.get("scoring_provider"),
+                    company.get("scoring_model"),
+                    company.get("scoring_mode"),
                 )
                 for company in companies
                 if company.get("company_key")
@@ -728,13 +764,27 @@ class CompanyScoreRepository:
                         run_id,
                         company_key,
                         opportunity_score,
+                        opportunity_label,
                         score_openings,
                         score_remote,
                         score_contractor,
                         score_multi_source,
-                        score_company_type
+                        score_company_type,
+                        score_icp_fit,
+                        score_pain_urgency,
+                        score_region_fit,
+                        score_company_scale,
+                        score_role_seniority_mix,
+                        score_penalty_competitor,
+                        score_penalty_negative_signals,
+                        primary_service_fit,
+                        buyer_persona_fit,
+                        opportunity_score_reason,
+                        scoring_provider,
+                        scoring_model,
+                        scoring_mode
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     rows,
                 )

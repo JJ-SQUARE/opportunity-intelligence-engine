@@ -70,22 +70,50 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
                 run_id,
                 company_key,
                 opportunity_score,
+                opportunity_label,
                 score_openings,
                 score_remote,
                 score_contractor,
                 score_multi_source,
-                score_company_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                score_company_type,
+                score_icp_fit,
+                score_pain_urgency,
+                score_region_fit,
+                score_company_scale,
+                score_role_seniority_mix,
+                score_penalty_competitor,
+                score_penalty_negative_signals,
+                primary_service_fit,
+                buyer_persona_fit,
+                opportunity_score_reason,
+                scoring_provider,
+                scoring_model,
+                scoring_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ctx.run_id,
                 "cmp_acme",
                 32.0,
+                "medium",
                 10.0,
                 8.0,
                 4.0,
                 5.0,
                 5.0,
+                18.0,
+                8.0,
+                3.0,
+                2.0,
+                1.0,
+                -10.0,
+                -5.0,
+                "talent_as_a_service",
+                "medium",
+                "Good fit but still medium priority.",
+                "openai",
+                "gpt-4.1-mini",
+                "live_api",
             ),
         )
 
@@ -105,8 +133,17 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
                 lead_confidence,
                 email_quality_score,
                 lead_capture_reason,
-                lead_relevance_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                lead_relevance_score,
+                lead_priority_label,
+                lead_decision_maker_score,
+                lead_icp_fit_score,
+                lead_contact_completeness_score,
+                lead_penalty_negative_title,
+                lead_score_reason,
+                lead_scoring_provider,
+                lead_scoring_model,
+                lead_scoring_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "lead_1",
@@ -123,6 +160,15 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
                 95,
                 "apollo_match | title:CTO | email_quality:95",
                 80,
+                "high",
+                34,
+                28,
+                18,
+                0,
+                "Strong technical decision-maker.",
+                "openai",
+                "gpt-4.1-mini",
+                "live_api",
             ),
         )
 
@@ -142,8 +188,17 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
                 lead_confidence,
                 email_quality_score,
                 lead_capture_reason,
-                lead_relevance_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                lead_relevance_score,
+                lead_priority_label,
+                lead_decision_maker_score,
+                lead_icp_fit_score,
+                lead_contact_completeness_score,
+                lead_penalty_negative_title,
+                lead_score_reason,
+                lead_scoring_provider,
+                lead_scoring_model,
+                lead_scoring_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "lead_2",
@@ -160,6 +215,15 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
                 70,
                 "hunter_match | title:VP Engineering | email_quality:70",
                 60,
+                "medium",
+                24,
+                20,
+                10,
+                0,
+                "Relevant but weaker than CTO.",
+                "openai",
+                "gpt-4.1-mini",
+                "live_api",
             ),
         )
 
@@ -183,6 +247,13 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
     assert "Acme" in commercial_text
     assert "jane@acme.com" in commercial_text
     assert "best_lead_capture_reason" in commercial_text
+    assert "opportunity_label" in commercial_text
+    assert "score_icp_fit" in commercial_text
+    assert "primary_service_fit" in commercial_text
+    assert "opportunity_score_reason" in commercial_text
+    assert "best_lead_priority_label" in commercial_text
+    assert "best_lead_decision_maker_score" in commercial_text
+    assert "best_lead_score_reason" in commercial_text
     assert "suggested_outreach_channel" in commercial_text
     assert "outreach_status" in commercial_text
     assert "commercial_priority_score" in commercial_text
@@ -308,22 +379,50 @@ def test_outbound_export_service_filters_rows_to_current_run(tmp_path):
                 run_id,
                 company_key,
                 opportunity_score,
+                opportunity_label,
                 score_openings,
                 score_remote,
                 score_contractor,
                 score_multi_source,
-                score_company_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                score_company_type,
+                score_icp_fit,
+                score_pain_urgency,
+                score_region_fit,
+                score_company_scale,
+                score_role_seniority_mix,
+                score_penalty_competitor,
+                score_penalty_negative_signals,
+                primary_service_fit,
+                buyer_persona_fit,
+                opportunity_score_reason,
+                scoring_provider,
+                scoring_model,
+                scoring_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ctx.run_id,
                 "cmp_current",
                 30.0,
+                "medium",
                 10.0,
                 8.0,
                 4.0,
                 3.0,
                 5.0,
+                16.0,
+                7.0,
+                4.0,
+                2.0,
+                1.0,
+                -8.0,
+                -4.0,
+                "agile_solution_delivery",
+                "medium",
+                "Current run scored company.",
+                "openai",
+                "gpt-4.1-mini",
+                "live_api",
             ),
         )
 
@@ -333,22 +432,50 @@ def test_outbound_export_service_filters_rows_to_current_run(tmp_path):
                 run_id,
                 company_key,
                 opportunity_score,
+                opportunity_label,
                 score_openings,
                 score_remote,
                 score_contractor,
                 score_multi_source,
-                score_company_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                score_company_type,
+                score_icp_fit,
+                score_pain_urgency,
+                score_region_fit,
+                score_company_scale,
+                score_role_seniority_mix,
+                score_penalty_competitor,
+                score_penalty_negative_signals,
+                primary_service_fit,
+                buyer_persona_fit,
+                opportunity_score_reason,
+                scoring_provider,
+                scoring_model,
+                scoring_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "older_run",
                 "cmp_old",
                 99.0,
+                "high",
                 40.0,
                 20.0,
                 20.0,
                 10.0,
                 9.0,
+                28.0,
+                20.0,
+                9.0,
+                8.0,
+                7.0,
+                0.0,
+                0.0,
+                "managed_it_services",
+                "high",
+                "Old run scored company.",
+                "openai",
+                "gpt-4.1-mini",
+                "live_api",
             ),
         )
 
@@ -368,8 +495,17 @@ def test_outbound_export_service_filters_rows_to_current_run(tmp_path):
                 lead_confidence,
                 email_quality_score,
                 lead_capture_reason,
-                lead_relevance_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                lead_relevance_score,
+                lead_priority_label,
+                lead_decision_maker_score,
+                lead_icp_fit_score,
+                lead_contact_completeness_score,
+                lead_penalty_negative_title,
+                lead_score_reason,
+                lead_scoring_provider,
+                lead_scoring_model,
+                lead_scoring_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "lead_current",
@@ -386,6 +522,15 @@ def test_outbound_export_service_filters_rows_to_current_run(tmp_path):
                 95,
                 "apollo_match | title:CTO | email_quality:95",
                 80,
+                "high",
+                34,
+                28,
+                18,
+                0,
+                "Current run strong lead.",
+                "openai",
+                "gpt-4.1-mini",
+                "live_api",
             ),
         )
 
@@ -405,8 +550,17 @@ def test_outbound_export_service_filters_rows_to_current_run(tmp_path):
                 lead_confidence,
                 email_quality_score,
                 lead_capture_reason,
-                lead_relevance_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                lead_relevance_score,
+                lead_priority_label,
+                lead_decision_maker_score,
+                lead_icp_fit_score,
+                lead_contact_completeness_score,
+                lead_penalty_negative_title,
+                lead_score_reason,
+                lead_scoring_provider,
+                lead_scoring_model,
+                lead_scoring_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "lead_old",
@@ -423,6 +577,15 @@ def test_outbound_export_service_filters_rows_to_current_run(tmp_path):
                 70,
                 "hunter_match | title:VP Engineering | email_quality:70",
                 60,
+                "medium",
+                24,
+                20,
+                10,
+                0,
+                "Old run relevant lead.",
+                "openai",
+                "gpt-4.1-mini",
+                "live_api",
             ),
         )
 

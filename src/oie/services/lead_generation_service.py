@@ -505,9 +505,14 @@ class LeadGenerationService:
 
         return deduped
 
-    def _map_apollo_people(self, company_key: str, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _map_apollo_people(
+        self,
+        company: Dict[str, Any],
+        payload: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
         people = payload.get("people") or payload.get("contacts") or []
         leads: List[Dict[str, Any]] = []
+        company_key = company.get("company_key") or ""
 
         for person in people:
             title = person.get("title") or ""
@@ -524,6 +529,16 @@ class LeadGenerationService:
             leads.append(
                 {
                     "company_key": company_key,
+                    "company_display": company.get("company_display") or company.get("company") or "",
+                    "company_type_ai": company.get("company_type_ai") or "",
+                    "industry": company.get("industry") or "",
+                    "resolved_domain": company.get("resolved_domain") or "",
+                    "company_size": company.get("company_size") or company.get("employee_range") or "",
+                    "employee_range": company.get("employee_range") or "",
+                    "linkedin_company_url": company.get("linkedin_company_url") or "",
+                    "company_description": company.get("company_description") or "",
+                    "opportunity_score": company.get("opportunity_score") or 0,
+                    "opportunity_label": company.get("opportunity_label") or "",
                     "contact_name": person.get("name") or "",
                     "contact_title": title,
                     "email": email,
@@ -539,13 +554,18 @@ class LeadGenerationService:
         leads.sort(key=self._lead_sort_key, reverse=True)
         return leads[: self.max_apollo_results_per_company]
 
-    def _map_hunter_people(self, company_key: str, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _map_hunter_people(
+        self,
+        company: Dict[str, Any],
+        payload: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
         data = payload.get("data") or {}
         emails = data.get("emails") or []
 
         leads: List[Dict[str, Any]] = []
         filtered_generic = 0
         filtered_low_quality = 0
+        company_key = company.get("company_key") or ""
 
         for item in emails:
             title = item.get("position") or ""
@@ -580,6 +600,16 @@ class LeadGenerationService:
             leads.append(
                 {
                     "company_key": company_key,
+                    "company_display": company.get("company_display") or company.get("company") or "",
+                    "company_type_ai": company.get("company_type_ai") or "",
+                    "industry": company.get("industry") or "",
+                    "resolved_domain": company.get("resolved_domain") or "",
+                    "company_size": company.get("company_size") or company.get("employee_range") or "",
+                    "employee_range": company.get("employee_range") or "",
+                    "linkedin_company_url": company.get("linkedin_company_url") or "",
+                    "company_description": company.get("company_description") or "",
+                    "opportunity_score": company.get("opportunity_score") or 0,
+                    "opportunity_label": company.get("opportunity_label") or "",
                     "contact_name": contact_name,
                     "contact_title": title_value,
                     "email": email,
@@ -668,7 +698,7 @@ class LeadGenerationService:
                 self._failed_apollo_lead_domains.add(domain)
             return []
 
-        return self._map_apollo_people(company_key, payload)
+        return self._map_apollo_people(company, payload)
 
     def _search_hunter_fallback(self, company: Dict[str, Any]) -> List[Dict[str, Any]]:
         client = self.provider_control_service.registry.get_client("hunter")
@@ -699,7 +729,7 @@ class LeadGenerationService:
                 self._failed_hunter_lead_domains.add(domain)
             return []
 
-        return self._map_hunter_people(company_key, payload)
+        return self._map_hunter_people(company, payload)
 
     def generate_leads(self, companies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if self.ctx.flags.get("no_enrichment"):

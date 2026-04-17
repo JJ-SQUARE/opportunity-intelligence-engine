@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from oie.orchestration.run_context import RunContext
+from oie.services.provider_control_service import ProviderControlService
+from oie.services.provider_execution_service import ProviderExecutionService
 
 
 TITLE_WEIGHTS = {
@@ -64,8 +66,18 @@ SOURCE_WEIGHTS = {
 
 
 class LeadRankingService:
-    def __init__(self, ctx: RunContext) -> None:
+    def __init__(
+        self,
+        ctx: RunContext,
+        provider_control_service: Optional[ProviderControlService] = None,
+    ) -> None:
         self.ctx = ctx
+        self.provider_control_service = provider_control_service
+
+        if provider_control_service:
+            self.provider_execution_service = ProviderExecutionService(ctx, provider_control_service)
+        else:
+            self.provider_execution_service = None
 
     def _normalized_title(self, title: str) -> str:
         return " ".join((title or "").strip().lower().replace("/", " ").replace("-", " ").split())
@@ -134,8 +146,126 @@ class LeadRankingService:
         value = max(0.0, min(value, 1.0))
         return int(round(value * 20))
 
+
+    def _build_lead_scoring_context(self) -> Dict[str, Any]:
+        return {
+            "target_buyer_personas": [
+                "cto",
+                "coo",
+                "cdo",
+                "vp engineering",
+                "director of engineering",
+                "engineering director",
+                "head of engineering",
+                "it manager",
+                "innovation manager",
+                "digital channels manager",
+            ],
+            "priority_industries": [
+                "banking and financial services",
+                "bfsi",
+                "insurance",
+                "aerospace",
+                "airlines",
+                "technology",
+                "healthcare",
+                "life sciences",
+                "logistics",
+                "transportation",
+            ],
+            "priority_regions": [
+                "mexico",
+                "panama",
+                "colombia",
+                "chile",
+                "ecuador",
+                "argentina",
+                "uruguay",
+                "peru",
+                "guatemala",
+                "el salvador",
+                "costa rica",
+                "republica dominicana",
+                "dominican republic",
+                "bolivia",
+                "paraguay",
+            ],
+            "commercial_rules": {
+                "company_fit_more_important_than_vacancy_volume": True,
+                "pain_and_buying_probability_are_both_crucial": True,
+                "decision_maker_seniority_required_for_top_scores": True,
+                "competitors_should_be_preserved_but_penalized": True,
+                "multiple_relevant_contacts_per_company_are_valuable": True,
+            },
+        }
+
+    def _normalize_lead_label(self, score: int, label: str | None) -> str:
+        value = (label or "").strip().lower()
+        if value in {"high", "medium", "low"}:
+            return value
+        if score >= 75:
+            return "high"
+        if score >= 45:
+            return "medium"
+        return "low"
+
+    def _score_lead_with_llm(self, lead: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if not self.provider_control_service or not self.provider_execution_service:
+            return None
+
+        if self.ctx.flags.get("no_llm"):
+            return None
+
+        client = self.provider_control_service.registry.get_client("openai")
+        if client is None:
+            return None
+
+        score_fn = getattr(client, "score_lead", None)
+        if not callable(score_fn):
+            return None
+
+        try:
+            payload = dict(lead)
+            payload["lead_scoring_context"] = self._build_lead_scoring_context()
+
+            result = self.provider_execution_service.execute(
+                "openai",
+                "score_lead",
+                score_fn,
+                payload,
+                cost=1,
+            )
+            if not result or not isinstance(result, dict):
+                return None
+
+            lead_score = result.get("lead_relevance_score")
+            if lead_score is None:
+                return None
+
+            score_int = max(0, min(int(lead_score), 100))
+
+            return {
+                "lead_relevance_score": score_int,
+                "lead_priority_label": self._normalize_lead_label(
+                    score_int,
+                    result.get("lead_priority_label"),
+                ),
+                "lead_decision_maker_score": int(result.get("lead_decision_maker_score", 0) or 0),
+                "lead_icp_fit_score": int(result.get("lead_icp_fit_score", 0) or 0),
+                "lead_contact_completeness_score": int(result.get("lead_contact_completeness_score", 0) or 0),
+                "lead_penalty_negative_title": int(result.get("lead_penalty_negative_title", 0) or 0),
+                "lead_score_reason": str(result.get("lead_score_reason") or "").strip(),
+                "lead_scoring_provider": str(result.get("lead_scoring_provider") or "openai").strip().lower(),
+                "lead_scoring_model": str(result.get("lead_scoring_model") or "").strip(),
+                "lead_scoring_mode": str(result.get("lead_scoring_mode") or "llm").strip().lower(),
+            }
+        except Exception:
+            return None
+
     def rank_leads(self, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         ranked: List[Dict[str, Any]] = []
+        llm_used = 0
+        rules_used = 0
 
         for lead in leads:
             title_score = self._title_score(lead.get("contact_title", ""))
@@ -168,6 +298,19 @@ class LeadRankingService:
             enriched["lead_score_email_quality"] = email_quality_score
             enriched["lead_score_confidence"] = confidence_score
             enriched["lead_score_completeness_penalty"] = completeness_penalty
+            enriched["lead_priority_label"] = self._normalize_lead_label(lead_relevance_score, None)
+            enriched["lead_score_reason"] = ""
+            enriched["lead_scoring_provider"] = "rules"
+            enriched["lead_scoring_model"] = ""
+            enriched["lead_scoring_mode"] = "fallback_rules"
+
+            llm_result = self._score_lead_with_llm(enriched)
+            if llm_result:
+                enriched.update(llm_result)
+                llm_used += 1
+            else:
+                rules_used += 1
+
             ranked.append(enriched)
 
         ranked.sort(
@@ -183,6 +326,8 @@ class LeadRankingService:
             reverse=True,
         )
         self.ctx.metrics["leads_ranked"] = len(ranked)
+        self.ctx.metrics["lead_scoring_llm_used"] = llm_used
+        self.ctx.metrics["lead_scoring_rules_used"] = rules_used
         return ranked
 
     def select_best_lead_per_company(self, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -222,6 +367,11 @@ class LeadRankingService:
                 "lead_score_email_quality": lead.get("lead_score_email_quality", 0),
                 "lead_score_confidence": lead.get("lead_score_confidence", 0),
                 "lead_score_completeness_penalty": lead.get("lead_score_completeness_penalty", 0),
+                "lead_priority_label": lead.get("lead_priority_label", ""),
+                "lead_score_reason": lead.get("lead_score_reason", ""),
+                "lead_scoring_provider": lead.get("lead_scoring_provider", ""),
+                "lead_scoring_model": lead.get("lead_scoring_model", ""),
+                "lead_scoring_mode": lead.get("lead_scoring_mode", ""),
             }
             for lead in ranked[:limit]
         ]

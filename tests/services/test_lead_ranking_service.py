@@ -216,3 +216,110 @@ def test_lead_ranking_service_penalizes_generic_director_against_technical_direc
 
     assert ranked[0]["contact_name"] == "Technical"
     assert ranked[0]["lead_score_title"] > ranked[1]["lead_score_title"]
+
+
+def test_lead_ranking_service_uses_llm_shape_when_available():
+    captured = {}
+
+    class DummyRegistry:
+        def get_client(self, name):
+            class DummyOpenAIClient:
+                def score_lead(self, payload):
+                    captured["payload"] = payload
+                    return {
+                        "lead_relevance_score": 88,
+                        "lead_priority_label": "high",
+                        "lead_decision_maker_score": 34,
+                        "lead_icp_fit_score": 28,
+                        "lead_contact_completeness_score": 18,
+                        "lead_penalty_negative_title": 0,
+                        "lead_score_reason": "Strong technical decision-maker with reachable channel.",
+                        "lead_scoring_provider": "openai",
+                        "lead_scoring_model": "gpt-4.1-mini",
+                        "lead_scoring_mode": "live_api",
+                    }
+            return DummyOpenAIClient()
+
+    class DummyProviderControlService:
+        def __init__(self):
+            self.registry = DummyRegistry()
+
+    class DummyProviderExecutionService:
+        def execute(self, provider_name, operation_name, func, *args, **kwargs):
+            return func(*args)
+
+    ctx = RunContext.create(config={}, flags={})
+    control = DummyProviderControlService()
+    service = LeadRankingService(ctx, control)
+    service.provider_execution_service = DummyProviderExecutionService()
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "company_display": "Acme BFSI",
+            "industry": "Banking and Financial Services",
+            "resolved_domain": "acme.com",
+            "company_type_ai": "end_client",
+            "opportunity_score": 82,
+            "contact_name": "Jane Doe",
+            "contact_title": "CTO",
+            "email": "jane@acme.com",
+            "linkedin_url": "https://linkedin.com/in/jane",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.9,
+            "email_quality_score": 95,
+        }
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["lead_relevance_score"] == 88
+    assert ranked[0]["lead_priority_label"] == "high"
+    assert ranked[0]["lead_scoring_provider"] == "openai"
+    assert "lead_scoring_context" in captured["payload"]
+    assert captured["payload"]["lead_scoring_context"]["commercial_rules"]["decision_maker_seniority_required_for_top_scores"] is True
+    assert "banking and financial services" in captured["payload"]["lead_scoring_context"]["priority_industries"]
+
+
+def test_lead_ranking_service_tracks_llm_vs_rules_metrics():
+    class DummyRegistry:
+        def get_client(self, name):
+            class DummyOpenAIClient:
+                def score_lead(self, payload):
+                    return {
+                        "lead_relevance_score": 80,
+                        "lead_priority_label": "high",
+                    }
+            return DummyOpenAIClient()
+
+    class DummyProviderControlService:
+        def __init__(self):
+            self.registry = DummyRegistry()
+
+    class DummyProviderExecutionService:
+        def execute(self, provider_name, operation_name, func, *args, **kwargs):
+            return func(*args)
+
+    ctx = RunContext.create(config={}, flags={})
+    control = DummyProviderControlService()
+    service = LeadRankingService(ctx, control)
+    service.provider_execution_service = DummyProviderExecutionService()
+
+    ranked = service.rank_leads(
+        [
+            {
+                "company_key": "cmp_a",
+                "contact_name": "A",
+                "contact_title": "CTO",
+                "email": "a@acme.com",
+                "linkedin_url": "",
+                "lead_source": "apollo_people",
+                "lead_confidence": 0.9,
+                "email_quality_score": 90,
+            }
+        ]
+    )
+
+    assert len(ranked) == 1
+    assert ctx.metrics["lead_scoring_llm_used"] == 1
+    assert ctx.metrics["lead_scoring_rules_used"] == 0

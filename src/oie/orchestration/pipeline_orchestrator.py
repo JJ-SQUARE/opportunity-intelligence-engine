@@ -60,7 +60,10 @@ class PipelineOrchestrator:
         self.company_identity_service = CompanyIdentityService(ctx)
         self.provider_control_service = ProviderControlService(ctx)
         self.domain_resolution_service = DomainResolutionService(ctx, self.provider_control_service)
-        self.opportunity_scoring_service = OpportunityScoringService(ctx)
+        self.opportunity_scoring_service = OpportunityScoringService(
+            ctx,
+            self.provider_control_service,
+        )
         self.persistence_service = PersistenceService(ctx)
         self.master_data_service = MasterDataService(ctx)
         self.master_dedup_service = MasterDedupService(ctx)
@@ -103,7 +106,10 @@ class PipelineOrchestrator:
             ctx,
             self.provider_control_service,
         )
-        self.lead_ranking_service = LeadRankingService(ctx)
+        self.lead_ranking_service = LeadRankingService(
+            ctx,
+            self.provider_control_service,
+        )
         self.serpapi_search_service = SerpAPISearchService(ctx, self.provider_control_service)
         self.domain_ai_validation_service = DomainAIValidationService(
             ctx,

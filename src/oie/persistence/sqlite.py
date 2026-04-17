@@ -163,6 +163,8 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 errors_rate_limit INTEGER DEFAULT 0,
                 errors_http_5xx INTEGER DEFAULT 0,
                 errors_execution_error INTEGER DEFAULT 0,
+                errors_auth INTEGER DEFAULT 0,
+                errors_permission INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (run_id) REFERENCES runs (run_id)
             );
@@ -173,11 +175,25 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 run_id TEXT NOT NULL,
                 company_key TEXT NOT NULL,
                 opportunity_score REAL,
+                opportunity_label TEXT,
                 score_openings REAL,
                 score_remote REAL,
                 score_contractor REAL,
                 score_multi_source REAL,
                 score_company_type REAL,
+                score_icp_fit REAL,
+                score_pain_urgency REAL,
+                score_region_fit REAL,
+                score_company_scale REAL,
+                score_role_seniority_mix REAL,
+                score_penalty_competitor REAL,
+                score_penalty_negative_signals REAL,
+                primary_service_fit TEXT,
+                buyer_persona_fit TEXT,
+                opportunity_score_reason TEXT,
+                scoring_provider TEXT,
+                scoring_model TEXT,
+                scoring_mode TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (run_id) REFERENCES runs (run_id),
                 FOREIGN KEY (company_key) REFERENCES companies (company_key)
@@ -278,6 +294,8 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
             "blocked_provider": "INTEGER DEFAULT 0",
             "errors_rate_limit": "INTEGER DEFAULT 0",
             "errors_http_5xx": "INTEGER DEFAULT 0",
+            "errors_auth": "INTEGER DEFAULT 0",
+            "errors_permission": "INTEGER DEFAULT 0",
         }
         for column_name, column_type in required_provider_operation_metrics_columns.items():
             if column_name not in provider_operation_metrics_columns:
@@ -301,10 +319,40 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
             "email_quality_score": "INTEGER DEFAULT 0",
             "lead_capture_reason": "TEXT",
             "lead_relevance_score": "REAL DEFAULT 0",
+            "lead_priority_label": "TEXT",
+            "lead_decision_maker_score": "REAL DEFAULT 0",
+            "lead_icp_fit_score": "REAL DEFAULT 0",
+            "lead_contact_completeness_score": "REAL DEFAULT 0",
+            "lead_penalty_negative_title": "REAL DEFAULT 0",
+            "lead_score_reason": "TEXT",
+            "lead_scoring_provider": "TEXT",
+            "lead_scoring_model": "TEXT",
+            "lead_scoring_mode": "TEXT",
         }
         for column_name, column_type in required_lead_columns.items():
             if column_name not in lead_columns:
                 conn.execute(f"ALTER TABLE leads ADD COLUMN {column_name} {column_type}")
+
+        company_score_columns = {row["name"] for row in conn.execute("PRAGMA table_info(company_scores)").fetchall()}
+        required_company_score_columns = {
+            "opportunity_label": "TEXT",
+            "score_icp_fit": "REAL",
+            "score_pain_urgency": "REAL",
+            "score_region_fit": "REAL",
+            "score_company_scale": "REAL",
+            "score_role_seniority_mix": "REAL",
+            "score_penalty_competitor": "REAL",
+            "score_penalty_negative_signals": "REAL",
+            "primary_service_fit": "TEXT",
+            "buyer_persona_fit": "TEXT",
+            "opportunity_score_reason": "TEXT",
+            "scoring_provider": "TEXT",
+            "scoring_model": "TEXT",
+            "scoring_mode": "TEXT",
+        }
+        for column_name, column_type in required_company_score_columns.items():
+            if column_name not in company_score_columns:
+                conn.execute(f"ALTER TABLE company_scores ADD COLUMN {column_name} {column_type}")
 
         conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_job_fingerprint ON jobs (job_fingerprint)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_lead_fingerprint ON leads (lead_fingerprint)")
