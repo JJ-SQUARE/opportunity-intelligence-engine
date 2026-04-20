@@ -636,3 +636,55 @@ def test_is_relevant_title_accepts_common_buyer_titles(tmp_path):
     assert service._is_relevant_title("Director of Software Engineering") is True
     assert service._is_relevant_title("Head of Platform Engineering") is True
     assert service._is_relevant_title("IT Director") is True
+
+
+def test_lead_generation_service_skips_competitor_company(tmp_path):
+    ctx = RunContext.create(
+        config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
+            "providers": {
+                "limits": {"apollo": 5, "hunter": 5},
+                "clients": {
+                    "apollo": {"api_key": "fake-apollo"},
+                    "hunter": {"api_key": "fake-hunter"},
+                },
+            }
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    apollo_client = control.registry.get_client("apollo")
+    hunter_client = control.registry.get_client("hunter")
+    calls = {"apollo": 0, "hunter": 0}
+
+    def fake_apollo(domain, titles):
+        calls["apollo"] += 1
+        return {"people": []}
+
+    def fake_hunter(domain):
+        calls["hunter"] += 1
+        return {"data": {"emails": []}}
+
+    apollo_client.search_people_by_domain_and_titles = fake_apollo
+    hunter_client.search_domain_contacts = fake_hunter
+
+    service = LeadGenerationService(ctx, control)
+    leads = service.generate_leads(
+        [
+            {
+                "company_key": "cmp_competitor",
+                "resolved_domain": "competitor.com",
+                "domain_validation_status": "accepted",
+                "company_type_ai": "competitor",
+                "classification_confidence_ai": 1.0,
+                "opportunity_score": 60,
+                "benchmark_only": True,
+            }
+        ]
+    )
+
+    assert leads == []
+    assert calls["apollo"] == 0
+    assert calls["hunter"] == 0

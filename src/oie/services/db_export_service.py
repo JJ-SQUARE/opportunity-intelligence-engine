@@ -52,16 +52,36 @@ class DBExportService:
         path = self._export_query_to_csv(
             """
             SELECT
-                company_key,
-                company_display,
-                company_normalized,
-                resolved_domain,
-                domain_source,
-                domain_confidence
-            FROM companies
-            ORDER BY company_display
+                c.company_key,
+                c.company_display,
+                c.company_normalized,
+                c.resolved_domain,
+                c.domain_source,
+                c.domain_confidence,
+                c.domain_candidate,
+                c.domain_validation_status,
+                c.domain_review_required,
+                c.domain_ai_decision,
+                c.industry,
+                c.employee_range,
+                c.company_size,
+                c.linkedin_company_url,
+                c.company_description,
+                c.company_type_ai,
+                c.classification_confidence_ai
+            FROM companies c
+            INNER JOIN (
+                SELECT DISTINCT company_key
+                FROM company_scores
+                WHERE run_id = ?
+                  AND company_key IS NOT NULL
+                  AND company_key <> ''
+            ) rs
+                ON rs.company_key = c.company_key
+            ORDER BY c.company_display, c.company_key
             """,
             "companies_export.csv",
+            (self.ctx.run_id,),
         )
         self.ctx.paths["companies_export"] = path
         return path

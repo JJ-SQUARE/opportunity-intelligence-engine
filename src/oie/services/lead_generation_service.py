@@ -648,6 +648,9 @@ class LeadGenerationService:
         classification_confidence = float(company.get("classification_confidence_ai") or 0.0)
         opportunity_score = float(company.get("opportunity_score") or 0.0)
 
+        if company.get("benchmark_only") or company_type == "competitor":
+            return False
+
         if not company_key or not domain:
             return False
 

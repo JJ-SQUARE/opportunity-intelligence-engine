@@ -13,6 +13,12 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
         config={
             "database": {"path": str(db_path)},
             "outputs": {"path": str(outputs_path)},
+            "hubspot": {
+                "owner_id": "owner_123",
+                "target_account": "tekton_enterprise_sales",
+                "source_tag": "OIE",
+                "max_contacts_per_company": 3,
+            },
         },
         flags={},
     )
@@ -236,12 +242,27 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
 
     commercial_path = Path(ctx.paths["commercial_pipeline_csv"])
     apollo_path = Path(ctx.paths["apollo_import_csv"])
+    hubspot_companies_path = Path(ctx.paths["hubspot_companies_json"])
+    hubspot_contacts_path = Path(ctx.paths["hubspot_contacts_json"])
+    hubspot_tasks_path = Path(ctx.paths["hubspot_tasks_json"])
+    hubspot_notes_path = Path(ctx.paths["hubspot_notes_json"])
+    commercial_report_path = Path(ctx.paths["commercial_report_md"])
 
     assert commercial_path.exists()
     assert apollo_path.exists()
+    assert hubspot_companies_path.exists()
+    assert hubspot_contacts_path.exists()
+    assert hubspot_tasks_path.exists()
+    assert hubspot_notes_path.exists()
+    assert commercial_report_path.exists()
 
     commercial_text = commercial_path.read_text(encoding="utf-8")
     apollo_text = apollo_path.read_text(encoding="utf-8")
+    hubspot_companies_text = hubspot_companies_path.read_text(encoding="utf-8")
+    hubspot_contacts_text = hubspot_contacts_path.read_text(encoding="utf-8")
+    hubspot_tasks_text = hubspot_tasks_path.read_text(encoding="utf-8")
+    hubspot_notes_text = hubspot_notes_path.read_text(encoding="utf-8")
+    commercial_report_text = commercial_report_path.read_text(encoding="utf-8")
 
     assert "company_display" in commercial_text
     assert "Acme" in commercial_text
@@ -268,8 +289,44 @@ def test_outbound_export_service_exports_commercial_pipeline_and_apollo_import(t
 
     assert "website" in apollo_text
     assert "acme.com" in apollo_text
+
+    assert "Acme" in hubspot_companies_text
+    assert '"domain": "acme.com"' in hubspot_companies_text
+    assert '"type": "PROSPECT"' in hubspot_companies_text
+    assert "Opportunity score: 32.0" in hubspot_companies_text
+    assert "Commercial priority score" in hubspot_companies_text
+    assert "Run timestamp:" in hubspot_companies_text
+    assert "ready_email" in hubspot_companies_text
+    assert "OIE" in hubspot_companies_text
+
+    assert "jane@acme.com" in hubspot_contacts_text
+    assert "John Roe" in hubspot_tasks_text
+    assert "Score: 32.0 | Source: OIE" in hubspot_contacts_text
+    assert '"lifecyclestage": "opportunity"' in hubspot_contacts_text
+
+    assert "Revisar reporte: John Roe (Acme)" in hubspot_tasks_text
+    assert "Run timestamp:" in hubspot_tasks_text
+    assert "### Posiciones" in hubspot_tasks_text
+    assert '"hs_task_priority": "HIGH"' in hubspot_tasks_text
+
+    assert "Run timestamp:" in hubspot_notes_text
+    assert "Top jobs:" in hubspot_notes_text
+    assert "Selected contacts:" in hubspot_notes_text
+
+    assert "# Commercial Report" in commercial_report_text
+    assert "## Actionable companies" in commercial_report_text
+    assert "### 1. Acme" in commercial_report_text
+    assert "- Best contact email: jane@acme.com" in commercial_report_text
+    assert "#### Top jobs" in commercial_report_text
+    assert "#### Selected contacts" in commercial_report_text
+    assert "## Benchmark competitors" in commercial_report_text
+
     assert ctx.metrics["commercial_pipeline_rows"] == 1
     assert ctx.metrics["apollo_import_rows"] == 1
+    assert ctx.metrics["hubspot_companies_rows"] == 1
+    assert ctx.metrics["hubspot_contacts_rows"] == 1
+    assert ctx.metrics["hubspot_tasks_rows"] == 2
+    assert ctx.metrics["hubspot_notes_rows"] == 1
 
 def test_outbound_export_service_filters_rows_to_current_run(tmp_path):
     db_path = tmp_path / "oie.db"
@@ -279,6 +336,12 @@ def test_outbound_export_service_filters_rows_to_current_run(tmp_path):
         config={
             "database": {"path": str(db_path)},
             "outputs": {"path": str(outputs_path)},
+            "hubspot": {
+                "owner_id": "owner_123",
+                "target_account": "tekton_enterprise_sales",
+                "source_tag": "OIE",
+                "max_contacts_per_company": 3,
+            },
         },
         flags={},
     )
@@ -598,6 +661,11 @@ def test_outbound_export_service_filters_rows_to_current_run(tmp_path):
 
     commercial_text = Path(ctx.paths["commercial_pipeline_csv"]).read_text(encoding="utf-8")
     apollo_text = Path(ctx.paths["apollo_import_csv"]).read_text(encoding="utf-8")
+    hubspot_companies_text = Path(ctx.paths["hubspot_companies_json"]).read_text(encoding="utf-8")
+    hubspot_contacts_text = Path(ctx.paths["hubspot_contacts_json"]).read_text(encoding="utf-8")
+    hubspot_tasks_text = Path(ctx.paths["hubspot_tasks_json"]).read_text(encoding="utf-8")
+    hubspot_notes_text = Path(ctx.paths["hubspot_notes_json"]).read_text(encoding="utf-8")
+    commercial_report_text = Path(ctx.paths["commercial_report_md"]).read_text(encoding="utf-8")
 
     assert "Current Co" in commercial_text
     assert "currentco.com" in commercial_text
@@ -609,4 +677,25 @@ def test_outbound_export_service_filters_rows_to_current_run(tmp_path):
 
     assert "currentco.com" in apollo_text
     assert "oldco.com" not in apollo_text
+
+    assert "Current Co" in hubspot_companies_text
+    assert '"domain": "currentco.com"' in hubspot_companies_text
+    assert "Opportunity score: 30.0" in hubspot_companies_text
+    assert "ready_email" in hubspot_companies_text
+    assert "OIE" in hubspot_companies_text
+
+    assert "jane@currentco.com" in hubspot_contacts_text
+    assert "Score: 30.0 | Source: OIE" in hubspot_contacts_text
+    assert '"lifecyclestage": "opportunity"' in hubspot_contacts_text
+
+    assert "Current Co" in hubspot_tasks_text
+    assert "Revisar reporte: Jane Current (Current Co)" in hubspot_tasks_text
+    assert "### Posiciones" in hubspot_tasks_text
+
+    assert "Current Co" in hubspot_notes_text
+    assert "Current Co" in commercial_report_text
+
+    assert "Old Co" not in hubspot_companies_text
+    assert "oldco.com" not in hubspot_companies_text
+    assert "john@oldco.com" not in hubspot_contacts_text
 

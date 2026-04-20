@@ -57,6 +57,21 @@ class CompanyClassificationService:
             classified = []
             for company in companies:
                 enriched = dict(company)
+                company_type = str(enriched.get("company_type_ai") or "").strip().lower()
+
+                if enriched.get("benchmark_only") or company_type == "competitor":
+                    enriched["company_type_ai"] = "competitor"
+                    enriched["classification_confidence_ai"] = float(
+                        enriched.get("classification_confidence_ai") or 1.0
+                    )
+                    enriched["classification_provider"] = (
+                        enriched.get("classification_provider")
+                        or enriched.get("classification_source")
+                        or "benchmark_config"
+                    )
+                    classified.append(enriched)
+                    continue
+
                 rule_result = self._rule_based_classification(company)
                 if rule_result:
                     enriched["company_type_ai"] = rule_result["classification"]
@@ -76,6 +91,22 @@ class CompanyClassificationService:
         classified: List[Dict[str, Any]] = []
 
         for company in companies:
+            enriched = dict(company)
+            company_type = str(enriched.get("company_type_ai") or "").strip().lower()
+
+            if enriched.get("benchmark_only") or company_type == "competitor":
+                enriched["company_type_ai"] = "competitor"
+                enriched["classification_confidence_ai"] = float(
+                    enriched.get("classification_confidence_ai") or 1.0
+                )
+                enriched["classification_provider"] = (
+                    enriched.get("classification_provider")
+                    or enriched.get("classification_source")
+                    or "benchmark_config"
+                )
+                classified.append(enriched)
+                continue
+
             try:
                 result = self.provider_execution_service.execute(
                     "openai",
@@ -91,7 +122,6 @@ class CompanyClassificationService:
                     "provider": "fallback_rules",
                 }
 
-            enriched = dict(company)
             enriched["company_type_ai"] = result.get("classification")
             enriched["classification_confidence_ai"] = result.get("confidence")
             enriched["classification_provider"] = result.get("provider")

@@ -271,3 +271,50 @@ def test_opportunity_scoring_service_tracks_llm_vs_rules_metrics():
 
     assert ctx.metrics["scoring_llm_used"] == 2
     assert ctx.metrics["scoring_rules_used"] == 0
+
+
+def test_opportunity_scoring_service_skips_llm_for_benchmark_competitor():
+    class DummyRegistry:
+        def get_client(self, name):
+            class DummyOpenAIClient:
+                def score_company(self, company_payload):
+                    raise AssertionError("LLM no debería ejecutarse para benchmark competitor")
+            return DummyOpenAIClient()
+
+    class DummyProviderControlService:
+        def __init__(self):
+            self.registry = DummyRegistry()
+
+    class DummyProviderExecutionService:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, provider_name, operation_name, func, *args, **kwargs):
+            self.calls.append((provider_name, operation_name))
+            return func(*args)
+
+    ctx = RunContext.create(config={}, flags={})
+    control = DummyProviderControlService()
+    service = OpportunityScoringService(ctx, control)
+    service.provider_execution_service = DummyProviderExecutionService()
+
+    companies = [
+        {
+            "company_key": "cmp_comp",
+            "company_display": "Competitor Co",
+            "total_openings": 3,
+            "remote_jobs": 1,
+            "contractor_jobs": 0,
+            "multi_source_signal": True,
+            "company_type_ai": "competitor",
+            "benchmark_only": True,
+        }
+    ]
+
+    scored = service.score_companies(companies)
+
+    assert len(scored) == 1
+    assert scored[0]["company_key"] == "cmp_comp"
+    assert scored[0]["scoring_provider"] == "rules"
+    assert scored[0]["scoring_mode"] == "fallback_rules"
+    assert service.provider_execution_service.calls == []

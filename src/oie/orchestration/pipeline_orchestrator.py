@@ -38,6 +38,7 @@ from oie.services.opportunity_scoring_service import OpportunityScoringService
 from oie.services.outbound_export_service import OutboundExportService
 from oie.services.persistence_service import PersistenceService
 from oie.services.provider_control_service import ProviderControlService
+from oie.services.provider_execution_service import ProviderExecutionService
 from oie.services.provider_operation_metrics_service import ProviderOperationMetricsService
 from oie.services.provider_operation_metrics_export_service import ProviderOperationMetricsExportService
 from oie.services.run_readiness_export_service import RunReadinessExportService
@@ -59,6 +60,7 @@ class PipelineOrchestrator:
         self.hiring_signals_service = HiringSignalsService(ctx)
         self.company_identity_service = CompanyIdentityService(ctx)
         self.provider_control_service = ProviderControlService(ctx)
+        self.provider_execution_service = ProviderExecutionService(ctx, self.provider_control_service)
         self.domain_resolution_service = DomainResolutionService(ctx, self.provider_control_service)
         self.opportunity_scoring_service = OpportunityScoringService(
             ctx,
@@ -234,20 +236,125 @@ class PipelineOrchestrator:
         self.ctx.metrics["companies_limit_truncated"] = max(len(sorted_companies) - len(limited), 0)
         return limited
 
+
+    def _competitor_patterns_from_config(self) -> List[str]:
+        patterns: List[str] = []
+
+        candidates = [
+            ((self.ctx.config.get("benchmark", {}) or {}).get("competitors")),
+            ((self.ctx.config.get("commercial", {}) or {}).get("benchmark_competitors")),
+            self.ctx.config.get("competitors"),
+        ]
+
+        for candidate in candidates:
+            if not candidate:
+                continue
+
+            if isinstance(candidate, str):
+                value = candidate.strip().lower()
+                if value:
+                    patterns.append(value)
+                continue
+
+            if isinstance(candidate, dict):
+                for key in ("name", "domain", "company", "website"):
+                    value = str(candidate.get(key) or "").strip().lower()
+                    if value:
+                        patterns.append(value)
+                continue
+
+            if isinstance(candidate, list):
+                for item in candidate:
+                    if isinstance(item, str):
+                        value = item.strip().lower()
+                        if value:
+                            patterns.append(value)
+                    elif isinstance(item, dict):
+                        for key in ("name", "domain", "company", "website"):
+                            value = str(item.get(key) or "").strip().lower()
+                            if value:
+                                patterns.append(value)
+
+        deduped: List[str] = []
+        seen = set()
+        for pattern in patterns:
+            if pattern not in seen:
+                seen.add(pattern)
+                deduped.append(pattern)
+
+        return deduped
+
+    def _split_benchmark_competitors(
+        self,
+        companies: List[Dict[str, Any]],
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        patterns = self._competitor_patterns_from_config()
+        if not patterns:
+            self.ctx.metrics["benchmark_competitors_detected"] = 0
+            return companies, []
+
+        actionable: List[Dict[str, Any]] = []
+        benchmark: List[Dict[str, Any]] = []
+
+        for company in companies:
+            record = dict(company)
+
+            haystacks = [
+                str(record.get("company_display") or "").strip().lower(),
+                str(record.get("company") or "").strip().lower(),
+                str(record.get("company_normalized") or "").strip().lower(),
+                str(record.get("resolved_domain") or "").strip().lower(),
+                str(record.get("linkedin_company_url") or "").strip().lower(),
+            ]
+            blob = " | ".join(v for v in haystacks if v)
+
+            is_competitor = any(pattern and pattern in blob for pattern in patterns)
+            if is_competitor:
+                record["benchmark_only"] = True
+                record["company_type_ai"] = "competitor"
+                record["classification_confidence_ai"] = 1.0
+                record["classification_source"] = "config_benchmark_competitor"
+                record.setdefault("opportunity_label", "benchmark")
+                benchmark.append(record)
+            else:
+                actionable.append(record)
+
+        self.ctx.metrics["benchmark_competitors_detected"] = len(benchmark)
+        return actionable, benchmark
+
+    def _companies_for_lead_generation(
+        self,
+        companies: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        filtered: List[Dict[str, Any]] = []
+        skipped = 0
+
+        for company in companies:
+            company_type = str(company.get("company_type_ai") or "").strip().lower()
+            if company.get("benchmark_only") or company_type == "competitor":
+                skipped += 1
+                continue
+            filtered.append(company)
+
+        self.ctx.metrics["benchmark_competitors_skipped_for_leads"] = skipped
+        return filtered
+
     def run_company_pipeline(self) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         jobs = self.run_initial_stages()
         unique_jobs, duplicate_jobs = self.master_dedup_service.dedupe_jobs_against_master(jobs)
 
         companies = self.hiring_signals_service.aggregate_by_company(unique_jobs)
-        companies = self.domain_resolution_service.resolve_domains(companies)
-        companies = self.company_identity_service.enrich_company_identity(companies)
-        companies = self.company_classification_service.classify_companies(companies)
-        companies = self.opportunity_scoring_service.score_companies(companies)
-        companies = self.company_enrichment_service.enrich_companies(companies)
+        actionable_companies, benchmark_companies = self._split_benchmark_competitors(companies)
 
+        actionable_companies = self.domain_resolution_service.resolve_domains(actionable_companies)
+        actionable_companies = self.company_identity_service.enrich_company_identity(actionable_companies)
+        actionable_companies = self.company_classification_service.classify_companies(actionable_companies)
+        actionable_companies = self.opportunity_scoring_service.score_companies(actionable_companies)
+        actionable_companies = self.company_enrichment_service.enrich_companies(actionable_companies)
+        actionable_companies = self._limit_companies_for_run(actionable_companies)
+
+        companies = actionable_companies + benchmark_companies
         jobs_with_company_keys = self._attach_company_keys_to_jobs(unique_jobs, companies)
-
-        companies = self._limit_companies_for_run(companies)
 
         allowed_company_keys = {
             company.get("company_key")
@@ -281,7 +388,7 @@ class PipelineOrchestrator:
             self.provider_control_service.sync_budget_metrics()
 
             unique_jobs, companies, duplicate_jobs = self.run_company_pipeline()
-            leads = self.lead_generation_service.generate_leads(companies)
+            leads = self.lead_generation_service.generate_leads(self._companies_for_lead_generation(companies))
             ranked_leads = self.lead_ranking_service.rank_leads(leads)
             best_leads = self.lead_ranking_service.select_best_lead_per_company(ranked_leads)
             best_leads, duplicate_leads = self.master_dedup_service.dedupe_leads_against_master(best_leads)
@@ -312,6 +419,10 @@ class PipelineOrchestrator:
             self.opportunity_dataset_export_service.export_dataset(dataset)
             self.opportunity_dataset_export_service.export_top_dataset(top_dataset)
             self.outbound_export_service.export_all()
+            hubspot_push_result = self.outbound_export_service.push_hubspot_payloads(
+                self.provider_execution_service
+            )
+            self.ctx.provider_state["hubspot_push_result"] = hubspot_push_result
 
             executive_summary = self.executive_summary_service.build_summary(companies, best_leads)
             self.executive_summary_service.write_summary(executive_summary)
@@ -416,7 +527,13 @@ class PipelineOrchestrator:
                 "opportunities_export": self.ctx.paths.get("opportunities_export"),
                 "top_opportunities_export": self.ctx.paths.get("top_opportunities_export"),
                 "commercial_pipeline_csv": self.ctx.paths.get("commercial_pipeline_csv"),
+                "commercial_report_md": self.ctx.paths.get("commercial_report_md"),
                 "apollo_import_csv": self.ctx.paths.get("apollo_import_csv"),
+                "hubspot_companies_json": self.ctx.paths.get("hubspot_companies_json"),
+                "hubspot_contacts_json": self.ctx.paths.get("hubspot_contacts_json"),
+                "hubspot_tasks_json": self.ctx.paths.get("hubspot_tasks_json"),
+                "hubspot_notes_json": self.ctx.paths.get("hubspot_notes_json"),
+                "hubspot_sync_results_json": self.ctx.paths.get("hubspot_sync_results_json"),
                 "top_opportunities_csv": self.ctx.paths.get("top_opportunities_csv"),
 
                 "executive_summary_json": self.ctx.paths.get("executive_summary_json"),

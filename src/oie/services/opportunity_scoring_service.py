@@ -115,6 +115,10 @@ class OpportunityScoringService:
 
     def _score_company_with_llm(self, company: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
+        company_type = (company.get("company_type_ai") or "").strip().lower()
+        if company.get("benchmark_only") or company_type == "competitor":
+            return None
+
         if not self.provider_control_service or not self.provider_execution_service:
             return None
 

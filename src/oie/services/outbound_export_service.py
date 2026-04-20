@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import csv
+import json
 import re
 import sqlite3
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -486,7 +488,7 @@ class OutboundExportService:
         return output
 
     def export_apollo_import(self) -> str:
-        rows = self._build_commercial_pipeline_rows()
+        rows = [row for row in self._build_commercial_pipeline_rows() if not self._is_benchmark_row(row)]
         apollo_rows = []
 
         seen = set()
@@ -514,72 +516,786 @@ class OutboundExportService:
         self.ctx.metrics["apollo_import_rows"] = len(apollo_rows)
         return output
 
-    def export_commercial_report_markdown(self) -> str:
-        rows = self._build_commercial_pipeline_rows()
-        lines: List[str] = []
-        lines.append(f"# Commercial report - run {self.ctx.run_id}")
-        lines.append("")
+    def _hubspot_safe_text(self, value: Any, limit: int | None = None) -> str:
+        text = " ".join(str(value or "").split()).strip()
+        if limit is not None and len(text) > limit:
+            return text[: limit - 3].rstrip() + "..."
+        return text
+
+    def _split_contact_name(self, full_name: str) -> tuple[str, str]:
+        name = self._hubspot_safe_text(full_name)
+        if not name:
+            return "", ""
+        parts = name.split()
+        if len(parts) == 1:
+            return parts[0], ""
+        return parts[0], " ".join(parts[1:])
+
+    def _hubspot_config(self) -> Dict[str, Any]:
+        return self.ctx.config.get("hubspot", {}) or {}
+
+    def _normalize_hubspot_owner(self) -> str:
+        return str(self._hubspot_config().get("owner_id") or "").strip()
+
+    def _normalize_hubspot_target_account(self) -> str:
+        return str(self._hubspot_config().get("target_account") or "").strip()
+
+    def _normalize_hubspot_source_tag(self) -> str:
+        return str(self._hubspot_config().get("source_tag") or "OIE").strip() or "OIE"
+
+    def _run_timestamp_label(self) -> str:
+        raw = str(self.ctx.run_date or "").strip()
+        if not raw:
+            return "N/D"
+        try:
+            value = datetime.fromisoformat(raw)
+            value = value.astimezone(UTC)
+            return value.strftime("%Y-%m-%d %H:%M UTC")
+        except ValueError:
+            return raw
+
+    def _is_benchmark_row(self, row: Dict[str, Any]) -> bool:
+        company_type = self._hubspot_safe_text(row.get("company_type_ai")).lower()
+        return company_type == "competitor"
+
+    def _hubspot_task_subject(self, company_name: str, contact_name: str) -> str:
+        clean_contact = self._hubspot_safe_text(contact_name) or "Unknown contact"
+        clean_company = self._hubspot_safe_text(company_name) or "Unknown company"
+        return f"Revisar reporte: {clean_contact} ({clean_company})"
+
+    def _map_hubspot_industry(self, value: Any) -> str:
+        raw = self._hubspot_safe_text(value)
+        if not raw:
+            return ""
+
+        normalized = (
+            raw.upper()
+            .replace("&", "AND")
+            .replace("/", "_")
+            .replace("-", "_")
+            .replace(",", "")
+            .replace(".", "")
+        )
+        normalized = re.sub(r"\s+", "_", normalized)
+        normalized = re.sub(r"_+", "_", normalized).strip("_")
+
+        aliases = {
+            "IT_SERVICES": "INFORMATION_TECHNOLOGY_AND_SERVICES",
+            "INFORMATION_TECHNOLOGY": "INFORMATION_TECHNOLOGY_AND_SERVICES",
+            "SOFTWARE": "COMPUTER_SOFTWARE",
+            "STAFFING": "STAFFING_AND_RECRUITING",
+            "STAFFING_RECRUITING": "STAFFING_AND_RECRUITING",
+        }
+        return aliases.get(normalized, normalized)
+
+    def _hubspot_company_description(self, row: Dict[str, Any]) -> str:
+        lines = [
+            f"- Run ID: {self._hubspot_safe_text(self.ctx.run_id) or 'N/D'}",
+            f"- Run timestamp: {self._run_timestamp_label()}",
+            f"- Website: {'https://' + self._hubspot_safe_text(row.get('resolved_domain')) if self._hubspot_safe_text(row.get('resolved_domain')) else 'N/D'}",
+            f"- LinkedIn company: {self._hubspot_safe_text(row.get('linkedin_company_url')) or 'N/D'}",
+            f"- Industry: {self._hubspot_safe_text(row.get('industry')) or 'N/D'}",
+            f"- Size: {self._hubspot_safe_text(row.get('company_size') or row.get('employee_range')) or 'N/D'}",
+            f"- Company type: {self._hubspot_safe_text(row.get('company_type_ai')) or 'N/D'}",
+            f"- Opportunity score: {row.get('opportunity_score') or 0}",
+            f"- Commercial priority score: {row.get('commercial_priority_score') or 0}",
+            f"- Outreach status: {self._hubspot_safe_text(row.get('outreach_status')) or 'N/D'}",
+            f"- Source: {self._normalize_hubspot_source_tag()}",
+        ]
+        return "\n\n".join(lines)
+
+    def _hubspot_positions_body(self, jobs: List[Dict[str, Any]]) -> str:
+        lines: List[str] = [
+            f"Run ID: {self._hubspot_safe_text(self.ctx.run_id) or 'N/D'}",
+            f"Run timestamp: {self._run_timestamp_label()}",
+            "",
+            "### Posiciones",
+            "",
+        ]
+        if not jobs:
+            lines.append("Sin posiciones registradas en este run.")
+            return "\n".join(lines)
+
+        for idx, job in enumerate(jobs[:3], start=1):
+            lines.append(f"{idx}. {self._job_summary(job)}")
+            if job.get("job_url"):
+                lines.append(f"   - Job URL: {job.get('job_url')}")
+            if job.get("apply_url"):
+                lines.append(f"   - Apply URL: {job.get('apply_url')}")
+            lines.append("")
+
+        return "\n".join(lines).rstrip()
+
+    def _next_business_day_task_timestamp(self) -> str:
+        base = datetime.fromisoformat(self.ctx.run_date)
+        due = base.astimezone(UTC).replace(hour=9, minute=0, second=0, microsecond=0)
+
+        while True:
+            due = due + timedelta(days=1)
+            if due.weekday() < 5:
+                break
+
+        return due.isoformat().replace("+00:00", "Z")
+
+    def _select_hubspot_contacts(self, company_key: str, limit: int | None = None) -> List[Dict[str, Any]]:
+        contacts = self._build_company_contacts(company_key)
+        max_contacts = limit
+        if max_contacts is None:
+            max_contacts = int(
+                ((self.ctx.config.get("hubspot", {}) or {}).get("max_contacts_per_company", 3) or 3)
+            )
+
+        selected: List[Dict[str, Any]] = []
+        seen = set()
+
+        for contact in contacts:
+            email = (contact.get("email") or "").strip().lower()
+            linkedin_url = (contact.get("linkedin_url") or "").strip().lower()
+            relevance = float(contact.get("lead_relevance_score") or 0)
+
+            if not email and not linkedin_url:
+                continue
+            if relevance < 45:
+                continue
+
+            dedupe_key = email or linkedin_url or (
+                f"{company_key}|{(contact.get('contact_name') or '').strip().lower()}|"
+                f"{(contact.get('contact_title') or '').strip().lower()}"
+            )
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            selected.append(contact)
+
+            if len(selected) >= max_contacts:
+                break
+
+        return selected
+
+    def _rows_with_selected_contacts(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        filtered: List[Dict[str, Any]] = []
 
         for row in rows:
-            company_key = row.get("company_key", "")
-            company_name = row.get("company_display") or "Unknown"
-            website = row.get("resolved_domain") or ""
-            company_linkedin = row.get("linkedin_company_url") or ""
-            industry = row.get("industry") or "N/D"
-            size = row.get("company_size") or row.get("employee_range") or "N/D"
-            outreach_status = row.get("outreach_status") or "N/D"
-            priority = row.get("commercial_priority_score") or 0
+            if self._is_benchmark_row(row):
+                continue
 
+            company_key = self._hubspot_safe_text(row.get("company_key"))
+            if not company_key:
+                continue
+
+            selected_contacts = self._select_hubspot_contacts(company_key)
+            if not selected_contacts:
+                continue
+
+            filtered.append(row)
+
+        return filtered
+
+    def _build_hubspot_note_body(
+        self,
+        row: Dict[str, Any],
+        jobs: List[Dict[str, Any]],
+        contacts: List[Dict[str, Any]],
+    ) -> str:
+        lines: List[str] = []
+        lines.append(f"Run ID: {self._hubspot_safe_text(self.ctx.run_id) or 'N/D'}")
+        lines.append(f"Run timestamp: {self._run_timestamp_label()}")
+        lines.append(f"Company: {row.get('company_display') or 'Unknown'}")
+        lines.append(f"Domain: {row.get('resolved_domain') or 'N/D'}")
+        lines.append(f"Industry: {row.get('industry') or 'N/D'}")
+        lines.append(f"Size: {row.get('company_size') or row.get('employee_range') or 'N/D'}")
+        lines.append(f"Company type: {row.get('company_type_ai') or 'N/D'}")
+        lines.append(f"Opportunity score: {row.get('opportunity_score') or 0}")
+        lines.append(f"Opportunity label: {row.get('opportunity_label') or 'N/D'}")
+        lines.append(f"Commercial priority score: {row.get('commercial_priority_score') or 0}")
+        lines.append(f"Primary service fit: {row.get('primary_service_fit') or 'N/D'}")
+        lines.append(f"Buyer persona fit: {row.get('buyer_persona_fit') or 'N/D'}")
+        lines.append(f"Outreach status: {row.get('outreach_status') or 'N/D'}")
+        lines.append(
+            f"Reason: {self._hubspot_safe_text(row.get('opportunity_score_reason') or 'N/D', 500)}"
+        )
+        lines.append("")
+        lines.append("Top jobs:")
+        if jobs:
+            for idx, job in enumerate(jobs[:3], start=1):
+                lines.append(f"{idx}. {self._job_summary(job)}")
+        else:
+            lines.append("No jobs registered in this run.")
+        lines.append("")
+        lines.append("Selected contacts:")
+        if contacts:
+            for idx, contact in enumerate(contacts, start=1):
+                lines.append(
+                    f"{idx}. {contact.get('contact_name') or 'N/D'} | "
+                    f"{contact.get('contact_title') or 'N/D'} | "
+                    f"{contact.get('email') or 'N/D'} | "
+                    f"{contact.get('linkedin_url') or 'N/D'} | "
+                    f"source={contact.get('lead_source') or 'N/D'} | "
+                    f"relevance={contact.get('lead_relevance_score') or 0}"
+                )
+        else:
+            lines.append("No selected contacts.")
+        return "\n".join(lines)
+
+    def _build_hubspot_company_payloads(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        owner_id = self._normalize_hubspot_owner()
+        payloads: List[Dict[str, Any]] = []
+
+        for row in rows:
+            if self._is_benchmark_row(row):
+                continue
+
+            domain = self._hubspot_safe_text(row.get("resolved_domain"))
+            properties = {
+                "name": self._hubspot_safe_text(row.get("company_display")),
+                "domain": domain,
+                "website": f"https://{domain}" if domain else "",
+                "industry": self._map_hubspot_industry(row.get("industry")),
+                "numberofemployees": self._hubspot_safe_text(row.get("company_size") or row.get("employee_range")),
+                "type": "PROSPECT",
+                "description": self._hubspot_safe_text(self._hubspot_company_description(row), 5000),
+            }
+            if owner_id:
+                properties["hubspot_owner_id"] = owner_id
+
+            payloads.append(
+                {
+                    "company_key": self._hubspot_safe_text(row.get("company_key")),
+                    "company_name": self._hubspot_safe_text(row.get("company_display")),
+                    "properties": properties,
+                }
+            )
+
+        return payloads
+
+    def _build_hubspot_contact_payloads(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        owner_id = self._normalize_hubspot_owner()
+        source_tag = self._normalize_hubspot_source_tag()
+        payloads: List[Dict[str, Any]] = []
+        seen = set()
+
+        for row in rows:
+            if self._is_benchmark_row(row):
+                continue
+
+            company_key = self._hubspot_safe_text(row.get("company_key"))
+            company_name = self._hubspot_safe_text(row.get("company_display"))
+            opportunity_score = row.get("opportunity_score", 0)
+
+            contacts = self._select_hubspot_contacts(company_key)
+            for contact in contacts:
+                contact_name = self._hubspot_safe_text(contact.get("contact_name"))
+                email = self._hubspot_safe_text(contact.get("email")).lower()
+                linkedin_url = self._hubspot_safe_text(contact.get("linkedin_url"))
+                firstname, lastname = self._split_contact_name(contact_name)
+
+                if not email:
+                    continue
+
+                dedupe_key = email or linkedin_url or f"{company_key}|{contact_name}"
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+
+                properties = {
+                    "email": email,
+                    "firstname": firstname,
+                    "lastname": lastname,
+                    "jobtitle": (
+                        f"{self._hubspot_safe_text(contact.get('contact_title'))} | "
+                        f"Score: {opportunity_score} | Source: {source_tag}"
+                    ).strip(),
+                    "company": company_name,
+                    "lifecyclestage": "opportunity",
+                }
+                if owner_id:
+                    properties["hubspot_owner_id"] = owner_id
+
+                payloads.append(
+                    {
+                        "company_key": company_key,
+                        "company_name": company_name,
+                        "contact_name": contact_name,
+                        "properties": properties,
+                    }
+                )
+
+        return payloads
+
+    def _build_hubspot_task_payloads(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        owner_id = self._normalize_hubspot_owner()
+        payloads: List[Dict[str, Any]] = []
+
+        for row in rows:
+            if self._is_benchmark_row(row):
+                continue
+
+            company_key = self._hubspot_safe_text(row.get("company_key"))
+            company_name = self._hubspot_safe_text(row.get("company_display"))
             jobs = self._build_company_jobs(company_key)
-            contacts = self._build_company_contacts(company_key)
+            contacts = self._select_hubspot_contacts(company_key)
 
-            lines.append(f"## {company_name}")
-            lines.append(f"- Website: {'https://' + website if website else 'N/D'}")
-            lines.append(f"- LinkedIn company: {company_linkedin or 'N/D'}")
-            lines.append(f"- Industry: {industry}")
-            lines.append(f"- Size: {size}")
-            lines.append(f"- Opportunity score: {row.get('opportunity_score', 0)}")
-            lines.append(f"- Commercial priority score: {priority}")
-            lines.append(f"- Outreach status: {outreach_status}")
+            for contact in contacts:
+                contact_name = self._hubspot_safe_text(contact.get("contact_name")) or "Unknown contact"
+
+                properties = {
+                    "hs_task_subject": self._hubspot_task_subject(company_name, contact_name),
+                    "hs_task_body": self._hubspot_positions_body(jobs),
+                    "hs_task_status": "NOT_STARTED",
+                    "hs_task_priority": "HIGH",
+                    "hs_timestamp": self._next_business_day_task_timestamp(),
+                }
+                if owner_id:
+                    properties["hubspot_owner_id"] = owner_id
+
+                payloads.append(
+                    {
+                        "company_key": company_key,
+                        "company_name": company_name,
+                        "contact_name": contact_name,
+                        "task_subject": properties["hs_task_subject"],
+                        "properties": properties,
+                    }
+                )
+
+        return payloads
+
+    def _build_hubspot_note_payloads(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        target_account = self._normalize_hubspot_target_account()
+        source_tag = self._normalize_hubspot_source_tag()
+
+        payloads: List[Dict[str, Any]] = []
+
+        for row in rows:
+            if self._is_benchmark_row(row):
+                continue
+
+            company_key = self._hubspot_safe_text(row.get("company_key"))
+            jobs = self._build_company_jobs(company_key)
+            contacts = self._select_hubspot_contacts(company_key)
+            note_body = self._build_hubspot_note_body(row, jobs, contacts)
+
+            payloads.append(
+                {
+                    "company_key": company_key,
+                    "company_name": self._hubspot_safe_text(row.get("company_display")),
+                    "properties": {
+                        "hs_timestamp": self.ctx.run_date,
+                        "hs_note_body": (
+                            note_body
+                            + f"\n\nTarget account: {target_account or 'N/D'}"
+                            + f"\nSource tag: {source_tag}"
+                        ),
+                    },
+                }
+            )
+
+        return payloads
+
+    def export_hubspot_payloads(self) -> None:
+        rows = self._rows_with_selected_contacts(self._build_commercial_pipeline_rows())
+
+        companies_payload = self._build_hubspot_company_payloads(rows)
+        contacts_payload = self._build_hubspot_contact_payloads(rows)
+        tasks_payload = self._build_hubspot_task_payloads(rows)
+        notes_payload = self._build_hubspot_note_payloads(rows)
+
+        output_dir = self._output_dir()
+
+        companies_path = output_dir / "hubspot_companies.json"
+        contacts_path = output_dir / "hubspot_contacts.json"
+        tasks_path = output_dir / "hubspot_tasks.json"
+        notes_path = output_dir / "hubspot_notes.json"
+
+        self._write_text(companies_path, json.dumps(companies_payload, ensure_ascii=False, indent=2))
+        self._write_text(contacts_path, json.dumps(contacts_payload, ensure_ascii=False, indent=2))
+        self._write_text(tasks_path, json.dumps(tasks_payload, ensure_ascii=False, indent=2))
+        self._write_text(notes_path, json.dumps(notes_payload, ensure_ascii=False, indent=2))
+
+        self.ctx.paths["hubspot_companies_json"] = str(companies_path)
+        self.ctx.paths["hubspot_contacts_json"] = str(contacts_path)
+        self.ctx.paths["hubspot_tasks_json"] = str(tasks_path)
+        self.ctx.paths["hubspot_notes_json"] = str(notes_path)
+
+        self.ctx.metrics["hubspot_companies_rows"] = len(companies_payload)
+        self.ctx.metrics["hubspot_contacts_rows"] = len(contacts_payload)
+        self.ctx.metrics["hubspot_tasks_rows"] = len(tasks_payload)
+        self.ctx.metrics["hubspot_notes_rows"] = len(notes_payload)
+
+
+    def _hubspot_sync_enabled(self) -> bool:
+        cfg = self._hubspot_config()
+
+        # Nuevo: override por flag de ejecución
+        force_push = str(self.ctx.flags.get("push_hubspot", "")).lower() in {"1", "true", "yes"}
+
+        if force_push:
+            return True
+
+        return (
+            bool(cfg.get("enabled"))
+            and bool(cfg.get("push_enabled"))
+            and not bool(cfg.get("pause_before_push"))
+        )
+
+    def push_hubspot_payloads(self, provider_execution_service: Any) -> Dict[str, Any]:
+        self.export_hubspot_payloads()
+
+        if not self._hubspot_sync_enabled():
+            self.ctx.metrics["hubspot_push_skipped"] = True
+            return {
+                "enabled": False,
+                "pushed": False,
+                "reason": "hubspot_push_disabled",
+            }
+
+        client = provider_execution_service.provider_control_service.registry.get_client("hubspot")
+        if client is None:
+            raise RuntimeError("HubSpot client no está registrado")
+
+        rows = self._rows_with_selected_contacts(self._build_commercial_pipeline_rows())
+        companies_payload = self._build_hubspot_company_payloads(rows)
+        contacts_payload = self._build_hubspot_contact_payloads(rows)
+        tasks_payload = self._build_hubspot_task_payloads(rows)
+        notes_payload = self._build_hubspot_note_payloads(rows)
+
+        results = {
+            "companies": [],
+            "contacts": [],
+            "tasks": [],
+            "notes": [],
+            "associations": [],
+        }
+
+        company_id_map: Dict[str, str] = {}
+        contact_ids_by_company: Dict[str, List[str]] = {}
+
+        for payload in companies_payload:
+            properties = payload.get("properties", {}) or {}
+            domain = str(properties.get("domain") or "").strip().lower()
+
+            existing = None
+            if domain and hasattr(client, "search_company_by_domain"):
+                existing = provider_execution_service.execute(
+                    "hubspot",
+                    "search_company_by_domain",
+                    client.search_company_by_domain,
+                    domain,
+                )
+
+            response = existing
+            status = "existing"
+            if not response:
+                response = provider_execution_service.execute(
+                    "hubspot",
+                    "create_company",
+                    client.create_company,
+                    {"properties": properties},
+                )
+                status = "created"
+
+            company_key = payload.get("company_key", "")
+            company_id = str((response or {}).get("id") or "")
+            if company_key and company_id:
+                company_id_map[company_key] = company_id
+
+            results["companies"].append(
+                {
+                    "status": status,
+                    "company_key": company_key,
+                    "company_name": payload.get("company_name", ""),
+                    "response": response,
+                }
+            )
+
+        for payload in contacts_payload:
+            properties = payload.get("properties", {}) or {}
+            email = str(properties.get("email") or "").strip().lower()
+            if not email:
+                results["contacts"].append(
+                    {
+                        "status": "skipped",
+                        "reason": "missing_email",
+                        "company_key": payload.get("company_key", ""),
+                        "contact_name": payload.get("contact_name", ""),
+                    }
+                )
+                continue
+
+            existing = None
+            if hasattr(client, "search_contact_by_email"):
+                existing = provider_execution_service.execute(
+                    "hubspot",
+                    "search_contact_by_email",
+                    client.search_contact_by_email,
+                    email,
+                )
+
+            response = existing
+            status = "existing"
+            if not response:
+                response = provider_execution_service.execute(
+                    "hubspot",
+                    "create_contact",
+                    client.create_contact,
+                    {"properties": properties},
+                )
+                status = "created"
+
+            company_key = payload.get("company_key", "")
+            contact_id = str((response or {}).get("id") or "")
+            company_id = company_id_map.get(company_key)
+
+            if company_key and contact_id:
+                ids = contact_ids_by_company.setdefault(company_key, [])
+                if contact_id not in ids:
+                    ids.append(contact_id)
+
+            if company_id and contact_id:
+                association_response = provider_execution_service.execute(
+                    "hubspot",
+                    "associate_contact_company",
+                    client.create_association,
+                    "contacts",
+                    contact_id,
+                    "companies",
+                    company_id,
+                )
+                results["associations"].append(
+                    {
+                        "type": "contact_company",
+                        "company_key": company_key,
+                        "contact_name": payload.get("contact_name", ""),
+                        "from_object_type": "contacts",
+                        "from_object_id": contact_id,
+                        "to_object_type": "companies",
+                        "to_object_id": company_id,
+                        "response": association_response,
+                    }
+                )
+
+            results["contacts"].append(
+                {
+                    "status": status,
+                    "company_key": company_key,
+                    "company_name": payload.get("company_name", ""),
+                    "contact_name": payload.get("contact_name", ""),
+                    "response": response,
+                }
+            )
+
+        for payload in tasks_payload:
+            properties = payload.get("properties", {}) or {}
+            subject = str(payload.get("task_subject") or properties.get("hs_task_subject") or "").strip()
+
+            existing = None
+            if subject and hasattr(client, "search_task_by_subject"):
+                existing = provider_execution_service.execute(
+                    "hubspot",
+                    "search_task_by_subject",
+                    client.search_task_by_subject,
+                    subject,
+                )
+
+            response = existing
+            status = "existing"
+            if not response:
+                response = provider_execution_service.execute(
+                    "hubspot",
+                    "create_task",
+                    client.create_task,
+                    {"properties": properties},
+                )
+                status = "created"
+
+            company_key = payload.get("company_key", "")
+            company_id = company_id_map.get(company_key)
+            task_id = str((response or {}).get("id") or "")
+
+            if company_id and task_id:
+                association_response = provider_execution_service.execute(
+                    "hubspot",
+                    "associate_task_company",
+                    client.create_association,
+                    "tasks",
+                    task_id,
+                    "companies",
+                    company_id,
+                )
+                results["associations"].append(
+                    {
+                        "type": "task_company",
+                        "company_key": company_key,
+                        "from_object_type": "tasks",
+                        "from_object_id": task_id,
+                        "to_object_type": "companies",
+                        "to_object_id": company_id,
+                        "response": association_response,
+                    }
+                )
+
+            results["tasks"].append(
+                {
+                    "status": status,
+                    "company_key": company_key,
+                    "company_name": payload.get("company_name", ""),
+                    "contact_name": payload.get("contact_name", ""),
+                    "response": response,
+                }
+            )
+
+        for payload in notes_payload:
+            properties = payload.get("properties", {}) or {}
+            response = provider_execution_service.execute(
+                "hubspot",
+                "create_note",
+                client.create_note,
+                {"properties": properties},
+            )
+
+            company_key = payload.get("company_key", "")
+            company_id = company_id_map.get(company_key)
+            note_id = str((response or {}).get("id") or "")
+
+            if company_id and note_id:
+                association_response = provider_execution_service.execute(
+                    "hubspot",
+                    "associate_note_company",
+                    client.create_association,
+                    "notes",
+                    note_id,
+                    "companies",
+                    company_id,
+                )
+                results["associations"].append(
+                    {
+                        "type": "note_company",
+                        "company_key": company_key,
+                        "from_object_type": "notes",
+                        "from_object_id": note_id,
+                        "to_object_type": "companies",
+                        "to_object_id": company_id,
+                        "response": association_response,
+                    }
+                )
+
+            results["notes"].append(
+                {
+                    "status": "created",
+                    "company_key": company_key,
+                    "company_name": payload.get("company_name", ""),
+                    "response": response,
+                }
+            )
+
+        self.ctx.metrics["hubspot_push_companies"] = len(results["companies"])
+        self.ctx.metrics["hubspot_push_contacts"] = len(results["contacts"])
+        self.ctx.metrics["hubspot_push_tasks"] = len(results["tasks"])
+        self.ctx.metrics["hubspot_push_notes"] = len(results["notes"])
+
+        return results
+
+
+    def export_commercial_report_markdown(self) -> str:
+        rows = self._build_commercial_pipeline_rows()
+        actionable_rows = [row for row in rows if not self._is_benchmark_row(row)]
+        benchmark_rows = [row for row in rows if self._is_benchmark_row(row)]
+
+        lines: List[str] = []
+        lines.append("# Commercial Report")
+        lines.append("")
+        lines.append(f"- Run ID: {self._hubspot_safe_text(self.ctx.run_id) or 'N/D'}")
+        lines.append(f"- Run timestamp: {self._run_timestamp_label()}")
+        lines.append(f"- Actionable companies: {len(actionable_rows)}")
+        lines.append(f"- Benchmark competitors: {len(benchmark_rows)}")
+        lines.append("")
+
+        if actionable_rows:
+            lines.append("## Actionable companies")
+            lines.append("")
+            for idx, row in enumerate(actionable_rows, start=1):
+                company_key = self._hubspot_safe_text(row.get("company_key"))
+                lines.append(f"### {idx}. {row.get('company_display') or 'Unknown'}")
+                lines.append(f"- Domain: {row.get('resolved_domain') or 'N/D'}")
+                lines.append(f"- LinkedIn: {row.get('linkedin_company_url') or 'N/D'}")
+                lines.append(f"- Industry: {row.get('industry') or 'N/D'}")
+                lines.append(f"- Size: {row.get('company_size') or row.get('employee_range') or 'N/D'}")
+                lines.append(f"- Company type: {row.get('company_type_ai') or 'N/D'}")
+                lines.append(f"- Opportunity score: {row.get('opportunity_score') or 0}")
+                lines.append(f"- Opportunity label: {row.get('opportunity_label') or 'N/D'}")
+                lines.append(f"- Commercial priority score: {row.get('commercial_priority_score') or 0}")
+                lines.append(f"- Outreach status: {row.get('outreach_status') or 'N/D'}")
+                lines.append(f"- Primary service fit: {row.get('primary_service_fit') or 'N/D'}")
+                lines.append(f"- Buyer persona fit: {row.get('buyer_persona_fit') or 'N/D'}")
+                lines.append(f"- Best contact: {row.get('best_contact_name') or 'N/D'} | {row.get('best_contact_title') or 'N/D'}")
+                lines.append(f"- Best contact email: {row.get('best_contact_email') or 'N/D'}")
+                lines.append(f"- Best contact LinkedIn: {row.get('best_contact_linkedin_url') or 'N/D'}")
+                lines.append(f"- Reason: {self._hubspot_safe_text(row.get('opportunity_score_reason') or 'N/D', 500)}")
+                lines.append("")
+
+                jobs = self._build_company_jobs(company_key) if company_key else []
+                lines.append("#### Top jobs")
+                if jobs:
+                    for job_idx, job in enumerate(jobs[:3], start=1):
+                        lines.append(f"{job_idx}. {self._job_summary(job)}")
+                else:
+                    lines.append("No jobs registered in this run.")
+                lines.append("")
+
+                contacts = self._select_hubspot_contacts(company_key) if company_key else []
+                lines.append("#### Selected contacts")
+                if contacts:
+                    for contact_idx, contact in enumerate(contacts, start=1):
+                        lines.append(
+                            f"{contact_idx}. "
+                            f"{contact.get('contact_name') or 'N/D'} | "
+                            f"{contact.get('contact_title') or 'N/D'} | "
+                            f"{contact.get('email') or 'N/D'} | "
+                            f"{contact.get('linkedin_url') or 'N/D'} | "
+                            f"source={contact.get('lead_source') or 'N/D'} | "
+                            f"relevance={contact.get('lead_relevance_score') or 0}"
+                        )
+                else:
+                    lines.append("No selected contacts.")
+                lines.append("")
+        else:
+            lines.append("## Actionable companies")
+            lines.append("")
+            lines.append("No actionable companies in this run.")
             lines.append("")
 
-            lines.append("### Posiciones")
-            if jobs:
-                for idx, job in enumerate(jobs, start=1):
-                    lines.append(f"{idx}. {self._job_summary(job)}")
-                    if job.get("job_url"):
-                        lines.append(f"   - Job URL: {job.get('job_url')}")
-                    if job.get("apply_url"):
-                        lines.append(f"   - Apply URL: {job.get('apply_url')}")
-            else:
-                lines.append("Sin posiciones registradas en este run.")
-            lines.append("")
-
-            lines.append("### Contactos")
-            if contacts:
-                for idx, contact in enumerate(contacts, start=1):
-                    lines.append(
-                        f"{idx}. Nombre: {contact.get('contact_name') or 'N/D'} | "
-                        f"Puesto: {contact.get('contact_title') or 'N/D'} | "
-                        f"Email: {contact.get('email') or 'N/D'} | "
-                        f"LinkedIn: {contact.get('linkedin_url') or 'N/D'} | "
-                        f"Source: {contact.get('lead_source') or 'N/D'} | "
-                        f"Confidence: {contact.get('lead_confidence') or 0} | "
-                        f"Email quality: {contact.get('email_quality_score') or 0}"
-                    )
-            else:
-                lines.append("Sin contactos relevantes todavía.")
-            lines.append("")
-            lines.append("---")
+        lines.append("## Benchmark competitors")
+        lines.append("")
+        if benchmark_rows:
+            for idx, row in enumerate(benchmark_rows, start=1):
+                company_key = self._hubspot_safe_text(row.get("company_key"))
+                lines.append(f"### {idx}. {row.get('company_display') or 'Unknown'}")
+                lines.append(f"- Company type: {row.get('company_type_ai') or 'competitor'}")
+                lines.append(f"- Industry: {row.get('industry') or 'N/D'}")
+                lines.append(f"- LinkedIn: {row.get('linkedin_company_url') or 'N/D'}")
+                lines.append(f"- What they are hiring for: {self._hubspot_safe_text(row.get('opportunity_score_reason') or row.get('company_description') or 'N/D', 500)}")
+                jobs = self._build_company_jobs(company_key) if company_key else []
+                if jobs:
+                    lines.append("- Sample roles:")
+                    for job in jobs[:3]:
+                        lines.append(f"  - {job.get('title') or 'Sin título'} | {job.get('location') or 'N/D'}")
+                else:
+                    lines.append("- Sample roles: N/D")
+                lines.append("")
+        else:
+            lines.append("No benchmark competitors in this run.")
             lines.append("")
 
         path = self._output_dir() / "commercial_report.md"
         output = self._write_text(path, "\n".join(lines).rstrip() + "\n")
         self.ctx.paths["commercial_report_md"] = output
-        self.ctx.metrics["commercial_report_rows"] = len(rows)
+        self.ctx.metrics["commercial_report_companies"] = len(actionable_rows)
+        self.ctx.metrics["commercial_report_benchmark_companies"] = len(benchmark_rows)
         return output
+
 
     def export_all(self) -> None:
         self.export_commercial_pipeline()
         self.export_apollo_import()
+        self.export_hubspot_payloads()
         self.export_commercial_report_markdown()
