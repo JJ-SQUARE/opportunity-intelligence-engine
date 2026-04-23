@@ -136,12 +136,16 @@ providers:
       api_key_env: "HUNTER_API_KEY"
     openai:
       api_key_env: "OPENAI_API_KEY"
+    hubspot:
+      api_key_env: "HUBSPOT_BEARER_TOKEN"
+      base_url: "https://api.hubapi.com"
 
   limits:
     serpapi: 60
     apollo: 40
     hunter: 20
     openai: 120
+    hubspot: 120
 
   operation_limits:
     openai:
@@ -158,6 +162,11 @@ providers:
       search_people_by_domain_and_titles: 40
     hunter:
       search_domain_contacts: 20
+    hubspot:
+      create_company: 40
+      create_contact: 80
+      create_task: 80
+      create_note: 80
 
 enrichment:
   apollo_company_ttl_days: 30
@@ -175,6 +184,15 @@ lead_generation:
   max_apollo_results_per_company: 5
   max_leads_per_company: 5
   hunter_min_email_quality: 40
+
+hubspot:
+  enabled: true
+  push_enabled: true
+  pause_before_push: false
+  owner_id: "${HUBSPOT_USER_ID}"
+  target_account: "${HUBSPOT_COMPANY_ID}"
+  source_tag: "OIE"
+  max_contacts_per_company: 3
 
 outputs:
   path: "data/outputs"

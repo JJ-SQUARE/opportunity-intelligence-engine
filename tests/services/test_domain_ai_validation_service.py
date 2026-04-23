@@ -84,3 +84,62 @@ def test_validate_respects_limit():
 
     assert result["decision"] == "review"
     assert result["reason"] == "validation_limit_reached"
+
+
+def test_validate_rejects_selected_domain_outside_candidate_whitelist():
+    ctx = RunContext.create(config={"domain_resolution": {"domain_ai_validation_limit": 10}})
+    pcs = _FakePCS(
+        ctx,
+        _FakeOpenAIClient(
+            {
+                "selected_domain": "otherbrand.com",
+                "decision": "accepted",
+                "confidence": 0.92,
+                "reason": "model hallucinated another domain",
+            }
+        ),
+    )
+    svc = DomainAIValidationService(ctx, pcs)
+
+    result = svc.validate(
+        "Acme",
+        [
+            {
+                "domain": "acme.com",
+                "source": "serpapi_fallback",
+                "score": 0.55,
+                "title": "Acme official site",
+                "snippet": "Technology company",
+                "serp_rank": 1,
+                "confidence_reasons": ["core_hits_1"],
+            }
+        ],
+    )
+
+    assert result["decision"] == "rejected"
+    assert result["selected_domain"] is None
+    assert result["reason"] == "selected_domain_not_in_candidates"
+
+
+def test_validate_prefilter_rejects_low_signal_candidates():
+    ctx = RunContext.create(config={"domain_resolution": {"domain_ai_validation_limit": 10}})
+    pcs = _FakePCS(ctx, _FakeOpenAIClient({}))
+    svc = DomainAIValidationService(ctx, pcs)
+
+    result = svc.validate(
+        "Acme",
+        [
+            {
+                "domain": "acme.com",
+                "source": "serpapi_fallback",
+                "score": 0.10,
+                "title": "",
+                "snippet": "",
+                "serp_rank": 1,
+                "confidence_reasons": [],
+            }
+        ],
+    )
+
+    assert result["decision"] == "review"
+    assert result["reason"] == "prefilter_rejected_candidates"

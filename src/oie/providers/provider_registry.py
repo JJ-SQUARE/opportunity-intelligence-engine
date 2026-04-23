@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from oie.providers.adapters.apollo_adapter import ApolloAdapter
+from oie.providers.adapters.hubspot_adapter import HubSpotAdapter
 from oie.providers.adapters.hunter_adapter import HunterAdapter
 from oie.providers.adapters.openai_adapter import OpenAIAdapter
 from oie.providers.adapters.serpapi_adapter import SerpAPIAdapter
@@ -26,6 +27,7 @@ class ProviderRegistry:
         self.register_client("serpapi", SerpAPIAdapter(config=config.get("serpapi", {})))
         self.register_client("apollo", ApolloAdapter(config=config.get("apollo", {})))
         self.register_client("hunter", HunterAdapter(config=config.get("hunter", {})))
+        self.register_client("hubspot", HubSpotAdapter(config=config.get("hubspot", {})))
 
     def register_budget(self, provider_name: str, max_calls: int) -> None:
         self.budgets[provider_name] = BudgetGuard(provider=provider_name, max_calls=max_calls)

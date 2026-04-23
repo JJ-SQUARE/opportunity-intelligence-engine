@@ -6,6 +6,7 @@ from oie.orchestration.run_context import RunContext
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.provider_execution_service import (
     ProviderExecutionBlockedError,
+    ProviderExecutionError,
     ProviderExecutionService,
 )
 
@@ -48,9 +49,31 @@ class SerpAPISearchService:
             self.ctx.metrics["serpapi_search_skipped_blocked"] = True
             self.ctx.metrics["serpapi_search_google_jobs_skipped_blocked"] = True
             return {}
+        except ProviderExecutionError as exc:
+            self.ctx.metrics["serpapi_search_errors"] = (
+                int(self.ctx.metrics.get("serpapi_search_errors", 0)) + 1
+            )
+            self.ctx.metrics["serpapi_search_google_jobs_errors"] = (
+                int(self.ctx.metrics.get("serpapi_search_google_jobs_errors", 0)) + 1
+            )
+            self.ctx.add_provider_event(
+                provider="serpapi",
+                event_type="search_google_jobs_failed",
+                message="serpapi_search_google_jobs_failed",
+                metadata={
+                    "query": query,
+                    "location": location,
+                    "num": num,
+                    "error": repr(exc),
+                },
+            )
+            return {}
 
         self.ctx.metrics["serpapi_search_requests"] = (
             int(self.ctx.metrics.get("serpapi_search_requests", 0)) + 1
+        )
+        self.ctx.metrics["serpapi_search_google_jobs_requests"] = (
+            int(self.ctx.metrics.get("serpapi_search_google_jobs_requests", 0)) + 1
         )
 
         return result
@@ -79,9 +102,30 @@ class SerpAPISearchService:
             self.ctx.metrics["serpapi_search_skipped_blocked"] = True
             self.ctx.metrics["serpapi_search_google_skipped_blocked"] = True
             return {}
+        except ProviderExecutionError as exc:
+            self.ctx.metrics["serpapi_search_errors"] = (
+                int(self.ctx.metrics.get("serpapi_search_errors", 0)) + 1
+            )
+            self.ctx.metrics["serpapi_search_google_errors"] = (
+                int(self.ctx.metrics.get("serpapi_search_google_errors", 0)) + 1
+            )
+            self.ctx.add_provider_event(
+                provider="serpapi",
+                event_type="search_google_failed",
+                message="serpapi_search_google_failed",
+                metadata={
+                    "query": query,
+                    "num": num,
+                    "error": repr(exc),
+                },
+            )
+            return {}
 
         self.ctx.metrics["serpapi_search_requests"] = (
             int(self.ctx.metrics.get("serpapi_search_requests", 0)) + 1
+        )
+        self.ctx.metrics["serpapi_search_google_requests"] = (
+            int(self.ctx.metrics.get("serpapi_search_google_requests", 0)) + 1
         )
 
         return result

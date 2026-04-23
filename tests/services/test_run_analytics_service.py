@@ -116,6 +116,40 @@ def test_run_analytics_service_builds_consolidated_payload():
             "run_readiness_warnings": 1,
             "provider_errors": {"openai": {"execution_error": 1}},
             "provider_blocks": {"hunter": {"blocked_provider": 2}},
+            "master_data": {
+                "schema_errors_count": 1,
+                "jobs_rows_written": 2,
+                "companies_rows_written": 2,
+                "leads_rows_written": 2,
+            },
+            "persistence_data": {
+                "errors_count": 1,
+                "schema_errors_count": 1,
+                "sqlite_operational_errors_count": 1,
+                "companies_succeeded": False,
+            },
+            "counts_original": {
+                "jobs_collected_raw": 5,
+                "jobs_after_dedupe": 3,
+                "jobs_duplicates_detected_master": 1,
+                "jobs_unique_to_append_master": 2,
+                "companies_detected": 3,
+                "companies_after_identity_dedupe": 2,
+                "leads_generated": 4,
+                "best_leads_selected": 3,
+                "leads_duplicates_detected_master": 1,
+                "leads_unique_to_append_master": 2,
+            },
+            "counts_effective": {
+                "jobs": 2,
+                "companies": 2,
+                "leads": 2,
+            },
+            "counts_quality": {
+                "jobs_effective_lt_original": True,
+                "companies_effective_lte_detected": True,
+                "leads_effective_lte_selected": True,
+            },
         },
         executive_summary={
             "companies_count": 2,
@@ -132,6 +166,7 @@ def test_run_analytics_service_builds_consolidated_payload():
     assert analytics["quality"]["jobs_with_company_key"] == 2
     assert analytics["quality"]["jobs_without_company_key"] == 1
     assert analytics["quality"]["domain_review_queue_count"] == 3
+    assert analytics["quality"]["provider_events_count"] == 0
 
     assert analytics["top_collectors"]["by_jobs"][0]["source"] == "google_jobs"
     assert analytics["top_collectors"]["by_contribution"][0]["source"] == "google_jobs"
@@ -150,6 +185,11 @@ def test_run_analytics_service_builds_consolidated_payload():
     assert analytics["provider_health"]["provider_errors"]["openai"]["execution_error"] == 1
     assert analytics["provider_health"]["provider_blocks"]["hunter"]["blocked_provider"] == 2
     assert analytics["provider_health"]["provider_operation_metrics"][0]["provider"] == "openai"
+    assert analytics["persistence_data"]["errors_count"] == 1
+    assert analytics["persistence_data"]["companies_succeeded"] is False
+    assert analytics["counts_quality"]["jobs_effective_lt_original"] is True
+    assert analytics["counts_quality"]["companies_effective_lte_detected"] is True
+    assert analytics["counts_quality"]["leads_effective_lte_selected"] is True
 
     assert analytics["readiness"]["is_ready_for_review"] is True
     assert analytics["executive_summary"]["companies_count"] == 2
@@ -220,4 +260,42 @@ def test_run_analytics_service_prefers_higher_quality_lead_on_tie():
 
     assert analytics["top_leads"][0]["contact_name"] == "Higher Quality"
     assert analytics["top_leads"][0]["email_quality_score"] == 90
+    assert analytics["counts"]["jobs"] == 0
+    assert analytics["counts"]["companies"] == 0
+    assert analytics["counts"]["leads"] == 2
+
+def test_run_analytics_service_exposes_non_negative_effective_deltas():
+    ctx = RunContext.create(config={}, flags={})
+    service = RunAnalyticsService(ctx)
+
+    analytics = service.build_analytics(
+        status="company_pipeline_completed",
+        jobs=[],
+        companies=[],
+        leads=[],
+        duplicate_jobs=[],
+        collector_metrics=[],
+        collector_contribution=[],
+        collector_roi=[],
+        provider_operation_metrics=[],
+        readiness_report={"is_ready_for_review": True, "warnings": []},
+        run_metrics_summary={
+            "run_readiness_ready": True,
+            "run_readiness_warnings": 0,
+            "provider_errors": {},
+            "provider_blocks": {},
+            "counts_original": {
+                "jobs_after_dedupe": 2,
+                "best_leads_selected": 1,
+            },
+            "counts_effective": {
+                "jobs": 5,
+                "leads": 3,
+            },
+        },
+        executive_summary={},
+    )
+
+    assert analytics["quality"]["effective_jobs_vs_original_delta"] == 0
+    assert analytics["quality"]["effective_leads_vs_selected_delta"] == 0
 

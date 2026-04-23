@@ -50,7 +50,14 @@ class HubSpotAdapter(ProviderClient):
             headers=self._headers(),
             timeout=self.timeout,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            body = response.text[:2000]
+            raise requests.exceptions.HTTPError(
+                f"{exc} | response_body={body}",
+                response=response,
+            ) from exc
         return response.json()
 
     def _post_raw(self, path: str, payload: Dict[str, Any]) -> Response:
@@ -87,7 +94,14 @@ class HubSpotAdapter(ProviderClient):
                 "limit": 1,
             },
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            body = response.text[:2000]
+            raise requests.exceptions.HTTPError(
+                f"{exc} | response_body={body}",
+                response=response,
+            ) from exc
         data = response.json()
         results = data.get("results") or []
         if not results:
@@ -120,7 +134,14 @@ class HubSpotAdapter(ProviderClient):
                 "limit": 1,
             },
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            body = response.text[:2000]
+            raise requests.exceptions.HTTPError(
+                f"{exc} | response_body={body}",
+                response=response,
+            ) from exc
         data = response.json()
         results = data.get("results") or []
         if not results:
@@ -150,7 +171,14 @@ class HubSpotAdapter(ProviderClient):
                 "limit": 1,
             },
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            body = response.text[:2000]
+            raise requests.exceptions.HTTPError(
+                f"{exc} | response_body={body}",
+                response=response,
+            ) from exc
         data = response.json()
         results = data.get("results") or []
         if not results:
@@ -209,5 +237,12 @@ class HubSpotAdapter(ProviderClient):
             headers=self._headers(),
             timeout=self.timeout,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            body = response.text[:2000]
+            raise requests.exceptions.HTTPError(
+                f"{exc} | response_body={body}",
+                response=response,
+            ) from exc
         return {"status": "associated"}

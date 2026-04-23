@@ -88,3 +88,25 @@ def test_validate_domain_candidates_reviews_suspicious_beta_subdomain():
     assert result["selected_domain"] == "beta.rimutee.com"
     assert result["reason"] == "suspicious_subdomain"
 
+def test_validate_domain_candidates_reviews_ambiguous_short_single_token_brand():
+    adapter = OpenAIAdapter()
+
+    result = adapter.validate_domain_candidates(
+        {
+            "company_name": "NOUS",
+            "candidates": [
+                {
+                    "domain": "nous.example.com",
+                    "source": "serpapi_fallback",
+                    "title": "NOUS platform",
+                    "snippet": "Innovation platform",
+                    "serp_rank": 1,
+                }
+            ],
+        }
+    )
+
+    assert result["decision"] == "review"
+    assert result["selected_domain"] == "nous.example.com"
+    assert result["reason"] == "ambiguous_short_brand_match"
+

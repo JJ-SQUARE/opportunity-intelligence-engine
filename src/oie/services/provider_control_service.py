@@ -10,6 +10,7 @@ DEFAULT_PROVIDER_LIMITS = {
     "apollo": 100,
     "hunter": 100,
     "openai": 100,
+    "hubspot": 100,
 }
 
 

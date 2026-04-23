@@ -9,6 +9,7 @@ from oie.services.provider_execution_service import (
     ProviderExecutionBlockedError,
     ProviderExecutionService,
 )
+from oie.utils.domain_filters import is_job_board_domain, normalize_domain
 
 
 class DomainAIValidationService:
@@ -25,8 +26,10 @@ class DomainAIValidationService:
         self.validation_limit = int(config.get("domain_ai_validation_limit", 10))
         self._used = 0
 
-        self.ai_enabled = bool(ctx.config.get("domain_ai_enabled", True)) if ctx.config else True
-        self.max_calls = int(ctx.config.get("domain_ai_max_calls_per_run", 25)) if ctx.config else 25
+        self.ai_enabled = bool(config.get("domain_ai_enabled", ctx.config.get("domain_ai_enabled", True) if ctx.config else True))
+        self.max_calls = int(config.get("domain_ai_max_calls_per_run", ctx.config.get("domain_ai_max_calls_per_run", 25) if ctx.config else 25))
+        self.max_candidates = int(config.get("domain_ai_max_candidates", 3))
+        self.min_candidate_score = float(config.get("domain_ai_min_candidate_score", 0.20))
         self.ai_calls = 0
 
     def can_validate(self) -> bool:
@@ -104,6 +107,136 @@ class DomainAIValidationService:
             "reason": reason,
         }
 
+
+    def _candidate_domains(self, candidates: List[Dict[str, Any]]) -> set[str]:
+        return {
+            normalize_domain(candidate.get("domain") or "")
+            for candidate in candidates
+            if normalize_domain(candidate.get("domain") or "")
+        }
+
+    def _candidate_sort_key(self, candidate: Dict[str, Any]) -> tuple:
+        reasons = set(candidate.get("confidence_reasons") or [])
+        score = float(candidate.get("score", 0.0) or 0.0)
+        serp_rank = candidate.get("serp_rank")
+        normalized_rank = serp_rank if isinstance(serp_rank, int) and serp_rank > 0 else 999
+        title = str(candidate.get("title") or "").strip()
+        snippet = str(candidate.get("snippet") or "").strip()
+
+        signal_strength = sum(
+            1
+            for key in (
+                "full_join_match",
+                "core_join_match",
+                "primary_token_match",
+                "core_hits_1",
+                "core_hits_2plus",
+                "text_core_hits_1",
+                "text_core_hits_2plus",
+            )
+            if key in reasons
+        )
+
+        return (
+            score,
+            signal_strength,
+            1 if title else 0,
+            1 if snippet else 0,
+            -normalized_rank,
+        )
+
+    def _is_candidate_ai_eligible(self, candidate: Dict[str, Any]) -> bool:
+        domain = normalize_domain(candidate.get("domain") or "")
+        source = str(candidate.get("source") or "").strip().lower()
+        title = str(candidate.get("title") or "").strip()
+        snippet = str(candidate.get("snippet") or "").strip()
+        reasons = set(candidate.get("confidence_reasons") or [])
+        raw_score = candidate.get("score", None)
+        text = f"{title} {snippet}".strip().lower()
+
+        if not domain:
+            return False
+
+        if is_job_board_domain(domain):
+            return False
+
+        # No exigir score cuando el candidato viene solo con señales/rationale
+        # ya que varios tests y caminos reales mandan candidates sin score hidratado.
+        if raw_score is not None:
+            score = float(raw_score or 0.0)
+            if score < self.min_candidate_score:
+                return False
+
+        if source in {"apply_url", "url"} and not (title or snippet):
+            return False
+
+        if not (title or snippet or reasons):
+            return False
+
+        has_brand_signal = bool(
+            "full_join_match" in reasons
+            or "core_join_match" in reasons
+            or "primary_token_match" in reasons
+            or "core_hits_1" in reasons
+            or "core_hits_2plus" in reasons
+            or "text_core_hits_1" in reasons
+            or "text_core_hits_2plus" in reasons
+            or candidate.get("confidence_brand_match", False)
+        )
+
+        has_official_context = bool(
+            text
+            and (
+                "official" in text
+                or "official site" in text
+                or "official website" in text
+                or "sitio oficial" in text
+                or "company" in text
+            )
+        )
+
+        if not has_brand_signal and not has_official_context:
+            return False
+
+        return True
+
+    def _prefilter_candidates(self, candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        filtered = [
+            dict(candidate)
+            for candidate in candidates
+            if self._is_candidate_ai_eligible(candidate)
+        ]
+        filtered.sort(key=self._candidate_sort_key, reverse=True)
+        return filtered[: max(1, self.max_candidates)]
+
+    def _enforce_candidate_whitelist(
+        self,
+        parsed: Dict[str, Any],
+        candidates: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        selected_domain = normalize_domain(parsed.get("selected_domain") or "")
+        allowed_domains = self._candidate_domains(candidates)
+
+        if selected_domain and selected_domain not in allowed_domains:
+            return {
+                "selected_domain": None,
+                "decision": "rejected",
+                "confidence": 0.0,
+                "reason": "selected_domain_not_in_candidates",
+            }
+
+        if selected_domain and is_job_board_domain(selected_domain):
+            return {
+                "selected_domain": None,
+                "decision": "rejected",
+                "confidence": 0.0,
+                "reason": "selected_domain_blocked",
+            }
+
+        normalized = dict(parsed)
+        normalized["selected_domain"] = selected_domain or None
+        return normalized
+
     def validate(
         self,
         company_name: str,
@@ -165,28 +298,43 @@ class DomainAIValidationService:
                 "reason": "missing_openai_client",
             }
 
-        prompt = self._build_prompt(company_name, candidates)
+        filtered_candidates = self._prefilter_candidates(candidates)
+        if not filtered_candidates:
+            self.ctx.metrics["domain_ai_validation_skipped_prefilter"] = (
+                int(self.ctx.metrics.get("domain_ai_validation_skipped_prefilter", 0)) + 1
+            )
+            return {
+                "selected_domain": None,
+                "decision": "review",
+                "confidence": 0.0,
+                "reason": "prefilter_rejected_candidates",
+            }
+
+        prompt = self._build_prompt(company_name, filtered_candidates)
         payload = {
             "company_name": company_name,
             "prompt": prompt,
-            "candidates": candidates,
+            "candidates": filtered_candidates,
         }
 
         validate_fn = getattr(client, "validate_domain_candidates", None)
         complete_json_fn = getattr(client, "complete_json", None)
 
         exec_fn = None
-        exec_arg = None
+        exec_args = ()
+        fallback_call = None
 
         if validate_fn is not None:
             exec_fn = validate_fn
-            exec_arg = payload
+            exec_args = (payload,)
+            fallback_call = lambda: validate_fn(payload)
         elif complete_json_fn is not None:
             exec_fn = complete_json_fn
-            exec_arg = prompt
+            exec_args = (prompt,)
+            fallback_call = lambda: complete_json_fn(prompt)
         else:
             self.ctx.metrics["domain_ai_validation_skipped_no_supported_method"] = (
-                    int(self.ctx.metrics.get("domain_ai_validation_skipped_no_supported_method", 0)) + 1
+                int(self.ctx.metrics.get("domain_ai_validation_skipped_no_supported_method", 0)) + 1
             )
             return {
                 "selected_domain": None,
@@ -200,33 +348,35 @@ class DomainAIValidationService:
                 "openai",
                 "domain_ai_validation",
                 exec_fn,
-                exec_arg,
+                *exec_args,
                 cost=1,
             )
             self._used += 1
             self.ai_calls += 1
             self.ctx.metrics["domain_ai_validation_attempted"] = (
-                    int(self.ctx.metrics.get("domain_ai_validation_attempted", 0)) + 1
+                int(self.ctx.metrics.get("domain_ai_validation_attempted", 0)) + 1
             )
             self.ctx.metrics["domain_ai_calls"] = (
-                    int(self.ctx.metrics.get("domain_ai_calls", 0)) + 1
+                int(self.ctx.metrics.get("domain_ai_calls", 0)) + 1
             )
             parsed = self._parse_response(raw)
+            parsed = self._enforce_candidate_whitelist(parsed, filtered_candidates)
 
         except AttributeError as exc:
             if "get_circuit_breaker" not in str(exc):
                 raise
 
-            raw = exec_fn(exec_arg)
+            raw = fallback_call()
             self._used += 1
             self.ai_calls += 1
             self.ctx.metrics["domain_ai_validation_attempted"] = (
-                    int(self.ctx.metrics.get("domain_ai_validation_attempted", 0)) + 1
+                int(self.ctx.metrics.get("domain_ai_validation_attempted", 0)) + 1
             )
             self.ctx.metrics["domain_ai_calls"] = (
-                    int(self.ctx.metrics.get("domain_ai_calls", 0)) + 1
+                int(self.ctx.metrics.get("domain_ai_calls", 0)) + 1
             )
             parsed = self._parse_response(raw)
+            parsed = self._enforce_candidate_whitelist(parsed, filtered_candidates)
 
         except ProviderExecutionBlockedError:
             self.ctx.metrics["domain_ai_validation_skipped_blocked"] = (

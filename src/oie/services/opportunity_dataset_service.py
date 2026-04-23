@@ -4,12 +4,16 @@ import sqlite3
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.services.commercial_selection_service import CommercialSelectionService
+from oie.services.commercial_signal_service import CommercialSignalService
 
 
 class OpportunityDatasetService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
         self.db_path = self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.commercial_signal_service = CommercialSignalService()
+        self.commercial_selection_service = CommercialSelectionService(self.commercial_signal_service)
 
     def build_dataset(self) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(self.db_path)
@@ -35,7 +39,21 @@ class OpportunityDatasetService:
                         COALESCE(MAX(cs.score_remote), 0) AS score_remote,
                         COALESCE(MAX(cs.score_contractor), 0) AS score_contractor,
                         COALESCE(MAX(cs.score_multi_source), 0) AS score_multi_source,
-                        COALESCE(MAX(cs.score_company_type), 0) AS score_company_type
+                        COALESCE(MAX(cs.score_company_type), 0) AS score_company_type,
+                        COALESCE(MAX(cs.score_icp_fit), 0) AS score_icp_fit,
+                        COALESCE(MAX(cs.score_pain_urgency), 0) AS score_pain_urgency,
+                        COALESCE(MAX(cs.score_region_fit), 0) AS score_region_fit,
+                        COALESCE(MAX(cs.score_company_scale), 0) AS score_company_scale,
+                        COALESCE(MAX(cs.score_role_seniority_mix), 0) AS score_role_seniority_mix,
+                        COALESCE(MAX(cs.score_penalty_competitor), 0) AS score_penalty_competitor,
+                        COALESCE(MAX(cs.score_penalty_negative_signals), 0) AS score_penalty_negative_signals,
+                        COALESCE(MAX(cs.primary_service_fit), '') AS primary_service_fit,
+                        COALESCE(MAX(cs.buyer_persona_fit), '') AS buyer_persona_fit,
+                        COALESCE(MAX(cs.opportunity_label), '') AS opportunity_label,
+                        COALESCE(MAX(cs.opportunity_score_reason), '') AS opportunity_score_reason,
+                        COALESCE(MAX(cs.scoring_provider), '') AS scoring_provider,
+                        COALESCE(MAX(cs.scoring_model), '') AS scoring_model,
+                        COALESCE(MAX(cs.scoring_mode), '') AS scoring_mode
                     FROM company_scores cs
                     WHERE cs.run_id = ?
                     GROUP BY cs.company_key
@@ -120,11 +138,25 @@ class OpportunityDatasetService:
                     COALESCE(j.sample_job_title, '') AS sample_job_title,
                     COALESCE(j.jobs_count, 0) AS jobs_count,
                     COALESCE(s.opportunity_score, 0) AS opportunity_score,
+                    COALESCE(s.opportunity_label, '') AS opportunity_label,
                     COALESCE(s.score_openings, 0) AS score_openings,
                     COALESCE(s.score_remote, 0) AS score_remote,
                     COALESCE(s.score_contractor, 0) AS score_contractor,
                     COALESCE(s.score_multi_source, 0) AS score_multi_source,
                     COALESCE(s.score_company_type, 0) AS score_company_type,
+                    COALESCE(s.score_icp_fit, 0) AS score_icp_fit,
+                    COALESCE(s.score_pain_urgency, 0) AS score_pain_urgency,
+                    COALESCE(s.score_region_fit, 0) AS score_region_fit,
+                    COALESCE(s.score_company_scale, 0) AS score_company_scale,
+                    COALESCE(s.score_role_seniority_mix, 0) AS score_role_seniority_mix,
+                    COALESCE(s.score_penalty_competitor, 0) AS score_penalty_competitor,
+                    COALESCE(s.score_penalty_negative_signals, 0) AS score_penalty_negative_signals,
+                    COALESCE(s.primary_service_fit, '') AS primary_service_fit,
+                    COALESCE(s.buyer_persona_fit, '') AS buyer_persona_fit,
+                    COALESCE(s.opportunity_score_reason, '') AS opportunity_score_reason,
+                    COALESCE(s.scoring_provider, '') AS scoring_provider,
+                    COALESCE(s.scoring_model, '') AS scoring_model,
+                    COALESCE(s.scoring_mode, '') AS scoring_mode,
                     COALESCE(ls.lead_count, 0) AS lead_count,
                     COALESCE(ls.apollo_leads_count, 0) AS apollo_leads_count,
                     COALESCE(ls.hunter_leads_count, 0) AS hunter_leads_count,
@@ -159,10 +191,34 @@ class OpportunityDatasetService:
         finally:
             conn.close()
 
-        dataset = [dict(row) for row in rows]
+        dataset = []
+        for row in rows:
+            record = dict(row)
+            record = self.commercial_signal_service.finalize_row(record)
+            dataset.append(record)
+
+        # =========================
+        # FILTRO_COMERCIAL_DATASET (FIX)
+        # =========================
+        # =========================
+        # FILTRO_COMERCIAL_DATASET (REVERT - WRONG LEVEL)
+        # =========================
+        # NOTA: no filtramos dataset por lead aquí porque:
+        # - record es compañía, no lead
+        # - rompe coherencia y tests
+        # - el filtrado correcto ya ocurre en lead selection
+
+        dataset = self.commercial_selection_service.sort_companies_analytic(dataset)
+
         self.ctx.metrics["opportunity_dataset_rows"] = len(dataset)
+        self.ctx.metrics["opportunity_dataset_reachability_ready"] = sum(
+            1 for row in dataset if int(row.get("reachability_ready") or 0) == 1
+        )
+        self.ctx.metrics["opportunity_dataset_strong_icp"] = sum(
+            1 for row in dataset if str(row.get("icp_bucket") or "") == "strong_icp"
+        )
         return dataset
 
     def build_top_opportunities(self, limit: int = 25) -> List[Dict[str, Any]]:
         dataset = self.build_dataset()
-        return dataset[:limit]
+        return self.commercial_selection_service.top_companies_analytic(dataset, limit=limit)

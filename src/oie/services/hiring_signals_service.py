@@ -5,9 +5,68 @@ from typing import Any, Dict, List
 from oie.orchestration.run_context import RunContext
 
 
+TRUSTED_DESCRIPTION_SOURCES = {
+    "google_jobs",
+    "greenhouse",
+    "lever",
+    "workable",
+    "direct",
+    "company_site",
+}
+
+LOW_TRUST_DESCRIPTION_SOURCES = {
+    "linkedin_serpapi",
+}
+
+SUSPICIOUS_DESCRIPTION_MARKERS = (
+    " ...",
+    "job summary",
+    "expand",
+    "hace ",
+    "ago",
+    "platform support engineer",
+)
+
+
 class HiringSignalsService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
+
+    def _description_priority(self, job: Dict[str, Any]) -> int:
+        source = str(job.get("source") or "").strip().lower()
+        description = " ".join(str(job.get("description") or "").split()).strip().lower()
+
+        if not description:
+            return 0
+
+        if source in TRUSTED_DESCRIPTION_SOURCES:
+            return 3
+
+        if source in LOW_TRUST_DESCRIPTION_SOURCES:
+            token_hits = sum(1 for marker in SUSPICIOUS_DESCRIPTION_MARKERS if marker in description)
+            if token_hits >= 1:
+                return 0
+            return 1
+
+        return 2
+
+    def _should_replace_description(
+        self,
+        current_job: Dict[str, Any] | None,
+        new_job: Dict[str, Any],
+    ) -> bool:
+        if current_job is None:
+            return True
+
+        current_priority = self._description_priority(current_job)
+        new_priority = self._description_priority(new_job)
+
+        if new_priority != current_priority:
+            return new_priority > current_priority
+
+        current_len = len(" ".join(str(current_job.get("description") or "").split()).strip())
+        new_len = len(" ".join(str(new_job.get("description") or "").split()).strip())
+        return new_len > current_len
 
     def aggregate_by_company(self, jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         grouped: Dict[str, Dict[str, Any]] = {}
@@ -30,6 +89,7 @@ class HiringSignalsService:
                     "url": None,
                     "title": None,
                     "description": None,
+                    "description_source": None,
                     "source_meta": {},
                 }
 
@@ -60,8 +120,16 @@ class HiringSignalsService:
             if not grouped[company]["title"] and job.get("title"):
                 grouped[company]["title"] = job.get("title")
 
-            if not grouped[company]["description"] and job.get("description"):
+            current_description_job = None
+            if grouped[company]["description"]:
+                current_description_job = {
+                    "description": grouped[company]["description"],
+                    "source": grouped[company]["description_source"],
+                }
+
+            if job.get("description") and self._should_replace_description(current_description_job, job):
                 grouped[company]["description"] = job.get("description")
+                grouped[company]["description_source"] = job.get("source")
 
             if not grouped[company]["source_meta"] and job.get("source_meta"):
                 grouped[company]["source_meta"] = job.get("source_meta") or {}

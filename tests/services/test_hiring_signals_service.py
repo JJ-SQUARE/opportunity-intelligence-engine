@@ -62,3 +62,27 @@ def test_hiring_signals_service_supports_legacy_flag_names():
     company = companies[0]
     assert company["remote_jobs"] == 1
     assert company["contractor_jobs"] == 1
+
+
+def test_hiring_signals_service_prefers_trusted_description_over_contaminated_snippet():
+    ctx = RunContext.create(config={}, flags={})
+    service = HiringSignalsService(ctx)
+
+    jobs = [
+        {
+            "company": "Acme",
+            "source": "linkedin_serpapi",
+            "description": "Platform Support Engineer ... expand job summary ago",
+        },
+        {
+            "company": "Acme",
+            "source": "google_jobs",
+            "description": "Build and maintain backend services with Python and AWS.",
+        },
+    ]
+
+    companies = service.aggregate_by_company(jobs)
+
+    assert len(companies) == 1
+    assert companies[0]["description"] == "Build and maintain backend services with Python and AWS."
+    assert companies[0]["description_source"] == "google_jobs"

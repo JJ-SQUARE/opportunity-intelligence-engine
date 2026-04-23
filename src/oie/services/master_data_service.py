@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
@@ -46,11 +47,52 @@ class MasterDataService:
         if not existing_schema:
             return
 
-        if existing_schema != fieldnames:
+        existing_set = set(existing_schema)
+        new_set = set(fieldnames)
+
+        # Permitimos evolución aditiva del schema del master CSV:
+        # si solo faltan columnas nuevas, migramos el archivo y preservamos datos.
+        if existing_set.issubset(new_set):
+            return
+
+        raise MasterDataSchemaError(
+            f"Schema mismatch for {path.name}. "
+            f"existing={existing_schema} new={fieldnames}"
+        )
+
+    def _migrate_master_schema_if_needed(
+        self,
+        path: Path,
+        fieldnames: List[str],
+    ) -> int:
+        existing_schema = self._get_existing_schema(path)
+        if not existing_schema:
+            return 0
+
+        if existing_schema == fieldnames:
+            return 0
+
+        existing_set = set(existing_schema)
+        new_set = set(fieldnames)
+
+        # Solo migramos automáticamente cuando el cambio es aditivo.
+        if not existing_set.issubset(new_set):
             raise MasterDataSchemaError(
                 f"Schema mismatch for {path.name}. "
                 f"existing={existing_schema} new={fieldnames}"
             )
+
+        existing_rows = self._read_existing_rows(path)
+        normalized_rows = self._normalize_rows_to_schema(existing_rows, fieldnames)
+
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        with tmp_path.open("w", encoding="utf-8", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(normalized_rows)
+
+        os.replace(tmp_path, path)
+        return max(len(fieldnames) - len(existing_schema), 0)
 
     def _append_rows(
         self,
@@ -97,6 +139,19 @@ class MasterDataService:
     ) -> int:
         path = self._master_path(entity_name)
         self._validate_schema(path, fieldnames)
+        columns_added = self._migrate_master_schema_if_needed(path, fieldnames)
+
+        if columns_added > 0:
+            self.ctx.metrics[f"master_{entity_name}_schema_migrated"] = True
+            self.ctx.metrics[f"master_{entity_name}_schema_columns_added"] = (
+                int(self.ctx.metrics.get(f"master_{entity_name}_schema_columns_added", 0) or 0)
+                + columns_added
+            )
+            self.ctx.metrics[f"master_{entity_name}_schema_migrations_count"] = (
+                int(self.ctx.metrics.get(f"master_{entity_name}_schema_migrations_count", 0) or 0)
+                + 1
+            )
+
         normalized_rows = self._normalize_rows_to_schema(rows, fieldnames)
         return self._append_rows(path, fieldnames, normalized_rows)
 
@@ -109,12 +164,35 @@ class MasterDataService:
         try:
             count = self.append_entity_rows(entity_name, rows, fieldnames)
             self.ctx.metrics[f"master_{entity_name}_rows_written"] = count
+            self.ctx.metrics[f"master_{entity_name}_write_attempted"] = len(rows or [])
+            self.ctx.metrics[f"master_{entity_name}_write_succeeded"] = True
             return count
         except MasterDataSchemaError as exc:
+            self.ctx.metrics[f"master_{entity_name}_rows_written"] = 0
             self.ctx.metrics[f"master_{entity_name}_write_skipped_schema_error"] = True
+            self.ctx.metrics[f"master_{entity_name}_write_succeeded"] = False
+            self.ctx.metrics[f"master_{entity_name}_write_attempted"] = len(rows or [])
+            self.ctx.metrics["master_schema_errors_count"] = int(
+                self.ctx.metrics.get("master_schema_errors_count", 0) or 0
+            ) + 1
             self.ctx.add_provider_event(
                 provider="master_data",
                 event_type="schema_error",
+                message=str(exc),
+                metadata={"entity_name": entity_name},
+            )
+            return 0
+        except Exception as exc:
+            self.ctx.metrics[f"master_{entity_name}_rows_written"] = 0
+            self.ctx.metrics[f"master_{entity_name}_write_failed_error"] = True
+            self.ctx.metrics[f"master_{entity_name}_write_succeeded"] = False
+            self.ctx.metrics[f"master_{entity_name}_write_attempted"] = len(rows or [])
+            self.ctx.metrics[f"master_{entity_name}_write_errors_count"] = int(
+                self.ctx.metrics.get(f"master_{entity_name}_write_errors_count", 0) or 0
+            ) + 1
+            self.ctx.add_provider_event(
+                provider="master_data",
+                event_type="write_error",
                 message=str(exc),
                 metadata={"entity_name": entity_name},
             )
@@ -137,6 +215,12 @@ class MasterDataService:
             "is_full_time",
             "nearshore_friendly",
             "us_only",
+            "remote_flag",
+            "contractor_flag",
+            "many_openings_signal",
+            "offshore_mentioned",
+            "urgency_hits",
+            "job_fingerprint",
             "run_id",
             "run_date",
         ]
@@ -152,20 +236,38 @@ class MasterDataService:
             "resolved_domain",
             "domain_source",
             "domain_confidence",
-            "domain_validation_status",
             "domain_candidate",
+            "domain_validation_status",
+            "domain_review_required",
+            "domain_ai_validated",
+            "domain_ai_decision",
+            "domain_ai_confidence",
+            "domain_ai_reason",
             "company_type_ai",
             "classification_confidence_ai",
             "classification_provider",
             "industry",
             "employee_range",
+            "company_size",
             "linkedin_company_url",
+            "company_description",
+            "enriched_at",
             "enrichment_source",
             "total_openings",
             "remote_jobs",
             "contractor_jobs",
+            "remote_ratio",
+            "contractor_ratio",
+            "remote_friendly",
+            "contractor_signal",
+            "multi_source_signal",
             "opportunity_score",
             "opportunity_label",
+            "score_openings",
+            "score_remote",
+            "score_contractor",
+            "score_multi_source",
+            "score_company_type",
             "score_icp_fit",
             "score_pain_urgency",
             "score_region_fit",
@@ -194,6 +296,7 @@ class MasterDataService:
             "linkedin_url",
             "lead_source",
             "lead_confidence",
+            "lead_fingerprint",
             "email_quality_score",
             "lead_capture_reason",
             "lead_relevance_score",
@@ -212,6 +315,8 @@ class MasterDataService:
             "lead_score_linkedin",
             "lead_score_email_quality",
             "lead_score_confidence",
+            "lead_score_completeness_penalty",
+            "lead_score_company_penalty",
             "run_id",
             "run_date",
         ]

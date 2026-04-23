@@ -54,6 +54,7 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
                 company_key TEXT PRIMARY KEY,
                 company_display TEXT NOT NULL,
                 company_normalized TEXT NOT NULL,
+                company_root TEXT,
                 resolved_domain TEXT,
                 domain_source TEXT,
                 domain_confidence REAL,
@@ -255,6 +256,7 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
 
         company_columns = {row["name"] for row in conn.execute("PRAGMA table_info(companies)").fetchall()}
         required_company_columns = {
+            "company_root": "TEXT",
             "domain_candidate": "TEXT",
             "domain_validation_status": "TEXT",
             "domain_review_required": "INTEGER DEFAULT 0",
@@ -306,6 +308,16 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
         job_columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
         required_job_columns = {
             "job_fingerprint": "TEXT",
+            "is_remote": "INTEGER DEFAULT 0",
+            "is_contractor": "INTEGER DEFAULT 0",
+            "is_full_time": "INTEGER DEFAULT 0",
+            "nearshore_friendly": "INTEGER DEFAULT 0",
+            "us_only": "INTEGER DEFAULT 0",
+            "remote_flag": "INTEGER DEFAULT 0",
+            "contractor_flag": "INTEGER DEFAULT 0",
+            "many_openings_signal": "INTEGER DEFAULT 0",
+            "offshore_mentioned": "INTEGER DEFAULT 0",
+            "urgency_hits": "INTEGER DEFAULT 0",
         }
         for column_name, column_type in required_job_columns.items():
             if column_name not in job_columns:
@@ -328,6 +340,14 @@ def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
             "lead_scoring_provider": "TEXT",
             "lead_scoring_model": "TEXT",
             "lead_scoring_mode": "TEXT",
+            "lead_score_title": "REAL DEFAULT 0",
+            "lead_score_source": "REAL DEFAULT 0",
+            "lead_score_email": "REAL DEFAULT 0",
+            "lead_score_linkedin": "REAL DEFAULT 0",
+            "lead_score_email_quality": "REAL DEFAULT 0",
+            "lead_score_confidence": "REAL DEFAULT 0",
+            "lead_score_completeness_penalty": "REAL DEFAULT 0",
+            "lead_score_company_penalty": "REAL DEFAULT 0",
         }
         for column_name, column_type in required_lead_columns.items():
             if column_name not in lead_columns:

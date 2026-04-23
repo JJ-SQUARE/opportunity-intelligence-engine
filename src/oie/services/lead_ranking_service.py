@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+from oie.services.commercial_selection_service import CommercialSelectionService
 
 from oie.orchestration.run_context import RunContext
 from oie.services.provider_control_service import ProviderControlService
@@ -10,42 +11,72 @@ from oie.services.provider_execution_service import ProviderExecutionService
 TITLE_WEIGHTS = {
     "chief technology officer": 100,
     "cto": 100,
+    "chief information officer": 95,
+    "cio": 95,
+    "chief digital officer": 92,
+    "cdo": 92,
+    "chief operating officer": 70,
+    "coo": 70,
+    "chief product officer": 68,
+    "cpo": 68,
     "vp engineering": 90,
     "vice president engineering": 90,
-    "head of engineering": 85,
+    "vp of engineering": 90,
+    "vp technology": 82,
+    "vp digital": 72,
     "director of engineering": 80,
     "engineering director": 80,
-    "head of technology": 80,
-    "vp technology": 78,
     "director of technology": 76,
-    "head of product": 70,
-    "head of software": 70,
+    "director of software engineering": 82,
+    "director of platform engineering": 78,
+    "head of engineering": 85,
+    "head of technology": 80,
+    "head of software engineering": 82,
+    "head of platform engineering": 78,
+    "head of data engineering": 72,
+    "head of digital": 70,
+    "head of software": 72,
+    "head of product": 48,
+    "engineering manager": 62,
+    "platform engineering manager": 64,
+    "software engineering manager": 64,
+    "data engineering manager": 58,
+    "it manager": 54,
+    "innovation manager": 42,
+    "digital channels manager": 38,
+    "software manager": 48,
     "software director": 65,
-    "product director": 60,
-    "technical lead": 55,
-    "engineering manager": 50,
-    "software manager": 45,
-    "ceo": 20,
-    "chief executive officer": 20,
-    "director": 15,
+    "product director": 42,
+    "technical lead": 40,
+    "solutions architect": 36,
+    "enterprise architect": 34,
+    "ceo": 10,
+    "chief executive officer": 10,
+    "director": 12,
 }
 
 NEGATIVE_TITLE_TERMS = {
-    "compliance": -45,
-    "operations": -35,
-    "operating officer": -35,
-    "human resources": -50,
-    "hr": -50,
-    "recruit": -60,
-    "talent": -60,
-    "people": -40,
-    "finance": -35,
-    "accounting": -35,
-    "legal": -35,
-    "marketing": -20,
-    "sales": -20,
-    "customer success": -25,
-    "support": -20,
+    "compliance": -55,
+    "operations": -50,
+    "operating officer": -50,
+    "human resources": -60,
+    "hr": -60,
+    "recruit": -70,
+    "talent": -70,
+    "people": -55,
+    "finance": -45,
+    "accounting": -45,
+    "legal": -45,
+    "marketing": -30,
+    "sales": -30,
+    "customer success": -35,
+    "support": -30,
+    "product": -18,
+    "procurement": -40,
+    "purchasing": -40,
+    "buyer": -40,
+    "business development": -35,
+    "partnerships": -25,
 }
 
 GENERIC_EXACT_TITLE_SCORES = {
@@ -64,6 +95,19 @@ SOURCE_WEIGHTS = {
     "stub_generation": 0,
 }
 
+DEPRIORITIZED_COMPANY_TYPES = {
+    "competitor",
+    "staffing",
+    "consulting",
+    "marketplace",
+    "job_board",
+}
+
+COMPANY_TYPE_ALIASES = {
+    "staffing_agency": "staffing",
+    "outsourcing": "consulting",
+}
+
 
 class LeadRankingService:
     def __init__(
@@ -73,6 +117,7 @@ class LeadRankingService:
     ) -> None:
         self.ctx = ctx
         self.provider_control_service = provider_control_service
+        self.commercial_selection_service = CommercialSelectionService()
 
         if provider_control_service:
             self.provider_execution_service = ProviderExecutionService(ctx, provider_control_service)
@@ -146,20 +191,46 @@ class LeadRankingService:
         value = max(0.0, min(value, 1.0))
         return int(round(value * 20))
 
+    def _normalized_company_type(self, value: Any) -> str:
+        normalized = str(value or "").strip().lower()
+        return COMPANY_TYPE_ALIASES.get(normalized, normalized)
+
+    def _company_penalty_component(self, lead: Dict[str, Any]) -> int:
+        company_type = self._normalized_company_type(lead.get("company_type_ai") or "")
+        if company_type in DEPRIORITIZED_COMPANY_TYPES:
+            return -80
+
+        try:
+            competitor_penalty = float(lead.get("score_penalty_competitor") or 0)
+        except Exception:
+            competitor_penalty = 0.0
+
+        if competitor_penalty <= -20:
+            return -70
+
+        return 0
+
 
     def _build_lead_scoring_context(self) -> Dict[str, Any]:
         return {
             "target_buyer_personas": [
                 "cto",
-                "coo",
+                "cio",
                 "cdo",
                 "vp engineering",
+                "vp technology",
                 "director of engineering",
                 "engineering director",
+                "director of software engineering",
+                "director of platform engineering",
                 "head of engineering",
+                "head of technology",
+                "head of software engineering",
+                "head of platform engineering",
+                "engineering manager",
+                "software engineering manager",
+                "platform engineering manager",
                 "it manager",
-                "innovation manager",
-                "digital channels manager",
             ],
             "priority_industries": [
                 "banking and financial services",
@@ -208,6 +279,33 @@ class LeadRankingService:
         if score >= 45:
             return "medium"
         return "low"
+
+    def _looks_ranked(self, lead: Dict[str, Any]) -> bool:
+        if not isinstance(lead, dict):
+            return False
+
+        if "lead_relevance_score" not in lead:
+            return False
+
+        ranking_markers = (
+            "lead_score_title",
+            "lead_score_source",
+            "lead_score_email",
+            "lead_score_linkedin",
+            "lead_score_email_quality",
+            "lead_score_confidence",
+            "lead_score_completeness_penalty",
+            "lead_score_company_penalty",
+            "lead_priority_label",
+            "lead_scoring_provider",
+            "lead_scoring_mode",
+        )
+        return any(marker in lead for marker in ranking_markers)
+
+    def _ensure_ranked(self, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if leads and all(self._looks_ranked(lead) for lead in leads):
+            return list(leads)
+        return self.rank_leads(leads)
 
     def _score_lead_with_llm(self, lead: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if not self.provider_control_service or not self.provider_execution_service:
@@ -278,6 +376,7 @@ class LeadRankingService:
                 lead.get("email", ""),
                 lead.get("linkedin_url", ""),
             )
+            company_penalty = self._company_penalty_component(lead)
 
             lead_relevance_score = (
                 title_score
@@ -287,6 +386,7 @@ class LeadRankingService:
                 + email_quality_score
                 + confidence_score
                 + completeness_penalty
+                + company_penalty
             )
 
             enriched = dict(lead)
@@ -298,6 +398,7 @@ class LeadRankingService:
             enriched["lead_score_email_quality"] = email_quality_score
             enriched["lead_score_confidence"] = confidence_score
             enriched["lead_score_completeness_penalty"] = completeness_penalty
+            enriched["lead_score_company_penalty"] = company_penalty
             enriched["lead_priority_label"] = self._normalize_lead_label(lead_relevance_score, None)
             enriched["lead_score_reason"] = ""
             enriched["lead_scoring_provider"] = "rules"
@@ -331,22 +432,30 @@ class LeadRankingService:
         return ranked
 
     def select_best_lead_per_company(self, leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        best_by_company: Dict[str, Dict[str, Any]] = {}
+        return self.select_top_leads_per_company(leads, max_leads_per_company=1)
 
-        for lead in self.rank_leads(leads):
-            company_key = lead.get("company_key") or ""
-            if not company_key:
-                continue
+    def select_top_leads_per_company(
+        self,
+        leads: List[Dict[str, Any]],
+        max_leads_per_company: int = 3,
+    ) -> List[Dict[str, Any]]:
+        ranked = self._ensure_ranked(leads)
+        selected = self.commercial_selection_service.select_top_leads_per_company(
+            ranked,
+            max_leads_per_company=max_leads_per_company,
+            min_relevance_score=45,
+            require_channel=True,
+        )
 
-            if company_key not in best_by_company:
-                best_by_company[company_key] = lead
-
-        selected = list(best_by_company.values())
         self.ctx.metrics["best_leads_selected"] = len(selected)
+        self.ctx.metrics["best_leads_selected_companies"] = len(
+            {str(lead.get("company_key") or "").strip() for lead in selected if str(lead.get("company_key") or "").strip()}
+        )
+        self.ctx.metrics["best_leads_selected_max_per_company"] = max(1, int(max_leads_per_company or 1))
         return selected
 
     def build_top_leads(self, leads: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
-        ranked = self.rank_leads(leads)
+        ranked = self._ensure_ranked(leads)
 
         return [
             {
@@ -367,6 +476,7 @@ class LeadRankingService:
                 "lead_score_email_quality": lead.get("lead_score_email_quality", 0),
                 "lead_score_confidence": lead.get("lead_score_confidence", 0),
                 "lead_score_completeness_penalty": lead.get("lead_score_completeness_penalty", 0),
+                "lead_score_company_penalty": lead.get("lead_score_company_penalty", 0),
                 "lead_priority_label": lead.get("lead_priority_label", ""),
                 "lead_score_reason": lead.get("lead_score_reason", ""),
                 "lead_scoring_provider": lead.get("lead_scoring_provider", ""),

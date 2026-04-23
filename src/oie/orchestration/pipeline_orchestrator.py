@@ -13,6 +13,8 @@ from oie.services.collector_roi_export_service import CollectorROIExportService
 from oie.services.collector_roi_service import CollectorROIService
 from oie.services.company_classification_service import CompanyClassificationService
 from oie.services.company_enrichment_service import CompanyEnrichmentService
+from oie.services.commercial_selection_service import CommercialSelectionService
+from oie.services.commercial_signal_service import CommercialSignalService
 from oie.services.company_identity_service import CompanyIdentityService
 from oie.services.db_export_service import DBExportService
 from oie.services.domain_resolution_service import DomainResolutionService
@@ -103,6 +105,10 @@ class PipelineOrchestrator:
         self.company_enrichment_service = CompanyEnrichmentService(
             ctx,
             self.provider_control_service,
+        )
+        self.commercial_signal_service = CommercialSignalService()
+        self.commercial_selection_service = CommercialSelectionService(
+            self.commercial_signal_service,
         )
         self.lead_generation_service = LeadGenerationService(
             ctx,
@@ -198,42 +204,46 @@ class PipelineOrchestrator:
         companies: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         raw_limit = self.ctx.flags.get("limit")
+        sorted_companies = self.commercial_selection_service.sort_companies(companies)
+        actionable_companies = self.commercial_selection_service.commercially_actionable_companies(
+            sorted_companies
+        )
+
+        self.ctx.metrics["companies_commercial_candidates"] = len(actionable_companies)
+        self.ctx.metrics["companies_commercial_filtered_out"] = max(
+            len(sorted_companies) - len(actionable_companies),
+            0,
+        )
+
         if raw_limit in (None, "", 0, "0", False):
             self.ctx.metrics["companies_limit_requested"] = 0
-            self.ctx.metrics["companies_limit_applied"] = 0
+            self.ctx.metrics["companies_limit_applied"] = len(actionable_companies)
             self.ctx.metrics["companies_limit_truncated"] = 0
-            return companies
+            self.ctx.metrics["companies_limit_used_commercial_gate"] = True
+            return actionable_companies
 
         try:
             limit = int(raw_limit)
         except (TypeError, ValueError):
             self.ctx.metrics["companies_limit_invalid"] = True
             self.ctx.metrics["companies_limit_requested"] = 0
-            self.ctx.metrics["companies_limit_applied"] = 0
+            self.ctx.metrics["companies_limit_applied"] = len(actionable_companies)
             self.ctx.metrics["companies_limit_truncated"] = 0
-            return companies
+            self.ctx.metrics["companies_limit_used_commercial_gate"] = True
+            return actionable_companies
 
         if limit <= 0:
             self.ctx.metrics["companies_limit_requested"] = limit
             self.ctx.metrics["companies_limit_applied"] = 0
-            self.ctx.metrics["companies_limit_truncated"] = 0
-            return companies
+            self.ctx.metrics["companies_limit_truncated"] = len(actionable_companies)
+            self.ctx.metrics["companies_limit_used_commercial_gate"] = True
+            return []
 
-        sorted_companies = sorted(
-            companies,
-            key=lambda c: (
-                float(c.get("opportunity_score") or 0.0),
-                1 if (c.get("domain_validation_status") or "").strip().lower() == "accepted" else 0,
-                float(c.get("classification_confidence_ai") or 0.0),
-                (c.get("company_display") or c.get("company") or "").strip().lower(),
-            ),
-            reverse=True,
-        )
-
-        limited = sorted_companies[:limit]
+        limited = actionable_companies[:limit]
         self.ctx.metrics["companies_limit_requested"] = limit
         self.ctx.metrics["companies_limit_applied"] = len(limited)
-        self.ctx.metrics["companies_limit_truncated"] = max(len(sorted_companies) - len(limited), 0)
+        self.ctx.metrics["companies_limit_truncated"] = max(len(actionable_companies) - len(limited), 0)
+        self.ctx.metrics["companies_limit_used_commercial_gate"] = True
         return limited
 
 
@@ -348,9 +358,9 @@ class PipelineOrchestrator:
 
         actionable_companies = self.domain_resolution_service.resolve_domains(actionable_companies)
         actionable_companies = self.company_identity_service.enrich_company_identity(actionable_companies)
+        actionable_companies = self.company_enrichment_service.enrich_companies(actionable_companies)
         actionable_companies = self.company_classification_service.classify_companies(actionable_companies)
         actionable_companies = self.opportunity_scoring_service.score_companies(actionable_companies)
-        actionable_companies = self.company_enrichment_service.enrich_companies(actionable_companies)
         actionable_companies = self._limit_companies_for_run(actionable_companies)
 
         companies = actionable_companies + benchmark_companies
@@ -390,7 +400,19 @@ class PipelineOrchestrator:
             unique_jobs, companies, duplicate_jobs = self.run_company_pipeline()
             leads = self.lead_generation_service.generate_leads(self._companies_for_lead_generation(companies))
             ranked_leads = self.lead_ranking_service.rank_leads(leads)
-            best_leads = self.lead_ranking_service.select_best_lead_per_company(ranked_leads)
+
+            lead_cfg = self.ctx.config.get("lead_generation", {}) or {}
+            max_selected_leads_per_company = int(
+                lead_cfg.get("max_selected_leads_per_company", 3) or 3
+            )
+            max_selected_leads_per_company = max(1, max_selected_leads_per_company)
+
+            best_leads = self.lead_ranking_service.select_top_leads_per_company(
+                ranked_leads,
+                max_leads_per_company=max_selected_leads_per_company,
+            )
+            self.ctx.metrics["pipeline_selected_leads_per_company"] = max_selected_leads_per_company
+
             best_leads, duplicate_leads = self.master_dedup_service.dedupe_leads_against_master(best_leads)
 
             status = "company_pipeline_completed"

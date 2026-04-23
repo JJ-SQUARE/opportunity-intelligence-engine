@@ -32,6 +32,8 @@ OPPORTUNITY_DATASET_HEADERS = [
     "score_contractor",
     "score_multi_source",
     "score_company_type",
+    "icp_bucket",
+    "reachability_ready",
     "lead_count",
     "apollo_leads_count",
     "hunter_leads_count",

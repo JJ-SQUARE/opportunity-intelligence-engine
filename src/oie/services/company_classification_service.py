@@ -5,13 +5,114 @@ from typing import Any, Dict, List
 from oie.orchestration.run_context import RunContext
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.provider_execution_service import ProviderExecutionService
+from oie.utils.domain_filters import is_job_board_domain
 
 
 RULE_KEYWORDS = {
-    "staffing": ["staffing", "recruiting", "talent solutions", "headhunting"],
-    "consulting": ["consulting", "consultancy", "professional services", "advisory"],
-    "marketplace": ["marketplace", "platform", "two-sided marketplace"],
-    "job_board": ["job board", "jobs board", "career portal", "job search"],
+    "staffing": [
+        "staffing",
+        "staffing and recruiting",
+        "recruiting",
+        "recruitment",
+        "talent solutions",
+        "headhunting",
+        "executive search",
+        "talent partner",
+        "talent acquisition",
+    ],
+    "consulting": [
+        "outsourcing",
+        "outsource",
+        "outstaffing",
+        "staff augmentation",
+        "nearshore software",
+        "nearshore development",
+        "dedicated teams",
+        "software outsourcing",
+        "technology outsourcing",
+        "consulting",
+        "consultancy",
+        "professional services",
+        "advisory",
+        "technology consulting",
+        "software consulting",
+        "software consultancy",
+        "software development services",
+        "custom software development",
+        "digital transformation services",
+        "it services",
+        "it service provider",
+        "systems integrator",
+    ],
+    "marketplace": [
+        "marketplace",
+        "two-sided marketplace",
+        "talent marketplace",
+    ],
+    "job_board": [
+        "job board",
+        "jobs board",
+        "career portal",
+        "job search",
+        "find jobs",
+        "empleos",
+        "vacantes",
+        "jobgether",
+    ],
+}
+
+END_CLIENT_HINTS = {
+    "saas",
+    "platform",
+    "product company",
+    "software product",
+    "builds software products",
+    "banking and financial services",
+    "insurance",
+    "healthcare",
+    "life sciences",
+    "logistics",
+    "transportation",
+    "airlines",
+    "aviation",
+    "computer software",
+    "software company",
+    "fintech",
+    "proptech",
+    "healthtech",
+    "edtech",
+}
+
+
+COMPETITOR_HINTS = {
+    "bairesdev",
+    "globant",
+    "softserve",
+}
+
+PLACEHOLDER_COMPANY_VALUES = {
+    "",
+    "unknown",
+    "confidential",
+    "stealth",
+    "undisclosed",
+    "n/a",
+    "na",
+}
+
+PLACEHOLDER_COMPANY_PATTERNS = (
+    "empresa confidencial",
+    "compañía confidencial",
+    "cia confidencial",
+    "confidential company",
+    "stealth company",
+    "undisclosed company",
+)
+
+CLASSIFICATION_ALIASES = {
+    "outsourcing": "consulting",
+    "staffing_agency": "staffing",
+    "product_company": "end_client",
 }
 
 
@@ -25,32 +126,240 @@ class CompanyClassificationService:
         self.provider_control_service = provider_control_service
         self.provider_execution_service = ProviderExecutionService(ctx, provider_control_service)
 
-    def _rule_based_classification(self, company: Dict[str, Any]) -> Dict[str, Any] | None:
-        text = " ".join(
+    def _normalize_classification(self, value: Any) -> str:
+        normalized = str(value or "").strip().lower()
+        return CLASSIFICATION_ALIASES.get(normalized, normalized)
+
+    def _classification_text(self, company: Dict[str, Any]) -> str:
+        jobs = company.get("jobs") or []
+        job_parts: List[str] = []
+
+        for job in jobs:
+            if not isinstance(job, dict):
+                continue
+            job_parts.extend(
+                [
+                    str(job.get("title") or ""),
+                    str(job.get("description") or ""),
+                    str(job.get("location") or ""),
+                ]
+            )
+
+        return " ".join(
             [
                 str(company.get("company_display") or ""),
+                str(company.get("company") or ""),
                 str(company.get("company_description") or ""),
                 str(company.get("industry") or ""),
+                str(company.get("resolved_domain") or ""),
+                str(company.get("linkedin_company_url") or ""),
+                *job_parts,
             ]
         ).lower()
+
+    def _has_placeholder_company_name(self, company: Dict[str, Any]) -> bool:
+        values = [
+            str(company.get("company_display") or "").strip().lower(),
+            str(company.get("company") or "").strip().lower(),
+        ]
+
+        for value in values:
+            if not value:
+                continue
+            if value in PLACEHOLDER_COMPANY_VALUES:
+                return True
+            if any(pattern in value for pattern in PLACEHOLDER_COMPANY_PATTERNS):
+                return True
+
+        return False
+
+    def _has_minimum_llm_classification_evidence(self, company: Dict[str, Any]) -> bool:
+        if str(company.get("company_description") or "").strip():
+            return True
+        if str(company.get("industry") or "").strip():
+            return True
+        if str(company.get("resolved_domain") or "").strip():
+            return True
+        if str(company.get("linkedin_company_url") or "").strip():
+            return True
+
+        jobs = company.get("jobs") or []
+        for job in jobs:
+            if not isinstance(job, dict):
+                continue
+            if (
+                str(job.get("title") or "").strip()
+                or str(job.get("description") or "").strip()
+                or str(job.get("location") or "").strip()
+            ):
+                return True
+
+        return False
+
+    def _has_end_client_evidence(self, company: Dict[str, Any], text: str | None = None) -> bool:
+        haystack = (text or self._classification_text(company)).strip().lower()
+        if not haystack:
+            return False
+
+        if any(hint in haystack for hint in COMPETITOR_HINTS):
+            return False
+
+        for keywords in RULE_KEYWORDS.values():
+            if any(keyword in haystack for keyword in keywords):
+                return False
+
+        industry = str(company.get("industry") or "").strip().lower()
+        description = str(company.get("company_description") or "").strip().lower()
+        jobs = company.get("jobs") or []
+
+        hint_hits = sum(1 for hint in END_CLIENT_HINTS if hint in haystack)
+        has_product_language = any(term in description for term in ("product", "platform", "saas", "software"))
+        has_clear_industry = bool(industry and any(hint in industry for hint in END_CLIENT_HINTS))
+        has_build_language = any(
+            term in description
+            for term in ("builds", "develops", "operates", "offers", "provides")
+        )
+        has_hiring_signal = any(
+            isinstance(job, dict) and (
+                str(job.get("title") or "").strip()
+                or str(job.get("description") or "").strip()
+            )
+            for job in jobs
+        )
+
+        if hint_hits >= 2:
+            return True
+
+        if has_clear_industry and (has_product_language or has_build_language or has_hiring_signal):
+            return True
+
+        if has_product_language and has_build_language:
+            return True
+
+        return False
+
+    def _rule_based_classification(self, company: Dict[str, Any]) -> Dict[str, Any] | None:
+        domain = str(company.get("resolved_domain") or "").strip().lower()
+        text = self._classification_text(company)
+
+        if self._has_placeholder_company_name(company) and not self._has_minimum_llm_classification_evidence(company):
+            return {
+                "classification": "unknown",
+                "confidence": 0.0,
+                "provider": "rules",
+            }
+
+        if domain and is_job_board_domain(domain):
+            return {
+                "classification": "job_board",
+                "confidence": 0.95,
+                "provider": "rules",
+            }
+
+        if domain and any(hint in domain for hint in COMPETITOR_HINTS):
+            return {
+                "classification": "competitor",
+                "confidence": 0.95,
+                "provider": "rules",
+            }
+
+        if any(hint in text for hint in COMPETITOR_HINTS):
+            return {
+                "classification": "competitor",
+                "confidence": 0.95,
+                "provider": "rules",
+            }
 
         for company_type, keywords in RULE_KEYWORDS.items():
             for keyword in keywords:
                 if keyword in text:
+                    normalized_type = self._normalize_classification(company_type)
+                    confidence = 0.9 if normalized_type in {"staffing", "consulting", "job_board"} else 0.8
                     return {
-                        "classification": company_type,
-                        "confidence": 0.8,
+                        "classification": normalized_type,
+                        "confidence": confidence,
                         "provider": "rules",
                     }
 
-        if text.strip():
+        if self._has_end_client_evidence(company, text):
             return {
                 "classification": "end_client",
-                "confidence": 0.55,
+                "confidence": 0.72,
+                "provider": "rules",
+            }
+
+        if text.strip():
+            return {
+                "classification": "unknown",
+                "confidence": 0.2,
                 "provider": "rules",
             }
 
         return None
+
+    def _should_use_rule_override(
+        self,
+        rule_result: Dict[str, Any] | None,
+        company: Dict[str, Any] | None = None,
+    ) -> bool:
+        if not rule_result:
+            return False
+
+        classification = str(rule_result.get("classification") or "").strip().lower()
+        confidence = float(rule_result.get("confidence") or 0.0)
+
+        if classification in {"competitor", "staffing", "job_board", "consulting", "marketplace"} and confidence >= 0.8:
+            return True
+
+        if classification == "end_client" and confidence >= 0.72:
+            company = company or {}
+            description = str(company.get("company_description") or "").strip().lower()
+            industry = str(company.get("industry") or "").strip().lower()
+            domain = str(company.get("resolved_domain") or "").strip().lower()
+            jobs = company.get("jobs") or []
+
+            has_description = bool(description)
+            has_industry = bool(industry)
+            has_domain = bool(domain)
+
+            has_job_titles = any(
+                isinstance(job, dict) and str(job.get("title") or "").strip()
+                for job in jobs
+            )
+            has_job_descriptions = any(
+                isinstance(job, dict) and str(job.get("description") or "").strip()
+                for job in jobs
+            )
+            has_product_language = any(
+                term in description
+                for term in ("product", "products", "platform", "platforms", "saas", "software")
+            )
+            has_build_language = any(
+                term in description
+                for term in ("builds", "develops", "operates", "offers", "provides")
+            )
+            has_priority_industry = any(
+                hint in industry
+                for hint in END_CLIENT_HINTS
+            )
+
+            # Override fuerte solo cuando sí existen señales operativas reales
+            # además de descripción/industria/dominio.
+            if (
+                has_description
+                and has_industry
+                and has_domain
+                and has_job_titles
+                and (
+                    has_job_descriptions
+                    or has_product_language
+                    or has_build_language
+                    or has_priority_industry
+                )
+            ):
+                return True
+
+        return False
 
     def classify_companies(self, companies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if self.ctx.flags.get("no_llm"):
@@ -107,22 +416,44 @@ class CompanyClassificationService:
                 classified.append(enriched)
                 continue
 
-            try:
-                result = self.provider_execution_service.execute(
-                    "openai",
-                    "classify_company",
-                    client.classify_company,
-                    company,
-                    cost=1,
+            rule_result = self._rule_based_classification(company)
+            if self._should_use_rule_override(rule_result, company):
+                classification = str(rule_result.get("classification") or "").strip().lower()
+                metric_key = (
+                    "company_classification_rule_override_end_client"
+                    if classification == "end_client"
+                    else "company_classification_rule_override_used"
                 )
-            except Exception:
-                result = self._rule_based_classification(company) or {
+                self.ctx.metrics[metric_key] = (
+                    int(self.ctx.metrics.get(metric_key, 0) or 0) + 1
+                )
+                result = rule_result
+            elif not self._has_minimum_llm_classification_evidence(company):
+                self.ctx.metrics["company_classification_llm_skipped_low_evidence"] = (
+                    int(self.ctx.metrics.get("company_classification_llm_skipped_low_evidence", 0) or 0) + 1
+                )
+                result = rule_result or {
                     "classification": "unknown",
                     "confidence": 0.0,
-                    "provider": "fallback_rules",
+                    "provider": "rules",
                 }
+            else:
+                try:
+                    result = self.provider_execution_service.execute(
+                        "openai",
+                        "classify_company",
+                        client.classify_company,
+                        company,
+                        cost=1,
+                    )
+                except Exception:
+                    result = rule_result or {
+                        "classification": "unknown",
+                        "confidence": 0.0,
+                        "provider": "fallback_rules",
+                    }
 
-            enriched["company_type_ai"] = result.get("classification")
+            enriched["company_type_ai"] = self._normalize_classification(result.get("classification"))
             enriched["classification_confidence_ai"] = result.get("confidence")
             enriched["classification_provider"] = result.get("provider")
             classified.append(enriched)

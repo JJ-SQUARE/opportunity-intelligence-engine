@@ -106,6 +106,8 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
     assert dataset[0]["email_quality_score"] == 95
     assert "apollo_match" in dataset[0]["lead_capture_reason"]
     assert dataset[0]["lead_relevance_score"] == 197
+    assert dataset[0]["icp_bucket"] == "possible_icp"
+    assert dataset[0]["reachability_ready"] == 1
     assert dataset[0]["lead_count"] == 2
     assert dataset[0]["apollo_leads_count"] == 1
     assert dataset[0]["hunter_leads_count"] == 1
@@ -128,3 +130,5 @@ def test_opportunity_dataset_service_builds_dataset_and_exports(tmp_path):
         assert "hunter_leads_count" in reader.fieldnames
         assert "contacts_with_email_count" in reader.fieldnames
         assert "contacts_with_linkedin_count" in reader.fieldnames
+        assert "icp_bucket" in reader.fieldnames
+        assert "reachability_ready" in reader.fieldnames

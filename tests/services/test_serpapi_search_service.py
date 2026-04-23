@@ -58,3 +58,35 @@ def test_serpapi_search_service_respects_dry_run():
     assert result == {}
     assert ctx.budgets["serpapi"]["used_calls"] == 0
     assert ctx.metrics["serpapi_search_skipped_blocked"] is True
+
+
+def test_serpapi_search_service_google_search_tracks_metric():
+    ctx = RunContext.create(
+        config={
+            "providers": {
+                "limits": {"serpapi": 2},
+                "clients": {
+                    "serpapi": {
+                        "api_key": "fake-key"
+                    }
+                },
+            }
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    client = control.registry.get_client("serpapi")
+    client.search_google = lambda query, num=10: {
+        "organic_results": [{"title": "Tekton Labs - Official Website"}],
+        "query": query,
+    }
+
+    service = SerpAPISearchService(ctx, control)
+    result = service.search_google("tekton labs official website", num=5)
+
+    assert result["organic_results"][0]["title"] == "Tekton Labs - Official Website"
+    assert ctx.budgets["serpapi"]["used_calls"] == 1
+    assert ctx.metrics["serpapi_search_requests"] == 1
+    assert ctx.metrics["serpapi_search_google_requests"] == 1

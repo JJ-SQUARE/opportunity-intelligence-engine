@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
 from oie.utils.domain_filters import is_job_board_domain
+from oie.utils.company_name_extraction import extract_actionable_company_name
 from oie.persistence.repositories import CompanyAliasRepository, CompanyRepository
 from oie.persistence.sqlite import initialize_database
 
@@ -63,6 +64,15 @@ PLACEHOLDER_COMPANY_VALUES = {
     "na",
 }
 
+PLACEHOLDER_COMPANY_PATTERNS = (
+    "empresa confidencial",
+    "compañía confidencial",
+    "cia confidencial",
+    "confidential company",
+    "stealth company",
+    "undisclosed company",
+)
+
 LINKEDIN_TITLE_COMPANY_PATTERNS = [
     re.compile(r"^(?P<company>.+?)\s+hiring\s+.+$", re.IGNORECASE),
     re.compile(r"^(?P<title>.+?)\s+at\s+(?P<company>.+)$", re.IGNORECASE),
@@ -90,6 +100,9 @@ class CompanyIdentityService:
         if lowered in PLACEHOLDER_COMPANY_VALUES:
             return ""
 
+        if any(pattern in lowered for pattern in PLACEHOLDER_COMPANY_PATTERNS):
+            return ""
+
         candidate = re.sub(
             r"\b(remote|remoto|latam|latin america)\b",
             "",
@@ -102,8 +115,8 @@ class CompanyIdentityService:
         if lowered in PLACEHOLDER_COMPANY_VALUES:
             return ""
 
-        if len(candidate) <= 4 and candidate.isalpha():
-            return candidate.upper()
+        if any(pattern in lowered for pattern in PLACEHOLDER_COMPANY_PATTERNS):
+            return ""
 
         return candidate
 
@@ -147,6 +160,17 @@ class CompanyIdentityService:
         )
 
     def _infer_company_display(self, company: Dict[str, Any]) -> str:
+        extracted = extract_actionable_company_name(
+            company_display=company.get("company") or "",
+            title=company.get("title") or "",
+            snippet=company.get("description") or "",
+            apply_url=company.get("apply_url") or "",
+        )
+        if extracted:
+            cleaned = self._clean_company_candidate(extracted)
+            if cleaned:
+                return cleaned
+
         direct = self._clean_company_candidate(company.get("company") or "")
         if direct:
             return direct
@@ -209,22 +233,46 @@ class CompanyIdentityService:
             self.ctx.config.get("company_identity", {}).get("merge_rules", {}) or {}
         )
 
-    def build_aliases(self, company_display: str, company_normalized: str) -> tuple[List[str], Dict[str, str]]:
-        aliases = [company_display]
-        alias_type_map: Dict[str, str] = {
-            company_display: company_normalized,
-            f"{company_display}__type": "observed_name",
-        }
+    def build_aliases(
+        self,
+        company_display: str,
+        company_normalized: str,
+        observed_candidates: List[str] | None = None,
+    ) -> tuple[List[str], Dict[str, str]]:
+        aliases: List[str] = []
+        alias_type_map: Dict[str, str] = {}
+
+        def add_alias(raw_alias: str, alias_kind: str) -> None:
+            cleaned_alias = self._clean_company_candidate(raw_alias)
+            if not cleaned_alias:
+                return
+
+            normalized_alias = self.normalize_company_name(cleaned_alias)
+            if normalized_alias == "unknown":
+                return
+
+            if cleaned_alias not in aliases:
+                aliases.append(cleaned_alias)
+
+            alias_type_map[cleaned_alias] = normalized_alias
+            alias_type_map[f"{cleaned_alias}__type"] = alias_kind
+
+        add_alias(company_display, "observed_name")
+
+        for observed in observed_candidates or []:
+            observed_clean = self._clean_company_candidate(observed)
+            if not observed_clean:
+                continue
+            if observed_clean == company_display:
+                continue
+            add_alias(observed_clean, "observed_name")
 
         manual_aliases = self.get_manual_alias_map()
         for canonical_name, alias_values in manual_aliases.items():
             normalized_canonical = self.normalize_company_name(canonical_name)
             if normalized_canonical == company_normalized:
                 for alias in alias_values:
-                    if alias not in aliases:
-                        aliases.append(alias)
-                    alias_type_map[alias] = self.normalize_company_name(alias)
-                    alias_type_map[f"{alias}__type"] = "manual_alias"
+                    add_alias(alias, "manual_alias")
 
         return aliases, alias_type_map
 
@@ -298,6 +346,22 @@ class CompanyIdentityService:
         right_domain = (right.get("resolved_domain") or "").strip().lower()
         return bool(left_domain and right_domain and left_domain == right_domain)
 
+    def _domains_conflict(
+        self,
+        left: dict,
+        right: dict,
+    ) -> bool:
+        left_domain = (left.get("resolved_domain") or "").strip().lower()
+        right_domain = (right.get("resolved_domain") or "").strip().lower()
+
+        if not left_domain or not right_domain:
+            return False
+
+        if is_job_board_domain(left_domain) or is_job_board_domain(right_domain):
+            return False
+
+        return left_domain != right_domain
+
     def _is_strong_brand_match(self, left: dict, right: dict) -> bool:
         left_norm = (left.get("company_normalized") or "").lower()
         right_norm = (right.get("company_normalized") or "").lower()
@@ -321,22 +385,35 @@ class CompanyIdentityService:
         if not left_tokens or not right_tokens:
             return False
 
+        if self._domains_conflict(left, right):
+            return False
+
         shared = left_tokens & right_tokens
 
-        # Caso fuerte: token principal compartido
+        # Caso fuerte: token principal compartido (restringido pero permitiendo
+        # marcas reales como "Sofka" vs "Sofka Technologies")
         if len(shared) == 1:
             token = next(iter(shared))
 
-            # containment real
-            if (left_norm.startswith(token) or right_norm.startswith(token)):
-                if token in left_norm and token in right_norm:
-                    # evitar falsos positivos por dominio contradictorio
-                    ld = (left.get("resolved_domain") or "").lower()
-                    rd = (right.get("resolved_domain") or "").lower()
+            # seguir bloqueando tokens demasiado cortos/genéricos
+            if len(token) < 5:
+                return False
 
-                    if ld and rd and ld != rd:
-                        return False
+            # tokens completos
+            left_tokens_full = set(re.split(r"[^a-z0-9]+", left_norm))
+            right_tokens_full = set(re.split(r"[^a-z0-9]+", right_norm))
 
+            # remover vacíos
+            left_tokens_full = {t for t in left_tokens_full if t}
+            right_tokens_full = {t for t in right_tokens_full if t}
+
+            # no permitir colas demasiado largas; tolerar sufijos comunes de marca
+            if len(left_tokens_full) > 3 or len(right_tokens_full) > 3:
+                return False
+
+            # containment fuerte
+            if token in left_norm and token in right_norm:
+                if left_norm.startswith(token) or right_norm.startswith(token):
                     return True
 
         return False
@@ -357,26 +434,87 @@ class CompanyIdentityService:
         if left_norm == right_norm:
             return True
 
-        if self._have_shared_resolved_domain(left, right):
-            return True
-
         left_tokens = self._tokenize_identity_value(left_norm)
         right_tokens = self._tokenize_identity_value(right_norm)
 
         if not left_tokens or not right_tokens:
             return False
 
+        if self._domains_conflict(left, right):
+            return False
+
+        shared = left_tokens & right_tokens
+        left_only = left_tokens - shared
+        right_only = right_tokens - shared
+
+        # exigir superposición realmente fuerte:
+        # - 2+ tokens compartidos
+        # - y que no haya demasiada cola distinta en ambos lados
+        if len(shared) >= 2:
+            if len(left_only) <= 1 and len(right_only) <= 1:
+                return True
+            return False
+
+        # si solo comparten 1 token, ser estrictos pero permitir casos
+        # reales de marca base + sufijo descriptivo
+        if len(shared) == 1:
+            token = next(iter(shared))
+
+            if len(token) < 5:
+                return False
+
+            # no permitir si ambos lados agregan colas distintas:
+            # evita "focus digital" vs "focus logistics"
+            if left_only and right_only:
+                return False
+
+            if token in left_norm and token in right_norm:
+                if left_norm.startswith(token) or right_norm.startswith(token):
+                    if left_norm in right_norm or right_norm in left_norm:
+                        return True
+
+        return False
+
+    def _is_safe_same_domain_merge(
+        self,
+        left: dict,
+        right: dict,
+    ) -> bool:
+        if not self._have_shared_resolved_domain(left, right):
+            return False
+
+        left_norm = (left.get("company_normalized") or "").strip().lower()
+        right_norm = (right.get("company_normalized") or "").strip().lower()
+        left_root = (left.get("company_root") or "").strip().lower()
+        right_root = (right.get("company_root") or "").strip().lower()
+
+        if not left_norm or not right_norm:
+            return False
+
+        if left_norm == right_norm:
+            return True
+
+        if left_root and right_root and left_root == right_root:
+            return True
+
+        if self._is_strong_brand_match(left, right):
+            return True
+
+        if self._is_safe_same_root_merge(left, right):
+            return True
+
+        # Guardrail extra:
+        # compartir dominio no basta si la superposición real de marca es débil.
+        left_tokens = self._tokenize_identity_value(left_norm)
+        right_tokens = self._tokenize_identity_value(right_norm)
         shared = left_tokens & right_tokens
 
-        # exigir superposición fuerte; un solo token genérico no basta
         if len(shared) >= 2:
             return True
 
-        # si solo comparten 1 token, solo permitir cuando uno contiene al otro
-        # y además el token compartido es claramente la marca principal
         if len(shared) == 1:
             token = next(iter(shared))
-            if token in left_norm and token in right_norm:
+            if len(token) >= 6:
                 if left_norm.startswith(token) or right_norm.startswith(token):
                     if left_norm in right_norm or right_norm in left_norm:
                         return True
@@ -402,6 +540,9 @@ class CompanyIdentityService:
                 right_root = right.get("company_root")
                 left_domain = left.get("resolved_domain")
                 right_domain = right.get("resolved_domain")
+
+                if left_norm in PLACEHOLDER_COMPANY_VALUES or right_norm in PLACEHOLDER_COMPANY_VALUES:
+                    continue
 
                 if is_job_board_domain(left_domain):
                     left_domain = ""
@@ -439,14 +580,15 @@ class CompanyIdentityService:
                         continue
 
                 if allow_same_domain and left_domain and right_domain and left_domain == right_domain:
-                    candidates.append(
-                        {
-                            "company_key_left": left["company_key"],
-                            "company_key_right": right["company_key"],
-                            "reason": "same_domain",
-                            "confidence": 0.9,
-                        }
-                    )
+                    if self._is_safe_same_domain_merge(left, right):
+                        candidates.append(
+                            {
+                                "company_key_left": left["company_key"],
+                                "company_key_right": right["company_key"],
+                                "reason": "same_domain",
+                                "confidence": 0.9,
+                            }
+                        )
 
         return candidates
 
@@ -517,7 +659,21 @@ class CompanyIdentityService:
             if is_job_board_domain(resolved_domain):
                 resolved_domain = None
 
-            aliases, alias_type_map = self.build_aliases(display, normalized)
+            observed_candidates = []
+            for candidate in (
+                company.get("company"),
+                company.get("company_display"),
+                display,
+            ):
+                cleaned_candidate = self._clean_company_candidate(candidate or "")
+                if cleaned_candidate:
+                    observed_candidates.append(cleaned_candidate)
+
+            aliases, alias_type_map = self.build_aliases(
+                display,
+                normalized,
+                observed_candidates=observed_candidates,
+            )
             existing_company_key = self.reconcile_existing_company_key(
                 company_normalized=normalized,
                 resolved_domain=resolved_domain,

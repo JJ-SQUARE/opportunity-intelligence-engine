@@ -58,6 +58,22 @@ BLOCKED_DOMAINS = {
     "www.bebee.com",
     "jobijoba.mx",
     "www.jobijoba.mx",
+    "jobgether.com",
+    "www.jobgether.com",
+    "grabjobs.co",
+    "www.grabjobs.co",
+    "talenteca.com",
+    "www.talenteca.com",
+    "jobleads.com",
+    "www.jobleads.com",
+    "oficinaempleo.com",
+    "www.oficinaempleo.com",
+    "quierolaburo.com",
+    "www.quierolaburo.com",
+    "magneto365.com",
+    "www.magneto365.com",
+    "bumeran.com",
+    "www.bumeran.com",
 }
 
 GENERIC_COMPANY_TOKENS = {
@@ -113,6 +129,27 @@ GENERIC_COMPANY_TOKENS = {
     "latam",
 }
 
+UNRELATED_TEXT_MARKERS = {
+    "job board",
+    "bolsa de trabajo",
+    "empleos",
+    "vacantes",
+    "trabajos",
+    "jobs",
+    "career",
+    "careers",
+    "hiring",
+    "recruiting",
+    "recruitment",
+    "talent platform",
+    "marketplace",
+    "classifieds",
+    "news",
+    "blog",
+    "directory",
+    "platform support engineer",
+}
+
 
 class DomainConfidenceService:
     def __init__(
@@ -136,6 +173,8 @@ class DomainConfidenceService:
             .replace("(", " ")
             .replace(")", " ")
             .replace("&", " ")
+            .replace(":", " ")
+            .replace(";", " ")
             .strip()
         )
 
@@ -175,7 +214,6 @@ class DomainConfidenceService:
         token_hits = sum(1 for token in tokens if token in domain_text or token in domain_compact)
         core_hits = sum(1 for token in core_tokens if token in domain_text or token in domain_compact)
 
-        # NUEVO: match fuerte por token principal de marca
         primary_core_token = core_tokens[0] if core_tokens else ""
         primary_token_match = bool(primary_core_token and primary_core_token in domain_compact)
 
@@ -217,6 +255,7 @@ class DomainConfidenceService:
         serp_rank = candidate.get("serp_rank")
         title = self._normalize_text(candidate.get("title"))
         snippet = self._normalize_text(candidate.get("snippet"))
+        text = f"{title} {snippet}".strip()
 
         blocked = self._is_blocked_domain(normalized_domain)
         subdomain_parts = normalized_domain.split(".")[:-2] if normalized_domain.count(".") >= 2 else []
@@ -231,6 +270,20 @@ class DomainConfidenceService:
         full_join_match = brand_info["full_join_match"]
         core_join_match = brand_info["core_join_match"]
         primary_token_match = brand_info["primary_token_match"]
+        core_tokens = brand_info["core_tokens"]
+
+        text_core_hits = 0
+        if core_tokens and text:
+            text_core_hits = sum(1 for token in core_tokens if token in text)
+
+        weak_single_token_brand = (
+            len(core_tokens) == 1
+            and len(core_tokens[0]) <= 4
+        )
+        strong_text_proof = "official" in text or "sitio oficial" in text
+
+        unrelated_text_hits = sum(1 for marker in UNRELATED_TEXT_MARKERS if marker in text)
+        text_has_no_brand_tokens = bool(text) and text_core_hits == 0 and not strong_text_proof
 
         reasons: List[str] = []
         raw_score = 0.0
@@ -294,34 +347,58 @@ class DomainConfidenceService:
             raw_score -= 0.35
             reasons.append("suspicious_subdomain_penalty")
 
-        text = f"{title} {snippet}".strip()
-        core_tokens = brand_info["core_tokens"]
-        if core_tokens and text:
-            text_core_hits = sum(1 for token in core_tokens if token in text)
-            if text_core_hits >= 2:
-                raw_score += 0.15
-                reasons.append("text_core_hits_2plus")
-            elif text_core_hits == 1:
-                raw_score += 0.08
-                reasons.append("text_core_hits_1")
+        if text_core_hits >= 2:
+            raw_score += 0.15
+            reasons.append("text_core_hits_2plus")
+        elif text_core_hits == 1:
+            raw_score += 0.08
+            reasons.append("text_core_hits_1")
 
-        if not blocked and source in {"apply_url", "url"} and brand_match:
+        if unrelated_text_hits >= 2:
+            raw_score -= 0.35
+            reasons.append("unrelated_text_penalty_strong")
+        elif unrelated_text_hits == 1:
+            raw_score -= 0.18
+            reasons.append("unrelated_text_penalty")
+
+        if brand_match and text_has_no_brand_tokens and source == "serpapi_fallback":
+            raw_score -= 0.18
+            reasons.append("brand_without_text_support_penalty")
+
+        if weak_single_token_brand and text_has_no_brand_tokens:
+            raw_score -= 0.15
+            reasons.append("weak_single_token_without_text_support_penalty")
+
+        if (
+            weak_single_token_brand
+            and core_hits == 1
+            and text_core_hits <= 1
+            and not strong_text_proof
+        ):
+            raw_score = min(raw_score, self.auto_accept_threshold - 0.05)
+            reasons.append("weak_single_token_brand_cap")
+
+        if not blocked and source in {"apply_url", "url"} and brand_match and not suspicious_subdomain:
             raw_score = max(raw_score, 0.80)
             reasons.append("direct_url_brand_floor")
 
-        if not blocked and not suspicious_subdomain and source == "serpapi_fallback" and full_join_match:
+        if not blocked and not suspicious_subdomain and source == "serpapi_fallback" and full_join_match and text_core_hits >= 1:
             raw_score = max(raw_score, 0.90)
             reasons.append("serp_brand_floor_full")
         elif not blocked and not suspicious_subdomain and source == "serpapi_fallback" and core_hits >= 1 and "official" in text:
             raw_score = max(raw_score, 0.85)
             reasons.append("serp_brand_floor_official")
 
-        # NUEVO: match honesto por marca principal -> mínimo review
         if (
             not blocked
             and source == "serpapi_fallback"
             and not generic_name
-            and (core_hits >= 1 or primary_token_match or core_join_match)
+            and unrelated_text_hits == 0
+            and (
+                core_hits >= 1
+                or core_join_match
+                or (primary_token_match and not weak_single_token_brand)
+            )
         ):
             review_floor = self.review_threshold + (0.05 if suspicious_subdomain else 0.0)
             raw_score = max(raw_score, review_floor)
@@ -329,16 +406,38 @@ class DomainConfidenceService:
 
         score = max(0.0, min(1.0, round(raw_score, 4)))
 
+        force_review_for_weak_single_token_brand = (
+            weak_single_token_brand
+            and core_hits == 1
+            and text_core_hits <= 1
+            and not strong_text_proof
+            and score >= self.auto_accept_threshold
+        )
+
+        force_review_for_homonym_like_case = (
+            not blocked
+            and source == "serpapi_fallback"
+            and brand_match
+            and text_has_no_brand_tokens
+            and (weak_single_token_brand or unrelated_text_hits >= 1)
+        )
+
         if blocked:
             validation_status = "rejected"
         elif suspicious_subdomain and score >= self.review_threshold:
             validation_status = "review"
             reasons.append("suspicious_subdomain_forced_review")
+        elif force_review_for_weak_single_token_brand:
+            validation_status = "review"
+            reasons.append("weak_single_token_brand_forced_review")
+        elif force_review_for_homonym_like_case:
+            validation_status = "review"
+            reasons.append("homonym_like_forced_review")
         elif score >= self.auto_accept_threshold:
             validation_status = "accepted"
         elif score >= self.review_threshold:
             validation_status = "review"
-        elif brand_match:
+        elif brand_match and unrelated_text_hits == 0:
             validation_status = "review"
             reasons.append("brand_match_forced_review")
         else:

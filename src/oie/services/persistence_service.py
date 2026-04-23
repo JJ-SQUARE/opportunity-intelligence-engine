@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
@@ -24,6 +25,7 @@ class PersistenceService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
         self.db_path = self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.ctx.paths["db_path"] = self.db_path
         self.run_repository = RunRepository(self.db_path)
         self.run_metrics_repository = RunMetricsRepository(self.db_path)
         self.provider_event_repository = ProviderEventRepository(self.db_path)
@@ -39,6 +41,7 @@ class PersistenceService:
 
     def initialize(self) -> None:
         initialize_database(self.db_path)
+        self.ctx.metrics["persistence_database_initialized"] = True
 
     def persist_run(self, status: str) -> None:
         self.run_repository.upsert_run(
@@ -97,6 +100,55 @@ class PersistenceService:
             leads=leads,
         )
 
+    def _record_persistence_error(
+        self,
+        step: str,
+        exc: Exception,
+    ) -> None:
+        metric_key = f"persistence_{step}_failed"
+        self.ctx.metrics[metric_key] = True
+        self.ctx.metrics["persistence_errors_count"] = int(
+            self.ctx.metrics.get("persistence_errors_count", 0) or 0
+        ) + 1
+
+        if isinstance(exc, sqlite3.OperationalError):
+            self.ctx.metrics["persistence_schema_errors_count"] = int(
+                self.ctx.metrics.get("persistence_schema_errors_count", 0) or 0
+            ) + 1
+            self.ctx.metrics["persistence_sqlite_operational_errors_count"] = int(
+                self.ctx.metrics.get("persistence_sqlite_operational_errors_count", 0) or 0
+            ) + 1
+
+        self.ctx.add_provider_event(
+            provider="persistence",
+            event_type="persist_error",
+            message=f"{step}: {exc}",
+            metadata={
+                "step": step,
+                "error_type": exc.__class__.__name__,
+            },
+        )
+
+    def _safe_persist_step(
+        self,
+        step: str,
+        fn,
+        *args,
+        required: bool = False,
+        **kwargs,
+    ) -> bool:
+        self.ctx.metrics[f"persistence_{step}_attempted"] = True
+        try:
+            fn(*args, **kwargs)
+            self.ctx.metrics[f"persistence_{step}_succeeded"] = True
+            return True
+        except Exception as exc:
+            self.ctx.metrics[f"persistence_{step}_succeeded"] = False
+            self._record_persistence_error(step, exc)
+            if required:
+                raise
+            return False
+
     def persist_run_snapshot(
         self,
         status: str,
@@ -104,17 +156,19 @@ class PersistenceService:
         jobs: List[Dict[str, Any]] | None = None,
         leads: List[Dict[str, Any]] | None = None,
     ) -> None:
-        self.initialize()
-        self.persist_run(status=status)
-        self.persist_metrics()
-        self.persist_provider_events()
-        self.persist_provider_operation_metrics(
-            self.ctx.provider_state.get("provider_operation_metrics_rows_data")
+        self._safe_persist_step("initialize", self.initialize, required=True)
+        self._safe_persist_step("run", self.persist_run, status=status, required=True)
+        self._safe_persist_step("metrics", self.persist_metrics)
+        self._safe_persist_step("provider_events", self.persist_provider_events)
+        self._safe_persist_step(
+            "provider_operation_metrics",
+            self.persist_provider_operation_metrics,
+            self.ctx.provider_state.get("provider_operation_metrics_rows_data"),
         )
 
         if companies is not None:
-            self.persist_companies(companies)
+            self._safe_persist_step("companies", self.persist_companies, companies)
         if jobs is not None:
-            self.persist_jobs(jobs)
+            self._safe_persist_step("jobs", self.persist_jobs, jobs)
         if leads is not None:
-            self.persist_leads(leads)
+            self._safe_persist_step("leads", self.persist_leads, leads)

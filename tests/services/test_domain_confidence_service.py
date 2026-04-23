@@ -108,3 +108,51 @@ def test_score_candidate_forces_review_for_suspicious_beta_subdomain():
 
     assert result["validation_status"] == "review"
     assert result["review_required"] is True
+
+def test_score_candidate_does_not_auto_accept_ambiguous_short_single_token_brand():
+    svc = DomainConfidenceService()
+
+    result = svc.score_candidate(
+        company_name="NOUS",
+        domain="nous.example.com",
+        source="serpapi_fallback",
+        serp_rank=1,
+        title="NOUS platform",
+        snippet="Innovation platform",
+    )
+
+    assert result["validation_status"] != "accepted"
+    assert result["review_required"] is True
+
+
+
+def test_score_candidate_forces_review_for_homonym_like_serp_result_without_brand_support():
+    svc = DomainConfidenceService()
+
+    result = svc.score_candidate(
+        company_name="NOUS",
+        domain="nous.example.com",
+        source="serpapi_fallback",
+        serp_rank=1,
+        title="Innovation platform",
+        snippet="AI marketplace and jobs platform",
+    )
+
+    assert result["validation_status"] == "review"
+    assert result["review_required"] is True
+
+
+def test_score_candidate_rejects_unrelated_jobish_text_even_with_partial_brand_hit():
+    svc = DomainConfidenceService()
+
+    result = svc.score_candidate(
+        company_name="Rimutee",
+        domain="rimutee.example.com",
+        source="serpapi_fallback",
+        serp_rank=1,
+        title="Jobs platform",
+        snippet="Vacantes, empleos y talent platform",
+    )
+
+    assert result["validation_status"] in {"review", "rejected"}
+    assert result["score"] < 0.80

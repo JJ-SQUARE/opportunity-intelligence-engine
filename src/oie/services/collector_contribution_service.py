@@ -18,10 +18,18 @@ class CollectorContributionService:
     ) -> List[Dict[str, Any]]:
         company_first_source: Dict[str, str] = {}
         source_jobs = defaultdict(int)
+        source_effective_jobs = defaultdict(int)
         source_unique_jobs = defaultdict(set)
         source_companies = defaultdict(set)
+        source_effective_companies = defaultdict(set)
         source_new_companies = defaultdict(int)
         source_leads = defaultdict(int)
+
+        effective_company_keys = {
+            company.get("company_key")
+            for company in companies or []
+            if company.get("company_key")
+        }
 
         for job in jobs:
             source = job.get("source", "unknown")
@@ -33,6 +41,10 @@ class CollectorContributionService:
 
             if company_key:
                 source_companies[source].add(company_key)
+
+            if company_key and company_key in effective_company_keys:
+                source_effective_jobs[source] += 1
+                source_effective_companies[source].add(company_key)
                 if company_key not in company_first_source:
                     company_first_source[company_key] = source
                     source_new_companies[source] += 1
@@ -56,13 +68,15 @@ class CollectorContributionService:
         rows: List[Dict[str, Any]] = []
         for source in all_sources:
             jobs_collected = source_jobs[source]
+            effective_jobs = source_effective_jobs[source]
             unique_jobs = len(source_unique_jobs[source])
             unique_companies = len(source_companies[source])
+            effective_companies = len(source_effective_companies[source])
             new_companies = source_new_companies[source]
             leads_generated = source_leads[source]
 
             contribution_score = (
-                unique_jobs * 1.0
+                effective_jobs * 1.0
                 + new_companies * 3.0
                 + leads_generated * 2.0
             )
@@ -71,8 +85,10 @@ class CollectorContributionService:
                 {
                     "source": source,
                     "jobs_collected": jobs_collected,
+                    "jobs_effective": effective_jobs,
                     "unique_jobs": unique_jobs,
                     "unique_companies": unique_companies,
+                    "effective_companies": effective_companies,
                     "new_companies": new_companies,
                     "leads_generated": leads_generated,
                     "contribution_score": round(contribution_score, 2),
@@ -83,6 +99,7 @@ class CollectorContributionService:
             key=lambda row: (
                 row["contribution_score"],
                 row["new_companies"],
+                row["jobs_effective"],
                 row["unique_jobs"],
             ),
             reverse=True,

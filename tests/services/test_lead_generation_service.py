@@ -688,3 +688,322 @@ def test_lead_generation_service_skips_competitor_company(tmp_path):
     assert leads == []
     assert calls["apollo"] == 0
     assert calls["hunter"] == 0
+
+def test_lead_generation_service_allows_accepted_domain_without_full_enrichment(tmp_path):
+    ctx = RunContext.create(
+        config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
+            "lead_generation": {"max_companies_per_run": 5},
+            "providers": {
+                "limits": {"apollo": 5, "hunter": 5},
+                "clients": {
+                    "apollo": {"api_key": "fake-apollo"},
+                    "hunter": {"api_key": "fake-hunter"},
+                },
+            }
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    calls = {"apollo": 0}
+
+    apollo_client = control.registry.get_client("apollo")
+    def fake_apollo(domain, titles):
+        calls["apollo"] += 1
+        return {
+            "people": [
+                {
+                    "name": "Jane Domain",
+                    "title": "CTO",
+                    "email": "jane@signalco.com",
+                    "linkedin_url": "https://linkedin.com/in/janedomain",
+                }
+            ]
+        }
+    apollo_client.search_people_by_domain_and_titles = fake_apollo
+
+    hunter_client = control.registry.get_client("hunter")
+    hunter_client.search_domain_contacts = lambda domain: {"data": {"emails": []}}
+
+    service = LeadGenerationService(ctx, control)
+    leads = service.generate_leads(
+        [
+            {
+                "company_key": "cmp_signal_only",
+                "resolved_domain": "signalco.com",
+                "domain_validation_status": "accepted",
+                "company_type_ai": "unknown",
+                "classification_confidence_ai": 0.2,
+                "opportunity_score": 26,
+            },
+            {
+                "company_key": "cmp_enriched",
+                "resolved_domain": "enrichedco.com",
+                "domain_validation_status": "accepted",
+                "company_type_ai": "end_client",
+                "classification_confidence_ai": 0.95,
+                "opportunity_score": 24,
+                "industry": "software",
+                "linkedin_company_url": "https://linkedin.com/company/enrichedco",
+            },
+        ]
+    )
+
+    assert len(leads) >= 1
+    assert any(lead["company_key"] == "cmp_signal_only" for lead in leads)
+    assert calls["apollo"] >= 1
+    assert ctx.metrics["lead_generation_require_enrichment"] is False
+    assert ctx.metrics["lead_generation_skipped_missing_enrichment"] == 0
+
+
+def test_lead_generation_service_skips_high_confidence_outsourcing_company(tmp_path):
+    ctx = RunContext.create(
+        config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
+            "providers": {
+                "limits": {"apollo": 5, "hunter": 5},
+                "clients": {
+                    "apollo": {"api_key": "fake-apollo"},
+                    "hunter": {"api_key": "fake-hunter"},
+                },
+            }
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    apollo_client = control.registry.get_client("apollo")
+    hunter_client = control.registry.get_client("hunter")
+    calls = {"apollo": 0, "hunter": 0}
+
+    def fake_apollo(domain, titles):
+        calls["apollo"] += 1
+        return {"people": []}
+
+    def fake_hunter(domain):
+        calls["hunter"] += 1
+        return {"data": {"emails": []}}
+
+    apollo_client.search_people_by_domain_and_titles = fake_apollo
+    hunter_client.search_domain_contacts = fake_hunter
+
+    service = LeadGenerationService(ctx, control)
+    leads = service.generate_leads(
+        [
+            {
+                "company_key": "cmp_outsourcing",
+                "resolved_domain": "vendorco.com",
+                "domain_validation_status": "accepted",
+                "company_type_ai": "outsourcing",
+                "classification_confidence_ai": 0.95,
+                "opportunity_score": 55,
+                "industry": "Information Technology and Services",
+            }
+        ]
+    )
+
+    assert leads == []
+    assert calls["apollo"] == 0
+    assert calls["hunter"] == 0
+
+def test_lead_generation_service_skips_consulting_company_even_with_accepted_domain(tmp_path):
+    ctx = RunContext.create(
+        config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
+            "providers": {
+                "limits": {"apollo": 5, "hunter": 5},
+                "clients": {
+                    "apollo": {"api_key": "fake-apollo"},
+                    "hunter": {"api_key": "fake-hunter"},
+                },
+            }
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    apollo_client = control.registry.get_client("apollo")
+    hunter_client = control.registry.get_client("hunter")
+    calls = {"apollo": 0, "hunter": 0}
+
+    def fake_apollo(domain, titles):
+        calls["apollo"] += 1
+        return {"people": []}
+
+    def fake_hunter(domain):
+        calls["hunter"] += 1
+        return {"data": {"emails": []}}
+
+    apollo_client.search_people_by_domain_and_titles = fake_apollo
+    hunter_client.search_domain_contacts = fake_hunter
+
+    service = LeadGenerationService(ctx, control)
+    leads = service.generate_leads(
+        [
+            {
+                "company_key": "cmp_consulting",
+                "resolved_domain": "consultingco.com",
+                "domain_validation_status": "accepted",
+                "company_type_ai": "consulting",
+                "classification_confidence_ai": 0.95,
+                "opportunity_score": 70,
+            }
+        ]
+    )
+
+    assert leads == []
+    assert calls["apollo"] == 0
+    assert calls["hunter"] == 0
+
+
+def test_lead_generation_service_unknown_with_low_score_is_filtered_out(tmp_path):
+    ctx = RunContext.create(
+        config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
+            "lead_generation": {"min_opportunity_score": 15},
+            "providers": {
+                "limits": {"apollo": 5, "hunter": 5},
+                "clients": {
+                    "apollo": {"api_key": "fake-apollo"},
+                    "hunter": {"api_key": "fake-hunter"},
+                },
+            }
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    apollo_client = control.registry.get_client("apollo")
+    hunter_client = control.registry.get_client("hunter")
+    calls = {"apollo": 0, "hunter": 0}
+
+    def fake_apollo(domain, titles):
+        calls["apollo"] += 1
+        return {"people": []}
+
+    def fake_hunter(domain):
+        calls["hunter"] += 1
+        return {"data": {"emails": []}}
+
+    apollo_client.search_people_by_domain_and_titles = fake_apollo
+    hunter_client.search_domain_contacts = fake_hunter
+
+    service = LeadGenerationService(ctx, control)
+    leads = service.generate_leads(
+        [
+            {
+                "company_key": "cmp_unknown_low",
+                "resolved_domain": "unknownlow.com",
+                "domain_validation_status": "accepted",
+                "company_type_ai": "unknown",
+                "classification_confidence_ai": 0.1,
+                "opportunity_score": 12,
+            }
+        ]
+    )
+
+    assert leads == []
+    assert calls["apollo"] == 0
+    assert calls["hunter"] == 0
+
+
+
+def test_lead_generation_service_normalizes_staffing_agency_and_skips_it(tmp_path):
+    ctx = RunContext.create(
+        config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
+            "providers": {
+                "limits": {"apollo": 5, "hunter": 5},
+                "clients": {
+                    "apollo": {"api_key": "fake-apollo"},
+                    "hunter": {"api_key": "fake-hunter"},
+                },
+            }
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    apollo_client = control.registry.get_client("apollo")
+    hunter_client = control.registry.get_client("hunter")
+    calls = {"apollo": 0, "hunter": 0}
+
+    def fake_apollo(domain, titles):
+        calls["apollo"] += 1
+        return {"people": []}
+
+    def fake_hunter(domain):
+        calls["hunter"] += 1
+        return {"data": {"emails": []}}
+
+    apollo_client.search_people_by_domain_and_titles = fake_apollo
+    hunter_client.search_domain_contacts = fake_hunter
+
+    service = LeadGenerationService(ctx, control)
+    leads = service.generate_leads(
+        [
+            {
+                "company_key": "cmp_staffing_alias",
+                "resolved_domain": "staffingco.com",
+                "domain_validation_status": "accepted",
+                "company_type_ai": "staffing_agency",
+                "classification_confidence_ai": 0.95,
+                "opportunity_score": 70,
+            }
+        ]
+    )
+
+    assert leads == []
+    assert calls["apollo"] == 0
+    assert calls["hunter"] == 0
+
+def test_lead_generation_service_skips_rejected_domain_even_without_require_accepted_domain(tmp_path):
+    ctx = RunContext.create(
+        config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
+            "lead_generation": {"require_accepted_domain": False},
+            "providers": {
+                "limits": {"apollo": 5, "hunter": 5},
+                "clients": {
+                    "apollo": {"api_key": "fake-apollo"},
+                    "hunter": {"api_key": "fake-hunter"},
+                },
+            }
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    apollo_client = control.registry.get_client("apollo")
+    calls = {"apollo": 0}
+
+    def fake_apollo(domain, titles):
+        calls["apollo"] += 1
+        return {"people": []}
+
+    apollo_client.search_people_by_domain_and_titles = fake_apollo
+
+    service = LeadGenerationService(ctx, control)
+    leads = service.generate_leads(
+        [
+            {
+                "company_key": "cmp_rejected",
+                "resolved_domain": "rejectedco.com",
+                "domain_validation_status": "rejected",
+                "company_type_ai": "end_client",
+                "classification_confidence_ai": 0.9,
+                "opportunity_score": 30,
+            }
+        ]
+    )
+
+    assert leads == []
+    assert calls["apollo"] == 0
+

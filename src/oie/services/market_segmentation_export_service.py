@@ -27,11 +27,12 @@ class MarketSegmentationExportService:
     def export_segmented_companies(self, rows: List[Dict[str, Any]]) -> str:
         output_dir = self._get_output_dir()
         path = output_dir / "market_segmented_companies.csv"
-        fieldnames = list(rows[0].keys()) if rows else []
+        # Build union of all keys across rows to avoid CSV errors
+        fieldnames = sorted({key for row in rows for key in row.keys()}) if rows else []
 
         with path.open("w", encoding="utf-8", newline="") as fh:
             if fieldnames:
-                writer = csv.DictWriter(fh, fieldnames=fieldnames)
+                writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
                 writer.writeheader()
                 writer.writerows(rows)
             else:
@@ -43,11 +44,12 @@ class MarketSegmentationExportService:
     def export_segment_summary(self, rows: List[Dict[str, Any]]) -> str:
         output_dir = self._get_output_dir()
         path = output_dir / "market_segment_summary.csv"
-        fieldnames = list(rows[0].keys()) if rows else []
+        # Build union of all keys across rows to avoid CSV errors
+        fieldnames = sorted({key for row in rows for key in row.keys()}) if rows else []
 
         with path.open("w", encoding="utf-8", newline="") as fh:
             if fieldnames:
-                writer = csv.DictWriter(fh, fieldnames=fieldnames)
+                writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
                 writer.writeheader()
                 writer.writerows(rows)
             else:

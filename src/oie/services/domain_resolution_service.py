@@ -87,6 +87,8 @@ class DomainResolutionService:
         self.serpapi_fallback_limit = int(config.get("serpapi_fallback_limit", 25))
         self.review_threshold = float(config.get("review_threshold", 0.45))
         self.auto_accept_threshold = float(config.get("auto_accept_threshold", 0.80))
+        self.ai_min_score_for_review = float(config.get("ai_min_score_for_review", self.review_threshold))
+        self.ai_max_score_for_review = float(config.get("ai_max_score_for_review", 0.75))
         self._serpapi_fallback_count = 0
 
         self.confidence_service = DomainConfidenceService(
@@ -124,9 +126,29 @@ class DomainResolutionService:
     def _should_skip_generic_name(self, company_name: Optional[str]) -> bool:
         return self.confidence_service.is_generic_company_name(company_name)
 
-    def _is_aggregator_candidate(self, candidate: Dict[str, Any]) -> bool:
-        domain = candidate.get("domain")
-        return self._is_blocked_domain(domain)
+    def _should_preserve_direct_aggregator_review(self, candidate: Dict[str, Any]) -> bool:
+        domain = str(candidate.get("domain") or "").strip().lower()
+        source = str(candidate.get("source") or "").strip().lower()
+
+        if source not in {"apply_url", "url"}:
+            return False
+
+        # Preservamos review solo para wrappers/portales genéricos
+        # que no representan una marca de empresa real.
+        preservable_domains = {
+            "google.com",
+            "www.google.com",
+            "linkedin.com",
+            "www.linkedin.com",
+            "lnkd.in",
+            "indeed.com",
+            "www.indeed.com",
+            "glassdoor.com",
+            "www.glassdoor.com",
+            "ziprecruiter.com",
+            "www.ziprecruiter.com",
+        }
+        return domain in preservable_domains
 
     def _can_attempt_domain_resolution(self, company_name: Optional[str]) -> bool:
         value = (company_name or "").strip().lower()
@@ -196,14 +218,41 @@ class DomainResolutionService:
         # Excepción: subdominios sospechosos tipo beta/staging/dev/qa pueden venir
         # con score alto por match de marca, pero igual queremos validarlos con AI.
         if validation_status == "review":
-            if score < self.review_threshold:
+            if score < self.ai_min_score_for_review:
                 return False
 
             is_suspicious_subdomain = self._is_suspicious_subdomain_candidate(candidate)
 
-            if score > 0.75 and not is_suspicious_subdomain:
+            if score > self.ai_max_score_for_review and not is_suspicious_subdomain:
                 return False
-            return True
+
+            reasons = set(candidate.get("confidence_reasons") or [])
+            title = str(candidate.get("title") or "").strip()
+            snippet = str(candidate.get("snippet") or "").strip()
+            has_context = bool(title or snippet)
+
+            # Para subdominios sospechosos dejamos pasar la validación AI aunque
+            # no venga contexto adicional, porque justamente queremos que AI
+            # arbitre estos casos de alto score pero potencialmente contaminados.
+            if is_suspicious_subdomain:
+                return True
+
+            if not has_context:
+                return False
+
+            has_signal = bool(
+                candidate.get("confidence_brand_match", False)
+                or "text_core_hits_1" in reasons
+                or "text_core_hits_2plus" in reasons
+                or "core_hits_1" in reasons
+                or "core_hits_2plus" in reasons
+                or "primary_token_match" in reasons
+                or "full_join_match" in reasons
+                or "core_join_match" in reasons
+                or source == "serpapi_fallback"
+            )
+
+            return has_signal
 
         # Camino extendido: rechazados SERPAPI con señales mínimas de marca/contexto.
         # Esto abre una segunda oportunidad a falsos negativos tipo marca↔dominio no triviales,
@@ -325,42 +374,71 @@ class DomainResolutionService:
             self.ctx.metrics["serpapi_domain_resolution_skipped_no_service"] = True
             return []
 
-        try:
-            payload = service.search_google(f"{company_name} official website", num=5) or {}
-            self._serpapi_fallback_count += 1
-        except ProviderExecutionError as exc:
-            self.ctx.metrics["serpapi_domain_resolution_provider_errors"] = (
-                int(self.ctx.metrics.get("serpapi_domain_resolution_provider_errors", 0)) + 1
-            )
-            self.ctx.add_provider_event(
-                provider="serpapi",
-                event_type="domain_resolution_search_failed",
-                message="serpapi_domain_resolution_failed",
-                metadata={
-                    "company_name": company_name,
-                    "error": repr(exc),
-                },
-            )
-            return []
+        queries = [
+            f"{company_name} official website",
+            f"{company_name} company official site",
+        ]
 
-        organic_results = payload.get("organic_results") or []
         candidates: List[Dict[str, Any]] = []
+        seen_domains = set()
 
-        for idx, item in enumerate(organic_results, start=1):
-            link = item.get("link") or ""
-            domain = self._extract_domain(link)
-            if not domain:
+        def _has_accepted_candidate(rows: List[Dict[str, Any]]) -> bool:
+            if not rows:
+                return False
+            best = self.confidence_service.pick_best_candidate(company_name, rows)
+            return bool(best and best.get("validation_status") == "accepted")
+
+        for query_index, query in enumerate(queries):
+            if self._serpapi_fallback_count >= self.serpapi_fallback_limit:
+                self.ctx.metrics["serpapi_domain_resolution_skipped_limit"] = True
+                break
+
+            try:
+                payload = service.search_google(query, num=5) or {}
+                self._serpapi_fallback_count += 1
+            except ProviderExecutionError as exc:
+                self.ctx.metrics["serpapi_domain_resolution_provider_errors"] = (
+                    int(self.ctx.metrics.get("serpapi_domain_resolution_provider_errors", 0)) + 1
+                )
+                self.ctx.add_provider_event(
+                    provider="serpapi",
+                    event_type="domain_resolution_search_failed",
+                    message="serpapi_domain_resolution_failed",
+                    metadata={
+                        "company_name": company_name,
+                        "query": query,
+                        "error": repr(exc),
+                    },
+                )
                 continue
 
-            candidates.append(
-                {
+            organic_results = payload.get("organic_results") or []
+            query_candidates: List[Dict[str, Any]] = []
+
+            for idx, item in enumerate(organic_results, start=1):
+                link = item.get("link") or ""
+                domain = self._extract_domain(link)
+                if not domain:
+                    continue
+
+                normalized = domain.strip().lower()
+                if normalized in seen_domains:
+                    continue
+                seen_domains.add(normalized)
+
+                candidate = {
                     "domain": domain,
                     "source": "serpapi_fallback",
                     "serp_rank": idx,
                     "title": item.get("title") or "",
                     "snippet": item.get("snippet") or "",
                 }
-            )
+                query_candidates.append(candidate)
+                candidates.append(candidate)
+
+            # Solo intentar la segunda query si la primera no dejó un candidato aceptable.
+            if query_index == 0 and _has_accepted_candidate(query_candidates):
+                break
 
         return candidates
 
@@ -415,6 +493,27 @@ class DomainResolutionService:
         review_required = bool(best.get("review_required", validation_status == "review"))
         is_aggregator = self._is_aggregator_candidate(best)
 
+        # Si el mejor candidato directo viene de un agregador/job board,
+        # nunca lo aceptamos como dominio final de la empresa.
+        # Solo preservamos review para wrappers genéricos tipo Google/LinkedIn;
+        # job boards concretos deben quedar rechazados para que no tapen mejores candidatos.
+        #
+        # Ojo: estos candidatos suelen venir marcados como blocked por DomainConfidenceService,
+        # así que esta rama debe ejecutarse ANTES del rechazo general por blocked.
+        if is_aggregator and self._should_preserve_direct_aggregator_review(best):
+            return {
+                "domain": None,
+                "source": source,
+                "score": score,
+                "candidate": domain,
+                "validation_status": "review",
+                "review_required": True,
+                "ai_validated": 0,
+                "ai_decision": None,
+                "ai_confidence": None,
+                "ai_reason": "direct_aggregator_candidate",
+            }
+
         if blocked:
             return {
                 "domain": None,
@@ -427,23 +526,6 @@ class DomainResolutionService:
                 "ai_decision": None,
                 "ai_confidence": None,
                 "ai_reason": None,
-            }
-
-        # Si el mejor candidato directo viene de un agregador/job board,
-        # nunca lo aceptamos como dominio final de la empresa.
-        # Lo dejamos en review para permitir fallback posterior (SerpAPI / IA).
-        if is_aggregator and source in {"apply_url", "url"}:
-            return {
-                "domain": None,
-                "source": source,
-                "score": score,
-                "candidate": domain,
-                "validation_status": "review",
-                "review_required": True,
-                "ai_validated": 0,
-                "ai_decision": None,
-                "ai_confidence": None,
-                "ai_reason": "direct_aggregator_candidate",
             }
 
         ai_validated = 0
@@ -516,7 +598,18 @@ class DomainResolutionService:
                 self.ctx.metrics["serpapi_domain_resolution_rejected_low_confidence"] = (
                     int(self.ctx.metrics.get("serpapi_domain_resolution_rejected_low_confidence", 0)) + 1
                 )
+            if best_direct["validation_status"] == "review" and best_serp["validation_status"] == "rejected":
+                self.ctx.metrics["domain_resolution_preserved_direct_review"] = (
+                    int(self.ctx.metrics.get("domain_resolution_preserved_direct_review", 0)) + 1
+                )
+                return best_direct
             return best_serp
+
+        if best_direct["validation_status"] == "review":
+            self.ctx.metrics["domain_resolution_preserved_direct_review"] = (
+                int(self.ctx.metrics.get("domain_resolution_preserved_direct_review", 0)) + 1
+            )
+            return best_direct
 
         if best_direct["candidate"]:
             return best_direct

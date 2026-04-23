@@ -122,19 +122,108 @@ class RunMetricsSummaryService:
         )
 
         data = summary.to_dict()
+        data["master_data"] = {
+            "schema_errors_count": self._int_metric("master_schema_errors_count"),
+            "jobs_rows_written": self._int_metric("master_jobs_rows_written"),
+            "companies_rows_written": self._int_metric("master_companies_rows_written"),
+            "leads_rows_written": self._int_metric("master_leads_rows_written"),
+            "jobs_write_attempted": self._int_metric("master_jobs_write_attempted"),
+            "companies_write_attempted": self._int_metric("master_companies_write_attempted"),
+            "leads_write_attempted": self._int_metric("master_leads_write_attempted"),
+            "jobs_write_succeeded": self._bool_metric("master_jobs_write_succeeded"),
+            "companies_write_succeeded": self._bool_metric("master_companies_write_succeeded"),
+            "leads_write_succeeded": self._bool_metric("master_leads_write_succeeded"),
+            "jobs_write_errors_count": self._int_metric("master_jobs_write_errors_count"),
+            "companies_write_errors_count": self._int_metric("master_companies_write_errors_count"),
+            "leads_write_errors_count": self._int_metric("master_leads_write_errors_count"),
+        }
+        data["persistence_data"] = {
+            "errors_count": self._int_metric("persistence_errors_count"),
+            "schema_errors_count": self._int_metric("persistence_schema_errors_count"),
+            "sqlite_operational_errors_count": self._int_metric("persistence_sqlite_operational_errors_count"),
+            "database_initialized": self._bool_metric("persistence_database_initialized"),
+            "initialize_attempted": self._bool_metric("persistence_initialize_attempted"),
+            "initialize_succeeded": self._bool_metric("persistence_initialize_succeeded"),
+            "run_attempted": self._bool_metric("persistence_run_attempted"),
+            "run_succeeded": self._bool_metric("persistence_run_succeeded"),
+            "metrics_attempted": self._bool_metric("persistence_metrics_attempted"),
+            "metrics_succeeded": self._bool_metric("persistence_metrics_succeeded"),
+            "provider_events_attempted": self._bool_metric("persistence_provider_events_attempted"),
+            "provider_events_succeeded": self._bool_metric("persistence_provider_events_succeeded"),
+            "provider_operation_metrics_attempted": self._bool_metric("persistence_provider_operation_metrics_attempted"),
+            "provider_operation_metrics_succeeded": self._bool_metric("persistence_provider_operation_metrics_succeeded"),
+            "companies_attempted": self._bool_metric("persistence_companies_attempted"),
+            "companies_succeeded": self._bool_metric("persistence_companies_succeeded"),
+            "jobs_attempted": self._bool_metric("persistence_jobs_attempted"),
+            "jobs_succeeded": self._bool_metric("persistence_jobs_succeeded"),
+            "leads_attempted": self._bool_metric("persistence_leads_attempted"),
+            "leads_succeeded": self._bool_metric("persistence_leads_succeeded"),
+        }
         data["counts_original"] = {
             "jobs_collected_raw": self._int_metric("jobs_collected_raw"),
             "jobs_after_dedupe": self._int_metric("jobs_after_dedupe"),
-            "master_jobs_unique_to_append": self._int_metric("master_jobs_unique_to_append"),
+            "jobs_duplicates_detected_master": self._int_metric("master_jobs_duplicates_detected"),
+            "jobs_unique_to_append_master": self._int_metric("master_jobs_unique_to_append"),
             "companies_detected": self._int_metric("companies_detected"),
             "companies_after_identity_dedupe": self._int_metric("companies_after_identity_dedupe"),
             "leads_generated": self._int_metric("leads_generated"),
             "best_leads_selected": self._int_metric("best_leads_selected"),
-            "master_leads_unique_to_append": self._int_metric("master_leads_unique_to_append"),
+            "leads_duplicates_detected_master": self._int_metric("master_leads_duplicates_detected"),
+            "leads_unique_to_append_master": self._int_metric("master_leads_unique_to_append"),
         }
+        jobs_effective = self._int_metric_or_snapshot("master_jobs_unique_to_append", "jobs_count")
+        companies_effective = self._int_metric_or_snapshot("companies_after_identity_dedupe", "companies_count")
+        leads_effective = self._int_metric_or_snapshot("master_leads_unique_to_append", "leads_count")
+
         data["counts_effective"] = {
-            "jobs": self._snapshot_int("jobs_count"),
-            "companies": self._snapshot_int("companies_count"),
-            "leads": self._snapshot_int("leads_count"),
+            "jobs": jobs_effective,
+            "companies": companies_effective,
+            "leads": leads_effective,
+            "jobs_snapshot": self._snapshot_int("jobs_count"),
+            "companies_snapshot": self._snapshot_int("companies_count"),
+            "leads_snapshot": self._snapshot_int("leads_count"),
         }
+        data["count_deltas"] = {
+            "jobs_removed_by_master_dedup": max(
+                data["counts_original"]["jobs_after_dedupe"] - data["counts_effective"]["jobs"],
+                0,
+            ),
+            "companies_removed_after_identity": max(
+                data["counts_original"]["companies_detected"] - data["counts_effective"]["companies"],
+                0,
+            ),
+            "leads_removed_by_master_dedup": max(
+                data["counts_original"]["best_leads_selected"] - data["counts_effective"]["leads"],
+                0,
+            ),
+        }
+        data["counts_quality"] = {
+            "jobs_effective_uses_snapshot": data["counts_effective"]["jobs"] == data["counts_effective"]["jobs_snapshot"],
+            "companies_effective_uses_snapshot": data["counts_effective"]["companies"] == data["counts_effective"]["companies_snapshot"],
+            "leads_effective_uses_snapshot": data["counts_effective"]["leads"] == data["counts_effective"]["leads_snapshot"],
+            "jobs_effective_lt_original": data["counts_effective"]["jobs"] <= data["counts_original"]["jobs_after_dedupe"],
+            "companies_effective_lte_detected": data["counts_effective"]["companies"] <= data["counts_original"]["companies_detected"],
+            "leads_effective_lte_selected": data["counts_effective"]["leads"] <= data["counts_original"]["best_leads_selected"],
+            "master_jobs_rows_match_effective": data["master_data"]["jobs_rows_written"] == data["counts_effective"]["jobs"],
+            "master_companies_rows_match_effective": (
+                data["master_data"]["companies_rows_written"] == data["counts_effective"]["companies"]
+                if data["master_data"]["companies_rows_written"] > 0
+                else True
+            ),
+            "master_leads_rows_match_effective": data["master_data"]["leads_rows_written"] == data["counts_effective"]["leads"],
+            "effective_counts_are_not_higher_than_snapshots": (
+                data["counts_effective"]["jobs"] <= max(data["counts_effective"]["jobs_snapshot"], 0)
+                and data["counts_effective"]["companies"] <= max(data["counts_effective"]["companies_snapshot"], 0)
+                and data["counts_effective"]["leads"] <= max(data["counts_effective"]["leads_snapshot"], 0)
+            ),
+        }
+
+        self.ctx.provider_state["run_metrics_summary_counts_original"] = dict(data["counts_original"])
+        self.ctx.provider_state["run_metrics_summary_counts_effective"] = dict(data["counts_effective"])
+        self.ctx.provider_state["run_metrics_summary_counts"] = {
+            "jobs_count": data["counts_effective"]["jobs"],
+            "companies_count": data["counts_effective"]["companies"],
+            "leads_count": data["counts_effective"]["leads"],
+        }
+
         return data

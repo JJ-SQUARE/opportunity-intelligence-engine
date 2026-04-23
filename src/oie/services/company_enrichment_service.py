@@ -14,6 +14,9 @@ from oie.services.provider_execution_service import (
     ProviderExecutionService,
 )
 from oie.utils.domain_filters import is_job_board_domain
+from oie.utils.company_identity_utils import is_actionable_company_name
+from oie.utils.company_name_extraction import extract_actionable_company_name
+from oie.services.domain_confidence_service import DomainConfidenceService
 
 
 PLACEHOLDER_COMPANY_VALUES = {
@@ -24,6 +27,13 @@ PLACEHOLDER_COMPANY_VALUES = {
     "undisclosed",
     "n/a",
     "na",
+}
+
+
+COMPANY_TYPE_ALIASES = {
+    "product_company": "end_client",
+    "staffing_agency": "staffing",
+    "outsourcing": "consulting",
 }
 
 
@@ -55,6 +65,8 @@ class CompanyEnrichmentService:
             str(v).strip().lower()
             for v in enrichment_cfg.get("allowed_company_types", ["end_client", "unknown", ""])
         }
+        self.min_domain_match_confidence = float(enrichment_cfg.get("min_domain_match_confidence", 0.80))
+        self.domain_confidence_service = DomainConfidenceService()
 
         initialize_database(self.db_path)
 
@@ -99,11 +111,133 @@ class CompanyEnrichmentService:
 
         return (now - enriched_at) <= timedelta(days=self.ttl_days)
 
+    def _best_company_name_for_validation(self, company: Dict[str, Any]) -> str:
+        extracted = extract_actionable_company_name(
+            company_display=company.get("company_display") or company.get("company"),
+            title=company.get("title"),
+            snippet=company.get("snippet") or company.get("company_description") or company.get("description"),
+            apply_url=company.get("apply_url"),
+        )
+        if extracted:
+            return extracted
+
+        for value in (
+            company.get("company_display"),
+            company.get("company"),
+            company.get("company_normalized"),
+        ):
+            cleaned = str(value or "").strip()
+            if cleaned and is_actionable_company_name(cleaned):
+                return cleaned
+        return ""
+
+    def _is_suspicious_domain_for_enrichment(self, domain: str) -> bool:
+        lowered = str(domain or "").strip().lower()
+        if not lowered:
+            return True
+
+        suspicious_subdomain_markers = (
+            "beta.",
+            "staging.",
+            "stage.",
+            "dev.",
+            "test.",
+            "qa.",
+            "uat.",
+            "sandbox.",
+            "preview.",
+            "demo.",
+            "internal.",
+        )
+        if any(lowered.startswith(marker) for marker in suspicious_subdomain_markers):
+            return True
+
+        return False
+
+    def _has_strong_company_domain_match(self, company: Dict[str, Any]) -> bool:
+        domain = (company.get("resolved_domain") or "").strip().lower()
+        if not domain:
+            return False
+
+        company_name = self._best_company_name_for_validation(company)
+        if not company_name:
+            return False
+
+        scored = self.domain_confidence_service.score_candidate(
+            company_name=company_name,
+            domain=domain,
+            source="apply_url",
+            serp_rank=None,
+            title="",
+            snippet="",
+        )
+        return (
+            not bool(scored.get("confidence_blocked"))
+            and float(scored.get("score") or 0.0) >= self.min_domain_match_confidence
+        )
+
+    def _normalized_company_type(self, value: Any) -> str:
+        normalized = str(value or "").strip().lower()
+        return COMPANY_TYPE_ALIASES.get(normalized, normalized)
+
+
+    def _has_end_client_enrichment_fallback(self, company: Dict[str, Any]) -> bool:
+        validation_status = (company.get("domain_validation_status") or "").strip().lower()
+        company_type = self._normalized_company_type(company.get("company_type_ai") or "")
+        classification_confidence = float(company.get("classification_confidence_ai") or 0.0)
+        opportunity_score = float(company.get("opportunity_score") or 0.0)
+
+        if validation_status != "accepted":
+            return False
+
+        if company_type != "end_client":
+            return False
+
+        if classification_confidence < 0.90:
+            return False
+
+        if opportunity_score > 0 and opportunity_score < self.min_opportunity_score:
+            return False
+
+        domain = (company.get("resolved_domain") or "").strip().lower()
+        if not domain:
+            return False
+
+        if is_job_board_domain(domain):
+            return False
+
+        if self._is_suspicious_domain_for_enrichment(domain):
+            return False
+
+        company_name = self._best_company_name_for_validation(company)
+        if not company_name:
+            return False
+
+        scored = self.domain_confidence_service.score_candidate(
+            company_name=company_name,
+            domain=domain,
+            source="serpapi_fallback",
+            serp_rank=1,
+            title=str(company.get("title") or company.get("company_display") or ""),
+            snippet=str(company.get("snippet") or company.get("company_description") or company.get("description") or ""),
+        )
+
+        if bool(scored.get("confidence_blocked")):
+            return False
+
+        if not bool(scored.get("confidence_brand_match")):
+            return False
+
+        if str(scored.get("validation_status") or "").strip().lower() == "rejected":
+            return False
+
+        return float(scored.get("score") or 0.0) >= self.domain_confidence_service.review_threshold
+
     def _should_attempt_enrichment(self, company: Dict[str, Any]) -> bool:
         company_key = company.get("company_key")
         domain = (company.get("resolved_domain") or "").strip().lower()
         validation_status = (company.get("domain_validation_status") or "").strip().lower()
-        company_type = (company.get("company_type_ai") or "").strip().lower()
+        company_type = self._normalized_company_type(company.get("company_type_ai") or "")
         classification_confidence = float(company.get("classification_confidence_ai") or 0.0)
         opportunity_score = float(company.get("opportunity_score") or 0.0)
 
@@ -116,7 +250,13 @@ class CompanyEnrichmentService:
         if self._is_placeholder_company_name(company):
             return False
 
+        if not self._best_company_name_for_validation(company):
+            return False
+
         if is_job_board_domain(domain):
+            return False
+
+        if self._is_suspicious_domain_for_enrichment(domain):
             return False
 
         if self.require_accepted_domain and validation_status and validation_status != "accepted":
@@ -134,11 +274,15 @@ class CompanyEnrichmentService:
         if opportunity_score > 0 and opportunity_score < self.min_opportunity_score:
             return False
 
+        if not self._has_strong_company_domain_match(company):
+            if not self._has_end_client_enrichment_fallback(company):
+                return False
+
         return True
 
     def _priority(self, company: Dict[str, Any]) -> tuple:
         opportunity_score = float(company.get("opportunity_score") or 0.0)
-        company_type = (company.get("company_type_ai") or "").strip().lower()
+        company_type = self._normalized_company_type(company.get("company_type_ai") or "")
         validation_status = (company.get("domain_validation_status") or "").strip().lower()
         recently_enriched = self._is_recently_enriched(company.get("company_key") or "")
 
@@ -206,17 +350,26 @@ class CompanyEnrichmentService:
                 continue
 
             try:
-                payload = self.cached_provider_service.execute_cached(
-                    namespace="apollo_company_enrichment",
-                    cache_payload={"domain": domain},
-                    fn=lambda: self.provider_execution_service.execute(
+                if self.db_path == ":memory:":
+                    payload = self.provider_execution_service.execute(
                         "apollo",
                         "enrich_company_by_domain",
                         client.enrich_company_by_domain,
                         domain,
                         cost=1,
-                    ),
-                )
+                    )
+                else:
+                    payload = self.cached_provider_service.execute_cached(
+                        namespace="apollo_company_enrichment",
+                        cache_payload={"domain": domain},
+                        fn=lambda: self.provider_execution_service.execute(
+                            "apollo",
+                            "enrich_company_by_domain",
+                            client.enrich_company_by_domain,
+                            domain,
+                            cost=1,
+                        ),
+                    )
                 if payload:
                     mapped = self._map_apollo_payload(payload)
                     record.update(mapped)

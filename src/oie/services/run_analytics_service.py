@@ -3,11 +3,15 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.services.commercial_selection_service import CommercialSelectionService
+from oie.services.commercial_signal_service import CommercialSignalService
 
 
 class RunAnalyticsService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
+        self.commercial_signal_service = CommercialSignalService()
+        self.commercial_selection_service = CommercialSelectionService(self.commercial_signal_service)
 
     def _top_n(
         self,
@@ -24,8 +28,7 @@ class RunAnalyticsService:
         companies: List[Dict[str, Any]] | None,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        items = list(companies or [])
-        items.sort(key=lambda row: row.get("opportunity_score", 0) or 0, reverse=True)
+        items = self.commercial_selection_service.top_companies_analytic(companies or [], limit=limit)
 
         return [
             {
@@ -35,16 +38,23 @@ class RunAnalyticsService:
                 "company_type_ai": company.get("company_type_ai"),
                 "classification_confidence_ai": company.get("classification_confidence_ai"),
                 "opportunity_score": company.get("opportunity_score", 0),
+                "opportunity_label": company.get("opportunity_label", ""),
+                "commercial_bucket": company.get("commercial_bucket", ""),
+                "commercial_priority_score": company.get("commercial_priority_score", 0),
+                "icp_bucket": company.get("icp_bucket", ""),
+                "reachability_ready": company.get("reachability_ready", 0),
                 "score_openings": company.get("score_openings", 0),
                 "score_remote": company.get("score_remote", 0),
                 "score_contractor": company.get("score_contractor", 0),
                 "score_multi_source": company.get("score_multi_source", 0),
                 "score_company_type": company.get("score_company_type", 0),
+                "score_icp_fit": company.get("score_icp_fit", 0),
+                "score_pain_urgency": company.get("score_pain_urgency", 0),
                 "total_openings": company.get("total_openings", 0),
                 "remote_jobs": company.get("remote_jobs", 0),
                 "contractor_jobs": company.get("contractor_jobs", 0),
             }
-            for company in items[:limit]
+            for company in items
         ]
 
     def _top_leads(
@@ -52,18 +62,7 @@ class RunAnalyticsService:
         leads: List[Dict[str, Any]] | None,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        items = list(leads or [])
-        items.sort(
-            key=lambda row: (
-                row.get("lead_relevance_score", 0) or 0,
-                row.get("email_quality_score", 0) or 0,
-                row.get("lead_confidence", 0) or 0,
-                row.get("lead_score_source", 0) or 0,
-                1 if row.get("linkedin_url") else 0,
-                row.get("contact_name", "") or "",
-            ),
-            reverse=True,
-        )
+        items = self.commercial_selection_service.top_leads(leads or [], limit=limit)
 
         return [
             {
@@ -84,7 +83,7 @@ class RunAnalyticsService:
                 "lead_score_email_quality": lead.get("lead_score_email_quality", 0),
                 "lead_score_confidence": lead.get("lead_score_confidence", 0),
             }
-            for lead in items[:limit]
+            for lead in items
         ]
 
     def build_analytics(
@@ -103,6 +102,11 @@ class RunAnalyticsService:
         run_metrics_summary: Dict[str, Any],
         executive_summary: Dict[str, Any],
     ) -> Dict[str, Any]:
+        summary_counts_original = run_metrics_summary.get("counts_original", {}) or {}
+        summary_counts_effective = run_metrics_summary.get("counts_effective", {}) or {}
+        master_data_summary = run_metrics_summary.get("master_data", {}) or {}
+        persistence_data_summary = run_metrics_summary.get("persistence_data", {}) or {}
+
         analytics = {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
@@ -115,20 +119,37 @@ class RunAnalyticsService:
                 "duplicate_jobs": len(duplicate_jobs),
             },
             "counts_original": {
-                "jobs_collected_raw": self.ctx.metrics.get("jobs_collected_raw", 0),
-                "jobs_after_dedupe": self.ctx.metrics.get("jobs_after_dedupe", 0),
-                "master_jobs_unique_to_append": self.ctx.metrics.get("master_jobs_unique_to_append", 0),
-                "companies_detected": self.ctx.metrics.get("companies_detected", 0),
-                "companies_after_identity_dedupe": self.ctx.metrics.get("companies_after_identity_dedupe", 0),
-                "leads_generated": self.ctx.metrics.get("leads_generated", 0),
-                "best_leads_selected": self.ctx.metrics.get("best_leads_selected", 0),
+                "jobs_collected_raw": summary_counts_original.get("jobs_collected_raw", self.ctx.metrics.get("jobs_collected_raw", 0)),
+                "jobs_after_dedupe": summary_counts_original.get("jobs_after_dedupe", self.ctx.metrics.get("jobs_after_dedupe", 0)),
+                "jobs_duplicates_detected_master": summary_counts_original.get("jobs_duplicates_detected_master", self.ctx.metrics.get("master_jobs_duplicates_detected", 0)),
+                "jobs_unique_to_append_master": summary_counts_original.get("jobs_unique_to_append_master", self.ctx.metrics.get("master_jobs_unique_to_append", 0)),
+                "companies_detected": summary_counts_original.get("companies_detected", self.ctx.metrics.get("companies_detected", 0)),
+                "companies_after_identity_dedupe": summary_counts_original.get("companies_after_identity_dedupe", self.ctx.metrics.get("companies_after_identity_dedupe", 0)),
+                "leads_generated": summary_counts_original.get("leads_generated", self.ctx.metrics.get("leads_generated", 0)),
+                "best_leads_selected": summary_counts_original.get("best_leads_selected", self.ctx.metrics.get("best_leads_selected", 0)),
+                "leads_duplicates_detected_master": summary_counts_original.get("leads_duplicates_detected_master", self.ctx.metrics.get("master_leads_duplicates_detected", 0)),
+                "leads_unique_to_append_master": summary_counts_original.get("leads_unique_to_append_master", self.ctx.metrics.get("master_leads_unique_to_append", 0)),
             },
+            "counts_effective": dict(summary_counts_effective),
+            "count_deltas": dict(run_metrics_summary.get("count_deltas", {}) or {}),
+            "counts_quality": dict(run_metrics_summary.get("counts_quality", {}) or {}),
             "quality": {
                 "jobs_with_company_key": self.ctx.metrics.get("jobs_with_company_key", 0),
                 "jobs_without_company_key": self.ctx.metrics.get("jobs_without_company_key", 0),
                 "domain_review_queue_count": self.ctx.metrics.get("domain_review_queue_count", 0),
                 "run_readiness_ready": run_metrics_summary.get("run_readiness_ready", False),
                 "run_readiness_warnings": run_metrics_summary.get("run_readiness_warnings", 0),
+                "provider_events_count": len(self.ctx.provider_events),
+                "effective_jobs_vs_original_delta": max(
+                    int(summary_counts_original.get("jobs_after_dedupe", 0) or 0)
+                    - int(summary_counts_effective.get("jobs", 0) or 0),
+                    0,
+                ),
+                "effective_leads_vs_selected_delta": max(
+                    int(summary_counts_original.get("best_leads_selected", 0) or 0)
+                    - int(summary_counts_effective.get("leads", 0) or 0),
+                    0,
+                ),
             },
             "top_collectors": {
                 "by_jobs": self._top_n(collector_metrics, "jobs_collected", limit=5),
@@ -146,6 +167,8 @@ class RunAnalyticsService:
                 "provider_blocks": run_metrics_summary.get("provider_blocks", {}),
                 "provider_operation_metrics": provider_operation_metrics,
             },
+            "master_data": master_data_summary,
+            "persistence_data": persistence_data_summary,
             "readiness": readiness_report,
             "run_metrics_summary": run_metrics_summary,
             "executive_summary": executive_summary,

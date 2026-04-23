@@ -176,3 +176,261 @@ def test_reconcile_existing_company_key_by_alias(tmp_path):
 
     assert enriched[0]["company_key"] == "cmp_meta"
     assert ctx.metrics["company_identity_reused_by_alias"] == 1
+
+
+def test_enrich_company_identity_treats_confidential_company_as_placeholder():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    enriched = service.enrich_company_identity(
+        [
+            {
+                "company": "Empresa Confidencial",
+                "resolved_domain": "secret.example.com",
+                "title": "Backend Engineer",
+                "job_url": "https://example.com/jobs/1",
+                "sources": ["google_jobs"],
+            }
+        ]
+    )
+
+    assert enriched[0]["company_display"] == "unknown"
+    assert enriched[0]["company_key"].startswith("cmp_placeholder_")
+
+
+def test_detect_merge_candidates_does_not_merge_same_root_with_conflicting_domains():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    candidates = service.detect_merge_candidates(
+        [
+            {
+                "company_key": "cmp_1",
+                "company_display": "Focus Digital MX",
+                "company_normalized": "focus digital mx",
+                "company_root": "focus mx",
+                "resolved_domain": "focusmx.com",
+            },
+            {
+                "company_key": "cmp_2",
+                "company_display": "Focus Digital AR",
+                "company_normalized": "focus digital ar",
+                "company_root": "focus ar",
+                "resolved_domain": "focusar.com",
+            },
+        ]
+    )
+
+    assert candidates == []
+
+def test_enrich_company_identity_uses_shared_extractor_for_unknown_company_display():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    enriched = service.enrich_company_identity(
+        [
+            {
+                "company": "unknown",
+                "title": "Backend Engineer at Tenaris",
+                "description": "",
+                "apply_url": "",
+                "resolved_domain": "tenaris.com",
+                "sources": ["google_jobs"],
+            }
+        ]
+    )
+
+    assert len(enriched) == 1
+    assert enriched[0]["company_display"] == "Tenaris"
+    assert enriched[0]["company_normalized"] == "tenaris"
+
+
+def test_enrich_company_identity_does_not_infer_company_from_blocked_apply_url_only():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    enriched = service.enrich_company_identity(
+        [
+            {
+                "company": "unknown",
+                "title": "Senior Backend Engineer",
+                "description": "",
+                "apply_url": "https://empresa-confidencial.gupy.io/jobs/12345",
+                "resolved_domain": None,
+                "sources": ["google_jobs"],
+            }
+        ]
+    )
+
+    assert len(enriched) == 1
+    assert enriched[0]["company_display"] == "unknown"
+    assert enriched[0]["company_key"].startswith("cmp_placeholder_")
+
+def test_detect_merge_candidates_does_not_merge_placeholder_or_unknown_names():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    candidates = service.detect_merge_candidates(
+        [
+            {
+                "company_key": "cmp_placeholder_1",
+                "company_display": "unknown",
+                "company_normalized": "unknown",
+                "company_root": "unknown",
+                "resolved_domain": "",
+            },
+            {
+                "company_key": "cmp_placeholder_2",
+                "company_display": "unknown",
+                "company_normalized": "unknown",
+                "company_root": "unknown",
+                "resolved_domain": "",
+            },
+        ]
+    )
+
+    assert candidates == []
+
+
+def test_detect_merge_candidates_does_not_merge_unrelated_names_even_with_same_domain():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    candidates = service.detect_merge_candidates(
+        [
+            {
+                "company_key": "cmp_1",
+                "company_display": "Alpha Security",
+                "company_normalized": "alpha security",
+                "company_root": "alpha security",
+                "resolved_domain": "example.com",
+            },
+            {
+                "company_key": "cmp_2",
+                "company_display": "Beta Logistics",
+                "company_normalized": "beta logistics",
+                "company_root": "beta logistics",
+                "resolved_domain": "example.com",
+            },
+        ]
+    )
+
+    assert candidates == []
+
+
+def test_detect_merge_candidates_keeps_same_domain_when_brand_is_really_the_same():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    candidates = service.detect_merge_candidates(
+        [
+            {
+                "company_key": "cmp_1",
+                "company_display": "Acme Inc.",
+                "company_normalized": "acme",
+                "company_root": "acme",
+                "resolved_domain": "acme.com",
+            },
+            {
+                "company_key": "cmp_2",
+                "company_display": "Acme LLC",
+                "company_normalized": "acme",
+                "company_root": "acme",
+                "resolved_domain": "acme.com",
+            },
+        ]
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["reason"] in {"same_company_normalized", "same_company_root_and_domain", "same_domain"}
+
+
+def test_detect_merge_candidates_does_not_merge_same_domain_with_single_weak_shared_token():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    candidates = service.detect_merge_candidates(
+        [
+            {
+                "company_key": "cmp_1",
+                "company_display": "Nova Security",
+                "company_normalized": "nova security",
+                "company_root": "nova security",
+                "resolved_domain": "example.com",
+            },
+            {
+                "company_key": "cmp_2",
+                "company_display": "Nova Logistics",
+                "company_normalized": "nova logistics",
+                "company_root": "nova logistics",
+                "resolved_domain": "example.com",
+            },
+        ]
+    )
+
+    assert candidates == []
+
+
+def test_detect_merge_candidates_allows_same_domain_when_one_name_contains_the_other():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    candidates = service.detect_merge_candidates(
+        [
+            {
+                "company_key": "cmp_1",
+                "company_display": "Tekton",
+                "company_normalized": "tekton",
+                "company_root": "tekton",
+                "resolved_domain": "tektonlabs.com",
+            },
+            {
+                "company_key": "cmp_2",
+                "company_display": "Tekton Labs",
+                "company_normalized": "tekton labs",
+                "company_root": "tekton",
+                "resolved_domain": "tektonlabs.com",
+            },
+        ]
+    )
+
+    assert len(candidates) == 1
+
+
+def test_enrich_company_identity_adds_observed_alias_when_extracted_name_differs():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    enriched = service.enrich_company_identity(
+        [
+            {
+                "company": "unknown",
+                "title": "Backend Engineer at Tenaris",
+                "description": "",
+                "apply_url": "",
+                "resolved_domain": "tenaris.com",
+                "sources": ["google_jobs"],
+            }
+        ]
+    )
+
+    assert enriched[0]["company_display"] == "Tenaris"
+    assert "Tenaris" in enriched[0]["aliases"]
+    assert enriched[0]["alias_type_map"]["Tenaris"] == "tenaris"
+    assert enriched[0]["alias_type_map"]["Tenaris__type"] == "observed_name"
+
+
+def test_build_aliases_does_not_keep_unknown_or_placeholder_aliases():
+    ctx = RunContext.create(config={})
+    service = CompanyIdentityService(ctx)
+
+    aliases, alias_type_map = service.build_aliases(
+        "Tenaris",
+        "tenaris",
+        observed_candidates=["unknown", "Empresa Confidencial", "Tenaris"],
+    )
+
+    assert aliases == ["Tenaris"]
+    assert "unknown" not in alias_type_map
+    assert "Empresa Confidencial" not in alias_type_map
+

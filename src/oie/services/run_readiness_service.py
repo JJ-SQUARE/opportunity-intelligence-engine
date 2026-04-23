@@ -3,11 +3,30 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.services.commercial_signal_service import CommercialSignalService
 
 
 class RunReadinessService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
+        self.commercial_signal_service = CommercialSignalService()
+
+    def _int_metric(self, key: str) -> int:
+        value = self.ctx.metrics.get(key, 0)
+        try:
+            return int(value or 0)
+        except Exception:
+            return 0
+
+    def _bool_metric(self, key: str) -> bool:
+        value = self.ctx.metrics.get(key, False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _has_output_artifact(self, paths: Dict[str, Any], key: str) -> bool:
+        value = str(paths.get(key) or "").strip()
+        return bool(value)
 
     def build_report(
         self,
@@ -48,6 +67,21 @@ class RunReadinessService:
                 enabled_collectors.append(name)
 
         warnings: List[str] = []
+
+        counts_original = self.ctx.provider_state.get("run_metrics_summary_counts_original") or {}
+        counts_effective = self.ctx.provider_state.get("run_metrics_summary_counts_effective") or {}
+
+        strong_icp_companies = 0
+        strong_icp_without_reachability = 0
+        for company in companies:
+            finalized_company = self.commercial_signal_service.finalize_row(company)
+            icp_bucket = str(finalized_company.get("icp_bucket") or "")
+            has_reachability = bool(int(finalized_company.get("reachability_ready", 0) or 0))
+
+            if icp_bucket == "strong_icp":
+                strong_icp_companies += 1
+                if not has_reachability:
+                    strong_icp_without_reachability += 1
 
         if not jobs:
             warnings.append("No se recolectaron jobs en la corrida.")
@@ -138,12 +172,80 @@ class RunReadinessService:
                     f"Lead generation exigió enrichment y dejó fuera {skipped_missing_enrichment} compañías sin enrichment."
                 )
 
-        is_ready = len(jobs) > 0 and len(companies) > 0
+        if strong_icp_without_reachability > 0:
+            warnings.append(
+                f"Hay {strong_icp_without_reachability} compañías strong ICP sin reachability suficiente para outreach."
+            )
+
+        original_jobs_after_dedupe = int(
+            counts_original.get("jobs_after_dedupe", metrics.get("jobs_after_dedupe", len(jobs))) or 0
+        )
+        effective_jobs = int(
+            counts_effective.get("jobs", metrics.get("master_jobs_unique_to_append", len(jobs))) or 0
+        )
+        original_leads_selected = int(
+            counts_original.get("best_leads_selected", metrics.get("best_leads_selected", len(leads))) or 0
+        )
+        effective_leads = int(
+            counts_effective.get("leads", metrics.get("master_leads_unique_to_append", len(leads))) or 0
+        )
+
+        if original_jobs_after_dedupe > 0 and effective_jobs < original_jobs_after_dedupe:
+            warnings.append(
+                f"El volumen efectivo de jobs ({effective_jobs}) quedó por debajo del volumen post-dedupe ({original_jobs_after_dedupe})."
+            )
+
+        if original_leads_selected > 0 and effective_leads < original_leads_selected:
+            warnings.append(
+                f"El volumen efectivo de leads ({effective_leads}) quedó por debajo de los leads seleccionados ({original_leads_selected})."
+            )
+
+        persistence_errors_count = self._int_metric("persistence_errors_count")
+        master_schema_errors_count = self._int_metric("master_schema_errors_count")
+        if persistence_errors_count > 0:
+            warnings.append(
+                f"Se detectaron {persistence_errors_count} errores de persistencia durante la corrida."
+            )
+        if master_schema_errors_count > 0:
+            warnings.append(
+                f"Se detectaron {master_schema_errors_count} errores de schema al escribir master data."
+            )
+
+        if self._bool_metric("persistence_companies_attempted") and not self._bool_metric("persistence_companies_succeeded"):
+            warnings.append("La persistencia de companies no se completó correctamente.")
+        if self._bool_metric("persistence_jobs_attempted") and not self._bool_metric("persistence_jobs_succeeded"):
+            warnings.append("La persistencia de jobs no se completó correctamente.")
+        if self._bool_metric("persistence_leads_attempted") and not self._bool_metric("persistence_leads_succeeded"):
+            warnings.append("La persistencia de leads no se completó correctamente.")
+
+        expected_output_keys = [
+            "jobs_export",
+            "companies_export",
+            "leads_export",
+            "commercial_pipeline_csv",
+            "apollo_import_csv",
+            "commercial_report_md",
+            "run_metrics_summary_json",
+        ]
+        missing_outputs = [key for key in expected_output_keys if not self._has_output_artifact(paths, key)]
+        if missing_outputs:
+            warnings.append(
+                f"Faltan artefactos de salida esperados: {', '.join(sorted(missing_outputs))}."
+            )
+
+        run_useful = bool(jobs) and bool(companies)
+        is_ready = (
+            run_useful
+            and persistence_errors_count == 0
+            and master_schema_errors_count == 0
+            and not missing_outputs
+        )
 
         report = {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
             "is_ready_for_review": is_ready,
+            "run_useful": run_useful,
             "enabled_collectors": enabled_collectors,
             "jobs_count": len(jobs),
             "companies_count": len(companies),
@@ -152,6 +254,30 @@ class RunReadinessService:
             "jobs_without_company_key": metrics.get("jobs_without_company_key", 0),
             "provider_events_count": len(self.ctx.provider_events),
             "warnings": warnings,
+            "counts_original": {
+                "jobs_after_dedupe": original_jobs_after_dedupe,
+                "best_leads_selected": original_leads_selected,
+            },
+            "counts_effective": {
+                "jobs": effective_jobs,
+                "companies": int(counts_effective.get("companies", len(companies)) or 0),
+                "leads": effective_leads,
+            },
+            "icp_reachability_summary": {
+                "strong_icp_companies": strong_icp_companies,
+                "strong_icp_without_reachability": strong_icp_without_reachability,
+            },
+            "persistence_summary": {
+                "errors_count": persistence_errors_count,
+                "master_schema_errors_count": master_schema_errors_count,
+                "companies_succeeded": self._bool_metric("persistence_companies_succeeded"),
+                "jobs_succeeded": self._bool_metric("persistence_jobs_succeeded"),
+                "leads_succeeded": self._bool_metric("persistence_leads_succeeded"),
+            },
+            "export_summary": {
+                "expected_outputs": expected_output_keys,
+                "missing_outputs": missing_outputs,
+            },
             "outputs": {
                 "db_path": paths.get("db_path"),
                 "jobs_export": paths.get("jobs_export"),
@@ -161,6 +287,7 @@ class RunReadinessService:
                 "top_opportunities_export": paths.get("top_opportunities_export"),
                 "commercial_pipeline_csv": paths.get("commercial_pipeline_csv"),
                 "apollo_import_csv": paths.get("apollo_import_csv"),
+                "commercial_report_md": paths.get("commercial_report_md"),
                 "domain_review_queue_csv": paths.get("domain_review_queue_csv"),
                 "provider_operation_metrics_json": paths.get("provider_operation_metrics_json"),
                 "provider_operation_metrics_csv": paths.get("provider_operation_metrics_csv"),
@@ -173,5 +300,7 @@ class RunReadinessService:
         }
 
         self.ctx.metrics["run_readiness_ready"] = is_ready
+        self.ctx.metrics["run_readiness_useful"] = run_useful
         self.ctx.metrics["run_readiness_warnings"] = len(warnings)
+        self.ctx.metrics["run_readiness_missing_outputs"] = len(missing_outputs)
         return report

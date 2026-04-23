@@ -212,6 +212,7 @@ class CompanyRepository:
                     company_key,
                     company_display,
                     company_normalized,
+                    company_root,
                     resolved_domain,
                     domain_source,
                     domain_confidence,
@@ -234,10 +235,11 @@ class CompanyRepository:
                     classification_provider,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(company_key) DO UPDATE SET
                     company_display = excluded.company_display,
                     company_normalized = excluded.company_normalized,
+                    company_root = COALESCE(excluded.company_root, companies.company_root),
                     resolved_domain = excluded.resolved_domain,
                     domain_source = excluded.domain_source,
                     domain_confidence = excluded.domain_confidence,
@@ -265,6 +267,7 @@ class CompanyRepository:
                         company.get("company_key"),
                         company.get("company_display"),
                         company.get("company_normalized"),
+                        company.get("company_root"),
                         company.get("resolved_domain"),
                         company.get("domain_source"),
                         company.get("domain_confidence"),
@@ -298,7 +301,7 @@ class CompanyRepository:
         try:
             row = conn.execute(
                 """
-                SELECT company_key, company_display, company_normalized, resolved_domain
+                SELECT company_key, company_display, company_normalized, company_root, resolved_domain
                 FROM companies
                 WHERE company_normalized = ?
                   AND COALESCE(resolved_domain, '') = COALESCE(?, '')
@@ -315,7 +318,7 @@ class CompanyRepository:
         try:
             row = conn.execute(
                 """
-                SELECT company_key, company_display, company_normalized, resolved_domain
+                SELECT company_key, company_display, company_normalized, company_root, resolved_domain
                 FROM companies
                 WHERE resolved_domain = ?
                 LIMIT 1
@@ -541,6 +544,16 @@ class JobRepository:
                     job.get("description"),
                     job.get("source"),
                     job.get("detected_at"),
+                    1 if job.get("is_remote") else 0,
+                    1 if job.get("is_contractor") else 0,
+                    1 if job.get("is_full_time") else 0,
+                    1 if job.get("nearshore_friendly") else 0,
+                    1 if job.get("us_only") else 0,
+                    1 if job.get("remote_flag") else 0,
+                    1 if job.get("contractor_flag") else 0,
+                    1 if job.get("many_openings_signal") else 0,
+                    1 if job.get("offshore_mentioned") else 0,
+                    int(job.get("urgency_hits") or 0),
                 )
                 for job in jobs
             ]
@@ -560,9 +573,19 @@ class JobRepository:
                         apply_url,
                         description,
                         source,
-                        detected_at
+                        detected_at,
+                        is_remote,
+                        is_contractor,
+                        is_full_time,
+                        nearshore_friendly,
+                        us_only,
+                        remote_flag,
+                        contractor_flag,
+                        many_openings_signal,
+                        offshore_mentioned,
+                        urgency_hits
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     rows,
                 )
@@ -665,6 +688,14 @@ class LeadRepository:
                     _clean(lead.get("lead_scoring_provider")),
                     _clean(lead.get("lead_scoring_model")),
                     _clean(lead.get("lead_scoring_mode")),
+                    float(lead.get("lead_score_title") or 0),
+                    float(lead.get("lead_score_source") or 0),
+                    float(lead.get("lead_score_email") or 0),
+                    float(lead.get("lead_score_linkedin") or 0),
+                    float(lead.get("lead_score_email_quality") or 0),
+                    float(lead.get("lead_score_confidence") or 0),
+                    float(lead.get("lead_score_completeness_penalty") or 0),
+                    float(lead.get("lead_score_company_penalty") or 0),
                 )
                 for lead in leads
             ]
@@ -694,9 +725,17 @@ class LeadRepository:
                         lead_score_reason,
                         lead_scoring_provider,
                         lead_scoring_model,
-                        lead_scoring_mode
+                        lead_scoring_mode,
+                        lead_score_title,
+                        lead_score_source,
+                        lead_score_email,
+                        lead_score_linkedin,
+                        lead_score_email_quality,
+                        lead_score_confidence,
+                        lead_score_completeness_penalty,
+                        lead_score_company_penalty
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     rows,
                 )

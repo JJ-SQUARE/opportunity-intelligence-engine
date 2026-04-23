@@ -18,17 +18,27 @@ class CollectorROIService:
         leads: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         source_unique_jobs = defaultdict(int)
+        source_effective_unique_jobs = defaultdict(int)
         source_duplicates = defaultdict(int)
         source_new_companies = defaultdict(int)
         source_leads = defaultdict(int)
         company_first_source: Dict[str, str] = {}
+
+        effective_company_keys = {
+            company.get("company_key")
+            for company in companies or []
+            if company.get("company_key")
+        }
 
         for job in unique_jobs:
             source = job.get("source", "unknown")
             source_unique_jobs[source] += 1
 
             company_key = job.get("company_key")
-            if company_key and company_key not in company_first_source:
+            if company_key and company_key in effective_company_keys:
+                source_effective_unique_jobs[source] += 1
+
+            if company_key and company_key in effective_company_keys and company_key not in company_first_source:
                 company_first_source[company_key] = source
                 source_new_companies[source] += 1
 
@@ -53,12 +63,13 @@ class CollectorROIService:
         rows: List[Dict[str, Any]] = []
         for source in all_sources:
             unique_jobs_count = source_unique_jobs[source]
+            effective_unique_jobs_count = source_effective_unique_jobs[source]
             duplicate_jobs_count = source_duplicates[source]
             new_companies_count = source_new_companies[source]
             leads_generated_count = source_leads[source]
 
             utility_score = (
-                unique_jobs_count * 1.0
+                effective_unique_jobs_count * 1.0
                 + new_companies_count * 3.0
                 + leads_generated_count * 2.0
                 - duplicate_jobs_count * 0.5
@@ -68,6 +79,7 @@ class CollectorROIService:
                 {
                     "source": source,
                     "unique_jobs": unique_jobs_count,
+                    "effective_unique_jobs": effective_unique_jobs_count,
                     "duplicate_jobs": duplicate_jobs_count,
                     "new_companies": new_companies_count,
                     "leads_generated": leads_generated_count,
@@ -79,6 +91,7 @@ class CollectorROIService:
             key=lambda row: (
                 row["utility_score"],
                 row["new_companies"],
+                row["effective_unique_jobs"],
                 row["unique_jobs"],
             ),
             reverse=True,

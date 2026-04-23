@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from oie.orchestration.run_context import RunContext
-from oie.persistence.repositories import JobRepository
+from oie.persistence.repositories import JobRepository, LeadRepository
 from oie.services.master_data_service import MasterDataService
 
 
@@ -12,18 +12,13 @@ class MasterDedupService:
         self.ctx = ctx
         self.master_data_service = MasterDataService(ctx)
         self.job_repository = JobRepository()
+        self.lead_repository = LeadRepository()
 
     def _job_dedupe_key(self, job: Dict[str, Any]) -> Tuple[str, str]:
         return ("job_fingerprint", self.job_repository._build_job_fingerprint(job))
 
     def _lead_dedupe_key(self, lead: Dict[str, Any]) -> Tuple[str, str]:
-        email = (lead.get("email") or "").strip().lower()
-        company_key = (lead.get("company_key") or "").strip()
-
-        if email:
-            return ("email", email)
-
-        return ("company_key_contact", f"{company_key}|{(lead.get('contact_name') or '').strip().lower()}")
+        return ("lead_fingerprint", self.lead_repository._build_lead_fingerprint(lead))
 
     def dedupe_jobs_against_master(
         self,

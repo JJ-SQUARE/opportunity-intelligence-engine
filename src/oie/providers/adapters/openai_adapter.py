@@ -35,6 +35,84 @@ AGGREGATOR_HINTS = {
     "ok.com",
 }
 
+CLASSIFICATION_RULE_KEYWORDS = {
+    "competitor": {
+        "bairesdev",
+        "globant",
+        "softserve",
+    },
+    "staffing": {
+        "staffing",
+        "staffing and recruiting",
+        "recruiting",
+        "recruitment",
+        "talent solutions",
+        "talent acquisition",
+        "headhunting",
+        "executive search",
+    },
+    "outsourcing": {
+        "outsourcing",
+        "outsource",
+        "outstaffing",
+        "staff augmentation",
+        "nearshore software",
+        "nearshore development",
+        "dedicated teams",
+        "software outsourcing",
+        "technology outsourcing",
+    },
+    "consulting": {
+        "consulting",
+        "consultancy",
+        "professional services",
+        "advisory",
+        "technology consulting",
+        "software consulting",
+        "software consultancy",
+        "software development services",
+        "digital transformation services",
+        "systems integrator",
+        "it services",
+    },
+    "marketplace": {
+        "marketplace",
+        "two-sided marketplace",
+        "talent marketplace",
+    },
+    "job_board": {
+        "job board",
+        "jobs board",
+        "career portal",
+        "job search",
+        "find jobs",
+        "empleos",
+        "vacantes",
+    },
+}
+
+END_CLIENT_CLASSIFICATION_HINTS = {
+    "saas",
+    "platform",
+    "software product",
+    "builds software products",
+    "product company",
+    "banking and financial services",
+    "insurance",
+    "healthcare",
+    "life sciences",
+    "logistics",
+    "transportation",
+    "airlines",
+    "aviation",
+    "computer software",
+    "software company",
+    "fintech",
+    "proptech",
+    "healthtech",
+    "edtech",
+}
+
 
 class OpenAIAdapter(ProviderClient):
     provider_name = "openai"
@@ -301,15 +379,85 @@ lead_capture_reason: {self._truncate(lead_payload.get("lead_capture_reason") or 
     def score_opportunity(self, company_payload: Dict[str, Any]) -> Dict[str, Any]:
         return self.score_company_opportunity(company_payload)
 
+    def _company_classification_text(self, company_payload: Dict[str, Any]) -> str:
+        jobs = company_payload.get("jobs") or []
+        jobs_blob = json.dumps(jobs, ensure_ascii=False) if isinstance(jobs, list) else str(jobs or "")
+        return " ".join(
+            [
+                str(company_payload.get("company_display") or ""),
+                str(company_payload.get("company") or ""),
+                str(company_payload.get("company_description") or ""),
+                str(company_payload.get("industry") or ""),
+                str(company_payload.get("resolved_domain") or ""),
+                str(company_payload.get("linkedin_company_url") or ""),
+                jobs_blob,
+            ]
+        ).lower()
+
+    def _has_end_client_classification_evidence(self, company_payload: Dict[str, Any], text: str) -> bool:
+        if not text.strip():
+            return False
+
+        if any(hint in text for hint in CLASSIFICATION_RULE_KEYWORDS.get("competitor", set())):
+            return False
+
+        for classification in ("staffing", "outsourcing", "consulting", "job_board", "marketplace"):
+            keywords = CLASSIFICATION_RULE_KEYWORDS.get(classification, set())
+            if any(keyword in text for keyword in keywords):
+                return False
+
+        industry = str(company_payload.get("industry") or "").strip().lower()
+        description = str(company_payload.get("company_description") or "").strip().lower()
+        jobs = company_payload.get("jobs") or []
+
+        hint_hits = sum(1 for hint in END_CLIENT_CLASSIFICATION_HINTS if hint in text)
+        has_product_language = any(term in description for term in ("product", "platform", "saas", "software"))
+        has_build_language = any(term in description for term in ("builds", "develops", "operates", "offers", "provides"))
+        has_clear_industry = bool(industry and any(hint in industry for hint in END_CLIENT_CLASSIFICATION_HINTS))
+        has_hiring_signal = bool(jobs)
+
+        if hint_hits >= 2:
+            return True
+
+        if has_clear_industry and (has_product_language or has_build_language or has_hiring_signal):
+            return True
+
+        if has_product_language and has_build_language:
+            return True
+
+        return False
+
+    def _rule_based_company_classification(self, company_payload: Dict[str, Any]) -> tuple[str, float]:
+        text = self._company_classification_text(company_payload)
+        domain = str(company_payload.get("resolved_domain") or "").strip().lower()
+
+        if self._is_aggregator_domain(domain):
+            return "job_board", 0.95
+
+        for classification in ("competitor", "staffing", "outsourcing", "consulting", "job_board", "marketplace"):
+            keywords = CLASSIFICATION_RULE_KEYWORDS.get(classification, set())
+            if any(keyword in text for keyword in keywords):
+                confidence = 0.95 if classification in {"competitor", "job_board"} else 0.9
+                return classification, confidence
+
+        if self._has_end_client_classification_evidence(company_payload, text):
+            return "end_client", 0.72
+
+        if text.strip():
+            return "unknown", 0.2
+
+        return "unknown", 0.0
+
     def classify_company(self, company_payload: Dict[str, Any]) -> Dict[str, Any]:
         company_name = company_payload.get("company_display") or company_payload.get("company") or "unknown"
+        classification, confidence = self._rule_based_company_classification(company_payload)
 
         return {
             "company_name": company_name,
-            "classification": "unknown",
-            "confidence": 0.0,
+            "classification": classification,
+            "confidence": confidence,
             "provider": self.provider_name,
-            "mode": "stub",
+            "mode": "heuristic_rules",
         }
 
     def _normalize_text(self, value: Any) -> str:
@@ -446,6 +594,20 @@ lead_capture_reason: {self._truncate(lead_payload.get("lead_capture_reason") or 
         text_hits = sum(1 for token in core_tokens if token and token in text)
         total_hits = len({token for token in core_tokens if token and token in text})
 
+        strong_text_proof = any(
+            marker in text
+            for marker in (
+                "official",
+                "sitio oficial",
+                "about us",
+                "nosotros",
+            )
+        )
+        weak_single_token_brand = (
+            len(core_tokens) == 1
+            and len(core_tokens[0]) <= 4
+        )
+
         if self._is_aggregator_domain(domain):
             return {
                 "selected_domain": None,
@@ -462,7 +624,21 @@ lead_capture_reason: {self._truncate(lead_payload.get("lead_capture_reason") or 
                 "reason": "suspicious_subdomain",
             }
 
-        if domain_hits >= 1 and text_hits >= 1:
+        if (
+            weak_single_token_brand
+            and domain_hits >= 1
+            and text_hits >= 1
+            and total_hits <= 1
+            and not strong_text_proof
+        ):
+            return {
+                "selected_domain": domain,
+                "decision": "review",
+                "confidence": 0.62,
+                "reason": "ambiguous_short_brand_match",
+            }
+
+        if domain_hits >= 1 and text_hits >= 1 and (len(core_tokens) >= 2 or strong_text_proof or total_hits >= 2):
             return {
                 "selected_domain": domain,
                 "decision": "accepted",

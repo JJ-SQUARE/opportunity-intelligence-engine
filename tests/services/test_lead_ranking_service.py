@@ -323,3 +323,391 @@ def test_lead_ranking_service_tracks_llm_vs_rules_metrics():
     assert len(ranked) == 1
     assert ctx.metrics["lead_scoring_llm_used"] == 1
     assert ctx.metrics["lead_scoring_rules_used"] == 0
+
+def test_lead_ranking_service_prioritizes_icp_titles_like_cdo_and_it_manager():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "CDO Contact",
+            "contact_title": "Chief Digital Officer",
+            "email": "cdo@acme.com",
+            "linkedin_url": "https://linkedin.com/in/cdo",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.8,
+            "email_quality_score": 90,
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Generic Director",
+            "contact_title": "Director",
+            "email": "director@acme.com",
+            "linkedin_url": "https://linkedin.com/in/director",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.8,
+            "email_quality_score": 90,
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["contact_name"] == "CDO Contact"
+    assert ranked[0]["lead_score_title"] > ranked[1]["lead_score_title"]
+
+
+
+
+def test_lead_ranking_service_deprioritizes_product_titles_against_true_buyer_personas():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Product Leader",
+            "contact_title": "Head of Product",
+            "email": "product@acme.com",
+            "linkedin_url": "https://linkedin.com/in/product",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.95,
+            "email_quality_score": 95,
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Engineering Leader",
+            "contact_title": "Head of Engineering",
+            "email": "eng@acme.com",
+            "linkedin_url": "https://linkedin.com/in/eng",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.85,
+            "email_quality_score": 88,
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["contact_name"] == "Engineering Leader"
+    assert ranked[0]["lead_score_title"] > ranked[1]["lead_score_title"]
+
+
+def test_lead_ranking_service_deprioritizes_coo_against_cto():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Operations Exec",
+            "contact_title": "COO",
+            "email": "coo@acme.com",
+            "linkedin_url": "https://linkedin.com/in/coo",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.95,
+            "email_quality_score": 95,
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Technology Exec",
+            "contact_title": "CTO",
+            "email": "cto@acme.com",
+            "linkedin_url": "https://linkedin.com/in/cto",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.80,
+            "email_quality_score": 85,
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["contact_name"] == "Technology Exec"
+    assert ranked[0]["lead_score_title"] > ranked[1]["lead_score_title"]
+
+
+def test_lead_ranking_service_deprioritizes_competitor_or_staffing_contacts():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_vendor",
+            "company_type_ai": "staffing",
+            "contact_name": "Vendor CTO",
+            "contact_title": "CTO",
+            "email": "vendor@staffco.com",
+            "linkedin_url": "https://linkedin.com/in/vendor",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.95,
+            "email_quality_score": 95,
+        },
+        {
+            "company_key": "cmp_client",
+            "company_type_ai": "end_client",
+            "contact_name": "Client Engineering Manager",
+            "contact_title": "Engineering Manager",
+            "email": "manager@client.com",
+            "linkedin_url": "https://linkedin.com/in/clientmanager",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.85,
+            "email_quality_score": 90,
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["contact_name"] == "Client Engineering Manager"
+    assert ranked[1]["contact_name"] == "Vendor CTO"
+    assert ranked[1]["lead_score_company_penalty"] < 0
+
+
+def test_lead_ranking_service_can_keep_top_multiple_leads_per_company():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Top CTO",
+            "contact_title": "CTO",
+            "email": "cto@acme.com",
+            "linkedin_url": "https://linkedin.com/in/cto",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.95,
+            "email_quality_score": 95,
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Strong VP",
+            "contact_title": "VP Engineering",
+            "email": "vp@acme.com",
+            "linkedin_url": "https://linkedin.com/in/vp",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.85,
+            "email_quality_score": 90,
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Third Director",
+            "contact_title": "Director of Engineering",
+            "email": "director@acme.com",
+            "linkedin_url": "https://linkedin.com/in/director",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.8,
+            "email_quality_score": 88,
+        },
+        {
+            "company_key": "cmp_b",
+            "contact_name": "Only B",
+            "contact_title": "Head of Engineering",
+            "email": "head@beta.com",
+            "linkedin_url": "https://linkedin.com/in/headbeta",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.9,
+            "email_quality_score": 92,
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+    selected = service.select_top_leads_per_company(leads, max_leads_per_company=2)
+
+    assert len(selected) == 3
+    assert selected[0]["contact_name"] == "Top CTO"
+    assert selected[1]["contact_name"] == "Only B"
+    assert [lead["company_key"] for lead in selected] == ["cmp_a", "cmp_b", "cmp_a"]
+    assert selected[0]["contact_name"] == ranked[0]["contact_name"]
+    assert selected[1]["contact_name"] == "Only B"
+    assert selected[2]["contact_name"] in {"Strong VP", "Third Director"}
+    assert {lead["contact_name"] for lead in selected} in [
+        {"Top CTO", "Only B", "Strong VP"},
+        {"Top CTO", "Only B", "Third Director"},
+    ]
+    assert ctx.metrics["best_leads_selected"] == len(selected)
+    assert ctx.metrics["best_leads_selected_companies"] == 2
+    assert ctx.metrics["best_leads_selected_max_per_company"] == 2
+
+
+
+def test_lead_ranking_service_prefers_apollo_when_same_contact_competes_with_hunter():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Jane Doe",
+            "contact_title": "CTO",
+            "email": "jane@acme.com",
+            "linkedin_url": "https://linkedin.com/in/janedoe",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.95,
+            "email_quality_score": 100,
+            "lead_relevance_score": 140,
+            "lead_score_title": 100,
+            "lead_score_source": 15,
+            "lead_score_email": 20,
+            "lead_score_linkedin": 10,
+            "lead_score_email_quality": 20,
+            "lead_score_confidence": 19,
+            "lead_score_completeness_penalty": 0,
+            "lead_score_company_penalty": 0,
+            "lead_priority_label": "high",
+            "lead_scoring_provider": "rules",
+            "lead_scoring_mode": "fallback_rules",
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Jane Doe",
+            "contact_title": "CTO",
+            "email": "jane@acme.com",
+            "linkedin_url": "https://linkedin.com/in/janedoe",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.80,
+            "email_quality_score": 90,
+            "lead_relevance_score": 140,
+            "lead_score_title": 100,
+            "lead_score_source": 30,
+            "lead_score_email": 20,
+            "lead_score_linkedin": 10,
+            "lead_score_email_quality": 18,
+            "lead_score_confidence": 16,
+            "lead_score_completeness_penalty": 0,
+            "lead_score_company_penalty": 0,
+            "lead_priority_label": "high",
+            "lead_scoring_provider": "rules",
+            "lead_scoring_mode": "fallback_rules",
+        },
+    ]
+
+    selected = service.select_top_leads_per_company(leads, max_leads_per_company=1)
+
+    assert len(selected) == 1
+    assert selected[0]["lead_source"] == "apollo_people"
+
+
+
+def test_lead_ranking_service_normalizes_legacy_outsourcing_alias():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    leads = [
+        {
+            "company_key": "cmp_vendor",
+            "company_type_ai": "outsourcing",
+            "contact_name": "Vendor CTO",
+            "contact_title": "CTO",
+            "email": "vendor@outsourceco.com",
+            "linkedin_url": "https://linkedin.com/in/vendor",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.95,
+            "email_quality_score": 95,
+        },
+        {
+            "company_key": "cmp_client",
+            "company_type_ai": "end_client",
+            "contact_name": "Client CTO",
+            "contact_title": "CTO",
+            "email": "client@acme.com",
+            "linkedin_url": "https://linkedin.com/in/client",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.95,
+            "email_quality_score": 95,
+        },
+    ]
+
+    ranked = service.rank_leads(leads)
+
+    assert ranked[0]["contact_name"] == "Client CTO"
+    assert ranked[1]["contact_name"] == "Vendor CTO"
+    assert ranked[1]["lead_score_company_penalty"] < 0
+
+def test_lead_ranking_service_does_not_rerank_when_input_already_has_rank_fields():
+    ctx = RunContext.create(config={}, flags={})
+    service = LeadRankingService(ctx)
+
+    ranked_input = [
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Top CTO",
+            "contact_title": "Director",
+            "email": "cto@acme.com",
+            "linkedin_url": "https://linkedin.com/in/cto",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.9,
+            "email_quality_score": 95,
+            "lead_relevance_score": 97,
+            "lead_score_title": 100,
+            "lead_score_source": 30,
+            "lead_score_email": 20,
+            "lead_score_linkedin": 10,
+            "lead_score_email_quality": 19,
+            "lead_score_confidence": 18,
+            "lead_score_completeness_penalty": 0,
+            "lead_score_company_penalty": 0,
+            "lead_priority_label": "high",
+            "lead_scoring_provider": "rules",
+            "lead_scoring_mode": "fallback_rules",
+        },
+        {
+            "company_key": "cmp_a",
+            "contact_name": "Second VP",
+            "contact_title": "CTO",
+            "email": "vp@acme.com",
+            "linkedin_url": "https://linkedin.com/in/vp",
+            "lead_source": "hunter_domain_search",
+            "lead_confidence": 0.8,
+            "email_quality_score": 90,
+            "lead_relevance_score": 88,
+            "lead_score_title": 80,
+            "lead_score_source": 15,
+            "lead_score_email": 20,
+            "lead_score_linkedin": 10,
+            "lead_score_email_quality": 18,
+            "lead_score_confidence": 16,
+            "lead_score_completeness_penalty": 0,
+            "lead_score_company_penalty": 0,
+            "lead_priority_label": "high",
+            "lead_scoring_provider": "rules",
+            "lead_scoring_mode": "fallback_rules",
+        },
+        {
+            "company_key": "cmp_b",
+            "contact_name": "Only B",
+            "contact_title": "Manager",
+            "email": "head@beta.com",
+            "linkedin_url": "https://linkedin.com/in/headbeta",
+            "lead_source": "apollo_people",
+            "lead_confidence": 0.85,
+            "email_quality_score": 92,
+            "lead_relevance_score": 91,
+            "lead_score_title": 58,
+            "lead_score_source": 30,
+            "lead_score_email": 20,
+            "lead_score_linkedin": 10,
+            "lead_score_email_quality": 18,
+            "lead_score_confidence": 17,
+            "lead_score_completeness_penalty": 0,
+            "lead_score_company_penalty": 0,
+            "lead_priority_label": "high",
+            "lead_scoring_provider": "rules",
+            "lead_scoring_mode": "fallback_rules",
+        },
+    ]
+
+    def boom(_):
+        raise AssertionError("rank_leads no debería ejecutarse cuando la entrada ya viene rankeada")
+
+    service.rank_leads = boom
+
+    selected = service.select_top_leads_per_company(ranked_input, max_leads_per_company=2)
+    top_leads = service.build_top_leads(ranked_input, limit=2)
+
+    assert [lead["contact_name"] for lead in selected] in [
+        ["Top CTO", "Only B", "Second VP"],
+        ["Top CTO", "Only B"],
+    ]
+    assert [lead["contact_name"] for lead in top_leads] == ["Top CTO", "Second VP"]
+    assert ctx.metrics["best_leads_selected"] == len(selected)
+    assert ctx.metrics["best_leads_selected_companies"] == 2
+    assert ctx.metrics["best_leads_selected_max_per_company"] == 2
+

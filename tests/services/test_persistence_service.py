@@ -339,3 +339,104 @@ def test_persistence_service_persist_run_snapshot_normalizes_lead_fields(tmp_pat
         assert lead["lead_capture_reason"] == "apollo_match | title:CTO | email_quality:95"
     finally:
         conn.close()
+
+def test_persistence_service_persist_run_snapshot_survives_partial_company_failure(tmp_path):
+    db_path = tmp_path / "oie_test_partial_failure.db"
+
+    ctx = RunContext.create(
+        config={"database": {"path": str(db_path)}},
+        flags={},
+    )
+    ctx.metrics["jobs_after_dedupe"] = 3
+
+    service = PersistenceService(ctx)
+
+    original_persist_companies = service.persist_companies
+
+    def boom(companies):
+        raise RuntimeError("companies write failed")
+
+    service.persist_companies = boom
+    try:
+        service.persist_run_snapshot(
+            status="partial_ok",
+            companies=[
+                {
+                    "company_key": "cmp_a",
+                    "company_display": "Acme Inc.",
+                    "company_normalized": "acme",
+                    "resolved_domain": "acme.com",
+                }
+            ],
+            jobs=[
+                {
+                    "title": "Backend Engineer",
+                    "company": "Acme Inc.",
+                    "company_key": "cmp_a",
+                    "location": "Remote",
+                    "job_url": "https://acme.com/jobs/1",
+                    "apply_url": "https://acme.com/apply/1",
+                    "description": "Python role",
+                    "source": "google_jobs",
+                    "detected_at": "2026-03-10",
+                }
+            ],
+            leads=[
+                {
+                    "company_key": "cmp_a",
+                    "contact_name": "Jane Doe",
+                    "contact_title": "CTO",
+                    "email": "jane@acme.com",
+                    "linkedin_url": "https://linkedin.com/in/jane",
+                }
+            ],
+        )
+    finally:
+        service.persist_companies = original_persist_companies
+
+    conn = get_connection(str(db_path))
+    try:
+        run_row = conn.execute(
+            "SELECT run_id, status FROM runs WHERE run_id = ?",
+            (ctx.run_id,),
+        ).fetchone()
+        assert run_row is not None
+        assert run_row["status"] == "partial_ok"
+
+        metric_row = conn.execute(
+            "SELECT metric_value FROM run_metrics WHERE run_id = ? AND metric_key = ?",
+            (ctx.run_id, "jobs_after_dedupe"),
+        ).fetchone()
+        assert metric_row is not None
+        assert metric_row["metric_value"] == "3"
+
+        jobs = conn.execute(
+            "SELECT title FROM jobs WHERE run_id = ?",
+            (ctx.run_id,),
+        ).fetchall()
+        assert len(jobs) == 1
+
+        leads = conn.execute(
+            "SELECT email FROM leads WHERE run_id = ?",
+            (ctx.run_id,),
+        ).fetchall()
+        assert len(leads) == 1
+        assert leads[0]["email"] == "jane@acme.com"
+
+        companies = conn.execute(
+            "SELECT company_key FROM companies WHERE company_key = ?",
+            ("cmp_a",),
+        ).fetchall()
+        assert len(companies) == 0
+    finally:
+        conn.close()
+
+    assert ctx.metrics["persistence_companies_succeeded"] is False
+    assert ctx.metrics["persistence_jobs_succeeded"] is True
+    assert ctx.metrics["persistence_leads_succeeded"] is True
+    assert ctx.metrics["persistence_errors_count"] >= 1
+    assert any(
+        event["provider"] == "persistence" and event["event_type"] == "persist_error"
+        for event in ctx.provider_events
+    )
+

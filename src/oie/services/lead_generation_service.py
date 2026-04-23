@@ -276,6 +276,20 @@ SENIORITY_HINTS = {
     "head of product": 24,
 }
 
+DEPRIORITIZED_COMPANY_TYPES = {
+    "competitor",
+    "consulting",
+    "staffing",
+    "marketplace",
+    "job_board",
+}
+
+COMPANY_TYPE_ALIASES = {
+    "product_company": "end_client",
+    "staffing_agency": "staffing",
+    "outsourcing": "consulting",
+}
+
 NAME_TOKEN_RE = re.compile(r"^[a-z]+(?:[._-][a-z]+)+$")
 SIMPLE_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -339,16 +353,27 @@ class LeadGenerationService:
 
         return has_seniority and has_technical_scope
 
+    def _normalized_company_type(self, value: Any) -> str:
+        normalized = str(value or "").strip().lower()
+        return COMPANY_TYPE_ALIASES.get(normalized, normalized)
+
     def _priority(self, company: Dict[str, Any]) -> tuple:
         opportunity_score = float(company.get("opportunity_score") or 0.0)
-        company_type = (company.get("company_type_ai") or "").strip().lower()
-        enriched = bool(company.get("industry") or company.get("employee_range") or company.get("linkedin_company_url"))
+        company_type = self._normalized_company_type(company.get("company_type_ai") or "")
+        enriched = self._has_real_enrichment(company)
         validation_status = (company.get("domain_validation_status") or "").strip().lower()
+        classification_confidence = float(company.get("classification_confidence_ai") or 0.0)
+        has_jobs = bool(company.get("jobs"))
+        has_domain = bool((company.get("resolved_domain") or "").strip())
 
         return (
             1 if validation_status == "accepted" else 0,
             1 if company_type == "end_client" else 0,
+            1 if has_domain else 0,
+            1 if company_type == "unknown" and opportunity_score >= max(self.min_opportunity_score, 20) else 0,
+            1 if has_jobs else 0,
             1 if enriched else 0,
+            classification_confidence,
             opportunity_score,
         )
 
@@ -644,11 +669,14 @@ class LeadGenerationService:
         company_key = company.get("company_key")
         domain = (company.get("resolved_domain") or "").strip().lower()
         validation_status = (company.get("domain_validation_status") or "").strip().lower()
-        company_type = (company.get("company_type_ai") or "").strip().lower()
+        company_type = self._normalized_company_type(company.get("company_type_ai") or "")
         classification_confidence = float(company.get("classification_confidence_ai") or 0.0)
         opportunity_score = float(company.get("opportunity_score") or 0.0)
 
         if company.get("benchmark_only") or company_type == "competitor":
+            return False
+
+        if company_type in DEPRIORITIZED_COMPANY_TYPES:
             return False
 
         if not company_key or not domain:
@@ -657,13 +685,22 @@ class LeadGenerationService:
         if is_job_board_domain(domain):
             return False
 
-        if self.require_accepted_domain and validation_status and validation_status != "accepted":
+        if validation_status in {"review", "rejected"}:
             return False
 
-        if validation_status == "review":
+        # 🔥 Antes: bloqueaba demasiado agresivo
+        # Ahora: solo bloqueamos si es explícitamente rejected
+        if self.require_accepted_domain and validation_status == "rejected":
             return False
 
-        if company_type and company_type != "end_client" and classification_confidence >= 0.75:
+        # 🔥 Antes: cortaba demasiado pronto por clasificación AI
+        # Ahora: solo excluimos si además tiene bajo opportunity_score
+        if (
+            company_type
+            and company_type not in {"", "unknown", "end_client"}
+            and classification_confidence >= 0.75
+            and opportunity_score < self.min_opportunity_score
+        ):
             return False
 
         if opportunity_score > 0 and opportunity_score < self.min_opportunity_score:
@@ -734,6 +771,66 @@ class LeadGenerationService:
 
         return self._map_hunter_people(company, payload)
 
+    def _has_real_enrichment(self, company: Dict[str, Any]) -> bool:
+        return bool(
+            (company.get("enrichment_source") == "apollo")
+            or company.get("linkedin_company_url")
+            or company.get("industry")
+            or company.get("employee_range")
+            or company.get("company_size")
+            or company.get("company_description")
+        )
+
+    def _has_minimum_company_signal(self, company: Dict[str, Any]) -> bool:
+        validation_status = (company.get("domain_validation_status") or "").strip().lower()
+        company_type = self._normalized_company_type(company.get("company_type_ai") or "")
+        classification_confidence = float(company.get("classification_confidence_ai") or 0.0)
+        opportunity_score = float(company.get("opportunity_score") or 0.0)
+
+        has_domain = bool((company.get("resolved_domain") or "").strip())
+        has_jobs = bool(company.get("jobs"))
+        has_description = bool((company.get("company_description") or "").strip())
+        has_real_enrichment = self._has_real_enrichment(company)
+
+        if company.get("benchmark_only"):
+            return False
+
+        if company_type in DEPRIORITIZED_COMPANY_TYPES:
+            return False
+
+        if validation_status == "accepted" and opportunity_score >= self.min_opportunity_score:
+            return True
+
+        if has_jobs and opportunity_score >= self.min_opportunity_score:
+            return True
+
+        if has_real_enrichment and opportunity_score >= self.min_opportunity_score:
+            return True
+
+        if has_description and has_domain and opportunity_score >= max(self.min_opportunity_score, 20):
+            return True
+
+        if company_type == "end_client" and opportunity_score >= max(self.min_opportunity_score, 12):
+            return True
+
+        if (
+            company_type == "unknown"
+            and validation_status == "accepted"
+            and opportunity_score >= max(self.min_opportunity_score, 20)
+        ):
+            return True
+
+        if (
+            company_type
+            and company_type not in {"unknown", "end_client"}
+            and classification_confidence >= 0.75
+            and opportunity_score >= max(self.min_opportunity_score, 20)
+            and has_real_enrichment
+        ):
+            return True
+
+        return False
+
     def generate_leads(self, companies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if self.ctx.flags.get("no_enrichment"):
             self.ctx.metrics["lead_generation_skipped_no_enrichment"] = True
@@ -741,19 +838,7 @@ class LeadGenerationService:
 
         leads: List[Dict[str, Any]] = []
 
-        def _has_real_enrichment(company: Dict[str, Any]) -> bool:
-            return bool(
-                (company.get("enrichment_source") == "apollo")
-                or (company.get("linkedin_company_url"))
-                or (company.get("industry"))
-                or (company.get("employee_range"))
-            )
-
-        def _should_require_enrichment(companies: List[Dict[str, Any]]) -> bool:
-            # Solo exigimos enrichment si al menos UNA empresa ya viene enriquecida
-            return any(_has_real_enrichment(c) for c in companies)
-
-        require_enrichment = _should_require_enrichment(companies)
+        require_enrichment = False
         self.ctx.metrics["lead_generation_require_enrichment"] = require_enrichment
 
         base_eligible_indexes = [
@@ -763,7 +848,7 @@ class LeadGenerationService:
 
         eligible_indexes = [
             idx for idx in base_eligible_indexes
-            if (not require_enrichment or _has_real_enrichment(companies[idx]))
+            if self._has_minimum_company_signal(companies[idx])
         ]
         eligible_indexes.sort(key=lambda idx: self._priority(companies[idx]), reverse=True)
         selected_indexes = set(eligible_indexes[: self.max_companies_per_run])
