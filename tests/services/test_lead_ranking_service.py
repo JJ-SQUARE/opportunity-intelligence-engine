@@ -39,6 +39,7 @@ def test_lead_ranking_service_ranks_and_selects_best_per_company():
     assert ranked[0]["lead_relevance_score"] > ranked[1]["lead_relevance_score"]
     assert len(best) == 1
     assert best[0]["contact_name"] == "A"
+    assert ctx.metrics["leads_useful"] == 1
 
     assert len(top_leads) == 2
     assert top_leads[0]["contact_name"] == "A"
@@ -234,6 +235,11 @@ def test_lead_ranking_service_uses_llm_shape_when_available():
                         "lead_contact_completeness_score": 18,
                         "lead_penalty_negative_title": 0,
                         "lead_score_reason": "Strong technical decision-maker with reachable channel.",
+                        "lead_role_type": "primary_decision_maker",
+                        "why_selected": "Owns technology strategy and delivery.",
+                        "outreach_angle": "Discuss engineering capacity and delivery acceleration.",
+                        "expected_relevance": "high",
+                        "risk_or_uncertainty": "No explicit budget authority confirmed.",
                         "lead_scoring_provider": "openai",
                         "lead_scoring_model": "gpt-4.1-mini",
                         "lead_scoring_mode": "live_api",
@@ -276,6 +282,11 @@ def test_lead_ranking_service_uses_llm_shape_when_available():
     assert ranked[0]["lead_relevance_score"] == 88
     assert ranked[0]["lead_priority_label"] == "high"
     assert ranked[0]["lead_scoring_provider"] == "openai"
+    assert ranked[0]["lead_role_type"] == "primary_decision_maker"
+    assert ranked[0]["why_selected"] == "Owns technology strategy and delivery."
+    assert ranked[0]["outreach_angle"] == "Discuss engineering capacity and delivery acceleration."
+    assert ranked[0]["expected_relevance"] == "high"
+    assert ranked[0]["risk_or_uncertainty"] == "No explicit budget authority confirmed."
     assert "lead_scoring_context" in captured["payload"]
     assert captured["payload"]["lead_scoring_context"]["commercial_rules"]["decision_maker_seniority_required_for_top_scores"] is True
     assert "banking and financial services" in captured["payload"]["lead_scoring_context"]["priority_industries"]

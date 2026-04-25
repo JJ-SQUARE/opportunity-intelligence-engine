@@ -312,11 +312,14 @@ class LeadGenerationService:
         self.enable_stub_leads = bool(lead_cfg.get("enable_stub_leads", False))
         self.max_hunter_results_per_company = int(lead_cfg.get("max_hunter_results_per_company", 2))
         self.max_apollo_results_per_company = int(lead_cfg.get("max_apollo_results_per_company", 3))
-        self.max_leads_per_company = int(
-            lead_cfg.get(
-                "max_leads_per_company",
-                max(self.max_hunter_results_per_company, self.max_apollo_results_per_company),
-            )
+        self.max_leads_per_company = min(
+            int(
+                lead_cfg.get(
+                    "max_leads_per_company",
+                    max(self.max_hunter_results_per_company, self.max_apollo_results_per_company),
+                )
+            ),
+            int(lead_cfg.get("max_leads_per_company_cap", 6)),
         )
         self.hunter_min_email_quality = int(lead_cfg.get("hunter_min_email_quality", 40))
 
@@ -331,6 +334,54 @@ class LeadGenerationService:
             failed_hunter_lead_domains = set()
             self.ctx.provider_state["failed_hunter_lead_domains"] = failed_hunter_lead_domains
         self._failed_hunter_lead_domains = failed_hunter_lead_domains
+
+    def _normalize_search_title(self, title: Any) -> str:
+        return " ".join(str(title or "").strip().replace("/", " ").replace("-", " ").split())
+
+    def _company_search_titles(self, company: Dict[str, Any]) -> List[str]:
+        titles: List[str] = []
+        for persona in company.get("buyer_personas_ai") or []:
+            if not isinstance(persona, dict):
+                continue
+            for title in persona.get("target_titles") or persona.get("suggested_titles") or []:
+                normalized = self._normalize_search_title(title)
+                if normalized and normalized.lower() not in {item.lower() for item in titles}:
+                    titles.append(normalized)
+
+        if not titles:
+            titles = list(TARGET_TITLES)
+
+        return titles[: max(self.max_leads_per_company * 3, len(TARGET_TITLES))]
+
+    def _matched_buyer_persona_context(self, company: Dict[str, Any], title: str) -> Dict[str, Any]:
+        normalized_title = self._normalize_search_title(title).lower()
+        for persona in company.get("buyer_personas_ai") or []:
+            if not isinstance(persona, dict):
+                continue
+            persona_titles = persona.get("target_titles") or persona.get("suggested_titles") or []
+            persona_patterns = persona.get("title_search_patterns") or []
+            normalized_titles = {
+                self._normalize_search_title(item).lower()
+                for item in persona_titles
+                if self._normalize_search_title(item)
+            }
+            normalized_patterns = [
+                self._normalize_search_title(item).lower()
+                for item in persona_patterns
+                if self._normalize_search_title(item)
+            ]
+            pattern_match = any(pattern and pattern in normalized_title for pattern in normalized_patterns)
+            if normalized_title in normalized_titles or pattern_match:
+                return {
+                    "target_persona": str(persona.get("persona") or persona.get("target_persona") or "").strip(),
+                    "suggested_titles": ", ".join(persona_titles),
+                    "title_search_patterns": ", ".join(persona_patterns),
+                    "search_reason": str(persona.get("rationale") or persona.get("search_reason") or "").strip(),
+                    "pain_alignment": str(persona.get("pain_alignment") or "").strip(),
+                    "priority": str(persona.get("priority") or "").strip(),
+                    "recommended_channel": str(persona.get("recommended_channel") or "").strip(),
+                }
+        return {}
 
     def _is_relevant_title(self, title: str) -> bool:
         value = (title or "").strip().lower()
@@ -541,7 +592,8 @@ class LeadGenerationService:
 
         for person in people:
             title = person.get("title") or ""
-            if not self._is_relevant_title(title):
+            persona_context = self._matched_buyer_persona_context(company, title)
+            if not self._is_relevant_title(title) and not persona_context:
                 continue
 
             email = person.get("email") or ""
@@ -572,6 +624,7 @@ class LeadGenerationService:
                     "lead_confidence": 0.9,
                     "email_quality_score": email_quality,
                     "lead_capture_reason": self._build_lead_reason("apollo_people", title, email_quality),
+                    **persona_context,
                 }
             )
 
@@ -594,7 +647,8 @@ class LeadGenerationService:
 
         for item in emails:
             title = item.get("position") or ""
-            if title and not self._is_relevant_title(title):
+            persona_context = self._matched_buyer_persona_context(company, title or "Unknown")
+            if title and not self._is_relevant_title(title) and not persona_context:
                 continue
 
             email = item.get("value") or ""
@@ -643,6 +697,7 @@ class LeadGenerationService:
                     "lead_confidence": round(confidence, 2),
                     "email_quality_score": email_quality,
                     "lead_capture_reason": self._build_lead_reason("hunter_domain_search", title_value, email_quality),
+                    **persona_context,
                 }
             )
 
@@ -720,16 +775,18 @@ class LeadGenerationService:
         if domain in self._failed_apollo_lead_domains:
             return []
 
+        search_titles = self._company_search_titles(company)
+
         try:
             payload = self.cached_provider_service.execute_cached(
                 namespace="apollo_people_search",
-                cache_payload={"domain": domain, "titles": TARGET_TITLES},
+                cache_payload={"domain": domain, "titles": search_titles},
                 fn=lambda: self.provider_execution_service.execute(
                     "apollo",
                     "search_people_by_domain_and_titles",
                     client.search_people_by_domain_and_titles,
                     domain,
-                    TARGET_TITLES,
+                    search_titles,
                     cost=1,
                 ),
             )

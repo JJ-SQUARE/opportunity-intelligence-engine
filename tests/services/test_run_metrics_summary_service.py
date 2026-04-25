@@ -27,7 +27,17 @@ def test_run_metrics_summary_service_builds_summary():
             "domain_resolution_rejected": 12,
             "domain_review_queue_count": 8,
             "run_readiness_ready": True,
+            "run_readiness_commercial_ready": True,
             "run_readiness_warnings": 2,
+            "jobs_analyzed_by_ai": 88,
+            "jobs_contaminated": 7,
+            "companies_discarded_by_ai": 5,
+            "companies_commercial_candidates": 22,
+            "leads_useful": 11,
+            "openai_cost_usd": 1.25,
+            "openai_classify_company_cost_usd": 0.75,
+            "apollo_people_search_cost_usd": 2.0,
+            "hunter_domain_search_cost_usd": 3.5,
             "openai_errors_execution_error": 3,
             "serpapi_search_google_errors_rate_limit": 2,
             "openai_classify_company_blocked_budget": 4,
@@ -63,6 +73,23 @@ def test_run_metrics_summary_service_builds_summary():
     assert summary["provider_errors"]["serpapi"]["rate_limit"] == 2
     assert summary["provider_blocks"]["openai"]["blocked_budget"] == 4
     assert summary["provider_blocks"]["hunter"]["blocked_provider"] == 6
+
+    assert summary["run_progress_metrics"]["jobs_collected_raw"] == 120
+    assert summary["run_progress_metrics"]["jobs_analyzed_by_ai"] == 88
+    assert summary["run_progress_metrics"]["jobs_effective"] == 85
+    assert summary["run_progress_metrics"]["jobs_contaminated"] == 7
+    assert summary["run_progress_metrics"]["companies_detected_raw"] == 40
+    assert summary["run_progress_metrics"]["companies_discarded_by_ai"] == 5
+    assert summary["run_progress_metrics"]["companies_effective"] == 38
+    assert summary["run_progress_metrics"]["companies_actionable"] == 22
+    assert summary["run_progress_metrics"]["companies_enriched"] == 12
+    assert summary["run_progress_metrics"]["leads_found_raw"] == 18
+    assert summary["run_progress_metrics"]["leads_useful"] == 11
+    assert summary["run_progress_metrics"]["leads_effective"] == 14
+    assert summary["run_progress_metrics"]["leads_selected"] == 15
+    assert summary["run_progress_metrics"]["ai_cost_usd"] == 2.0
+    assert summary["run_progress_metrics"]["apollo_hunter_cost_usd"] == 5.5
+    assert summary["run_progress_metrics"]["commercial_ready"] is True
 
     assert summary["master_data"]["schema_errors_count"] == 2
     assert summary["master_data"]["jobs_rows_written"] == 85

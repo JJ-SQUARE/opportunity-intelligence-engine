@@ -41,6 +41,27 @@ class RunMetricsSummaryService:
             return value
         return str(value).strip().lower() in {"1", "true", "yes"}
 
+    def _float_metric(self, key: str) -> float:
+        value = self.ctx.metrics.get(key, 0.0)
+        try:
+            return float(value or 0.0)
+        except Exception:
+            return 0.0
+
+    def _provider_cost_usd(self, provider: str) -> float:
+        prefix = f"{provider}_"
+        total = self._float_metric(f"{provider}_cost_usd")
+        for metric_key, metric_value in self.ctx.metrics.items():
+            if not metric_key.startswith(prefix) or not metric_key.endswith("_cost_usd"):
+                continue
+            if metric_key == f"{provider}_cost_usd":
+                continue
+            try:
+                total += float(metric_value or 0.0)
+            except Exception:
+                continue
+        return round(total, 6)
+
     def _build_provider_errors(self) -> Dict[str, Dict[str, int]]:
         grouped: Dict[str, Dict[str, int]] = {}
 
@@ -216,6 +237,27 @@ class RunMetricsSummaryService:
                 and data["counts_effective"]["companies"] <= max(data["counts_effective"]["companies_snapshot"], 0)
                 and data["counts_effective"]["leads"] <= max(data["counts_effective"]["leads_snapshot"], 0)
             ),
+        }
+        data["run_progress_metrics"] = {
+            "jobs_collected_raw": data["counts_original"]["jobs_collected_raw"],
+            "jobs_effective": data["counts_effective"]["jobs"],
+            "jobs_analyzed_by_ai": self._int_metric("jobs_analyzed_by_ai") or self._int_metric("job_intelligence_jobs_analyzed"),
+            "jobs_contaminated": self._int_metric("jobs_contaminated"),
+            "companies_detected_raw": data["counts_original"]["companies_detected"],
+            "companies_effective": data["counts_effective"]["companies"],
+            "companies_discarded_by_ai": self._int_metric("companies_discarded_by_ai"),
+            "companies_actionable": self._int_metric("companies_commercial_candidates"),
+            "companies_enriched": data["companies_enriched"],
+            "leads_found_raw": data["counts_original"]["leads_generated"],
+            "leads_effective": data["counts_effective"]["leads"],
+            "leads_useful": self._int_metric("leads_useful"),
+            "leads_selected": data["best_leads_selected"],
+            "ai_cost_usd": self._provider_cost_usd("openai"),
+            "apollo_hunter_cost_usd": round(
+                self._provider_cost_usd("apollo") + self._provider_cost_usd("hunter"),
+                6,
+            ),
+            "commercial_ready": self._bool_metric("run_readiness_commercial_ready"),
         }
 
         self.ctx.provider_state["run_metrics_summary_counts_original"] = dict(data["counts_original"])

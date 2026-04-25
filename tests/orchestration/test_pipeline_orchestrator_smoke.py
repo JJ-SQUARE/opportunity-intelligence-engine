@@ -11,6 +11,7 @@ def test_orchestrator_has_initial_stages():
     assert orchestrator.job_dedup_service is not None
     assert orchestrator.hiring_signals_service is not None
     assert orchestrator.company_identity_service is not None
+    assert orchestrator.company_identity_ai_service is not None
     assert orchestrator.domain_resolution_service is not None
     assert orchestrator.company_classification_service is not None
     assert orchestrator.opportunity_scoring_service is not None
@@ -197,6 +198,9 @@ def test_orchestrator_enriches_before_classification_and_scoring():
         {"company_key": "cmp_a", "company_display": "Go Sinergia"}
     ]
     orchestrator._split_benchmark_competitors = lambda companies: (companies, [])
+    orchestrator.company_identity_ai_service.enrich_companies = lambda companies: (
+        call_order.append("identity_ai") or companies
+    )
 
     orchestrator.domain_resolution_service.resolve_domains = lambda companies: (
         call_order.append("domain_resolution") or companies
@@ -224,6 +228,7 @@ def test_orchestrator_enriches_before_classification_and_scoring():
     assert companies == [{"company_key": "cmp_a", "company_display": "Go Sinergia"}]
     assert duplicate_jobs == []
     assert call_order == [
+        "identity_ai",
         "domain_resolution",
         "identity",
         "enrichment",

@@ -5,15 +5,15 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
-from oie.services.commercial_selection_service import CommercialSelectionService
-from oie.services.commercial_signal_service import CommercialSignalService
+from oie.services.commercial_row_service import CommercialRowService
 
 
 class ExecutiveSummaryService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.commercial_signal_service = CommercialSignalService()
-        self.commercial_selection_service = CommercialSelectionService(self.commercial_signal_service)
+        self.commercial_row_service = CommercialRowService(ctx)
+        self.commercial_signal_service = self.commercial_row_service.commercial_signal_service
+        self.commercial_selection_service = self.commercial_row_service.commercial_selection_service
 
     def _get_output_dir(self) -> Path:
         output_dir_value = self.ctx.paths.get("output_dir")
@@ -28,7 +28,11 @@ class ExecutiveSummaryService:
         return output_dir
 
     def _serialize_company(self, company: Dict[str, Any]) -> Dict[str, Any]:
-        finalized = self.commercial_signal_service.finalize_row(company)
+        finalized = dict(company)
+
+        # Fallback: si no viene finalizado desde CommercialRowService
+        if "icp_bucket" not in finalized or "reachability_ready" not in finalized:
+            finalized = self.commercial_signal_service.finalize_row(finalized)
 
         return {
             "company_key": finalized.get("company_key"),
@@ -43,7 +47,15 @@ class ExecutiveSummaryService:
             "outreach_status": finalized.get("outreach_status"),
             "commercial_bucket": finalized.get("commercial_bucket"),
             "commercial_priority_score": finalized.get("commercial_priority_score"),
-            "reachability_ready": bool(int(finalized.get("reachability_ready", 0) or 0)),
+            "reachability_ready": bool(
+                int(
+                    finalized.get(
+                        "soft_reachability_ready",
+                        finalized.get("reachability_ready", 0),
+                    )
+                    or 0
+                )
+            ),
             "icp_bucket": finalized.get("icp_bucket"),
             "score_breakdown": {
                 "score_openings": finalized.get("score_openings", 0),
@@ -60,7 +72,7 @@ class ExecutiveSummaryService:
         leads: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
 
-        top_companies = self.commercial_selection_service.top_companies(companies, limit=10)
+        top_companies = self.commercial_selection_service.top_companies(companies, limit=10, include_non_actionable_fallback=True)
         top_leads = self.commercial_selection_service.top_leads(leads, limit=10)
 
         reachability_ready = 0
@@ -68,8 +80,20 @@ class ExecutiveSummaryService:
         strong_icp_reachable = 0
 
         for c in companies:
-            f = self.commercial_signal_service.finalize_row(c)
-            is_reachable = bool(int(f.get("reachability_ready", 0) or 0))
+            f = dict(c)
+
+            # Fallback igual que arriba
+            if "icp_bucket" not in f or "reachability_ready" not in f:
+                f = self.commercial_signal_service.finalize_row(f)
+            is_reachable = bool(
+                int(
+                    f.get(
+                        "soft_reachability_ready",
+                        f.get("reachability_ready", 0),
+                    )
+                    or 0
+                )
+            )
             is_strong = f.get("icp_bucket") == "strong_icp"
 
             if is_reachable:

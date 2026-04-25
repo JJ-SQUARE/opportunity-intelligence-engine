@@ -46,6 +46,13 @@ def test_persistence_service_persist_run_snapshot_writes_core_records(tmp_path):
                 "domain_ai_decision": "accepted",
                 "domain_ai_confidence": 0.91,
                 "domain_ai_reason": "brand_match",
+                "enrichment_ai_match": True,
+                "enrichment_ai_confidence": 0.93,
+                "enrichment_ai_decision": "accepted",
+                "enrichment_ai_reason": "Apollo data matches Acme.",
+                "enrichment_ai_provider": "openai",
+                "enrichment_ai_model": "gpt-4.1-mini",
+                "enrichment_ai_mode": "live_api",
                 "aliases": ["Acme Inc."],
                 "alias_type_map": {
                     "Acme Inc.": "acme",
@@ -115,7 +122,10 @@ def test_persistence_service_persist_run_snapshot_writes_core_records(tmp_path):
                 resolved_domain,
                 domain_candidate,
                 domain_validation_status,
-                domain_ai_decision
+                domain_ai_decision,
+                enrichment_ai_match,
+                enrichment_ai_confidence,
+                enrichment_ai_decision
             FROM companies
             """
         ).fetchall()
@@ -125,6 +135,9 @@ def test_persistence_service_persist_run_snapshot_writes_core_records(tmp_path):
         assert companies[0]["domain_candidate"] == "acme.com"
         assert companies[0]["domain_validation_status"] == "accepted"
         assert companies[0]["domain_ai_decision"] == "accepted"
+        assert companies[0]["enrichment_ai_match"] == 1
+        assert companies[0]["enrichment_ai_confidence"] == 0.93
+        assert companies[0]["enrichment_ai_decision"] == "accepted"
 
         aliases = conn.execute(
             "SELECT company_key, alias_value, alias_normalized, alias_type FROM company_aliases"
@@ -244,6 +257,17 @@ def test_persistence_service_persist_run_snapshot_writes_scored_lead_fields(tmp_
                 "email_quality_score": 95,
                 "lead_capture_reason": "apollo_match | title:CTO | email_quality:95",
                 "lead_relevance_score": 197,
+                "target_persona": "Technology Leadership",
+                "suggested_titles": "CTO, VP Engineering",
+                "search_reason": "Owns engineering staffing and delivery decisions.",
+                "pain_alignment": "Strategic engineering hiring need.",
+                "priority": "high",
+                "recommended_channel": "email",
+                "lead_role_type": "primary_decision_maker",
+                "why_selected": "Owns technical staffing decisions.",
+                "outreach_angle": "Discuss senior engineering capacity.",
+                "expected_relevance": "high",
+                "risk_or_uncertainty": "Role scope may be broader than engineering.",
             }
         ],
     )
@@ -262,7 +286,18 @@ def test_persistence_service_persist_run_snapshot_writes_scored_lead_fields(tmp_
                 lead_confidence,
                 email_quality_score,
                 lead_capture_reason,
-                lead_relevance_score
+                lead_relevance_score,
+                target_persona,
+                suggested_titles,
+                search_reason,
+                pain_alignment,
+                priority,
+                recommended_channel,
+                lead_role_type,
+                why_selected,
+                outreach_angle,
+                expected_relevance,
+                risk_or_uncertainty
             FROM leads
             WHERE run_id = ?
             """,
@@ -280,6 +315,17 @@ def test_persistence_service_persist_run_snapshot_writes_scored_lead_fields(tmp_
         assert lead["email_quality_score"] == 95
         assert lead["lead_capture_reason"] == "apollo_match | title:CTO | email_quality:95"
         assert lead["lead_relevance_score"] == 197
+        assert lead["target_persona"] == "Technology Leadership"
+        assert lead["suggested_titles"] == "CTO, VP Engineering"
+        assert lead["search_reason"] == "Owns engineering staffing and delivery decisions."
+        assert lead["pain_alignment"] == "Strategic engineering hiring need."
+        assert lead["priority"] == "high"
+        assert lead["recommended_channel"] == "email"
+        assert lead["lead_role_type"] == "primary_decision_maker"
+        assert lead["why_selected"] == "Owns technical staffing decisions."
+        assert lead["outreach_angle"] == "Discuss senior engineering capacity."
+        assert lead["expected_relevance"] == "high"
+        assert lead["risk_or_uncertainty"] == "Role scope may be broader than engineering."
     finally:
         conn.close()
 

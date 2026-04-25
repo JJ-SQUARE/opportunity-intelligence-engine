@@ -12,7 +12,21 @@ class CommercialSignalService:
         "outsourcing": "consulting",
     }
 
-    NON_ICP_TYPES = {"staffing", "consulting", "marketplace", "job_board"}
+    NON_ICP_TYPES = {"staffing", "consulting", "marketplace", "job_board", "competitor"}
+
+    VENDOR_COMPETITOR_HINTS = {
+        "babel group",
+        "bairesdev",
+        "globant",
+        "michael page",
+        "pagegroup",
+        "reclutamiento especializado",
+        "softserve",
+        "softtek",
+        "staff augmentation",
+        "staffing",
+        "technology consulting",
+    }
 
     ATS_HOST_HINTS = (
         "greenhouse.io",
@@ -31,6 +45,13 @@ class CommercialSignalService:
         "applytojob.com",
         "boards.greenhouse.io",
         "jobs.lever.co",
+    )
+
+    NON_COMMERCIAL_DOMAIN_SUFFIXES = (
+        ".example",
+        ".invalid",
+        ".test",
+        ".localhost",
     )
 
     @staticmethod
@@ -67,6 +88,8 @@ class CommercialSignalService:
             return False
         if is_job_board_domain(value):
             return False
+        if any(value.endswith(suffix) for suffix in self.NON_COMMERCIAL_DOMAIN_SUFFIXES):
+            return False
         return not any(hint in value for hint in self.ATS_HOST_HINTS)
 
     def has_usable_company_domain(self, row: Dict[str, Any]) -> bool:
@@ -96,13 +119,18 @@ class CommercialSignalService:
     def has_company_channel(self, row: Dict[str, Any]) -> bool:
         return bool(self.has_usable_company_domain(row) or self.has_company_linkedin(row))
 
-    def has_reachability_signal(self, row: Dict[str, Any]) -> bool:
+    def has_real_reachability_signal(self, row: Dict[str, Any]) -> bool:
+        return self.has_contact_channel(row)
+
+    def has_soft_reachability_signal(self, row: Dict[str, Any]) -> bool:
         enrichment_source = self.safe_text(row.get("enrichment_source")).lower()
         return bool(
-            self.has_contact_channel(row)
-            or self.has_company_channel(row)
+            self.has_company_channel(row)
             or enrichment_source == "apollo"
         )
+
+    def has_reachability_signal(self, row: Dict[str, Any]) -> bool:
+        return self.has_real_reachability_signal(row)
 
     def _has_real_icp_signal(self, row: Dict[str, Any]) -> bool:
         has_real_icp = row.get("has_real_icp")
@@ -121,7 +149,7 @@ class CommercialSignalService:
             return True
         if score_icp_fit >= 16:
             return True
-        if score_pain_urgency >= 12:
+        if company_type == "end_client" and score_pain_urgency >= 12:
             return True
         if score_icp_fit >= 12 and opportunity_score >= 55:
             return True
@@ -141,23 +169,71 @@ class CommercialSignalService:
             or score_role_seniority_mix >= 7
         )
 
+    def _is_investigable_unknown_candidate(self, row: Dict[str, Any]) -> bool:
+        company_type = self.normalized_company_type(row.get("company_type_ai"))
+        if company_type not in {"", "unknown"}:
+            return False
+        if self._is_vendor_like_or_competitor(row):
+            return False
+
+        opportunity_score = self.safe_float(row.get("opportunity_score"))
+        score_icp_fit = self.safe_float(row.get("score_icp_fit"))
+        score_pain_urgency = self.safe_float(row.get("score_pain_urgency"))
+
+        has_meaningful_score = (
+            opportunity_score >= 30
+            or score_icp_fit >= 12
+            or (score_pain_urgency >= 12 and opportunity_score >= 35)
+        )
+
+        return bool(
+            has_meaningful_score
+            and self._has_minimum_job_signal(row)
+            and (
+                self.has_real_reachability_signal(row)
+                or self.has_soft_reachability_signal(row)
+            )
+            and (
+                self.has_usable_company_domain(row)
+                or self.has_company_linkedin(row)
+                or self.safe_text(row.get("enrichment_source")).lower() == "apollo"
+            )
+        )
+
     def is_unknown_weak(self, row: Dict[str, Any]) -> bool:
         company_type = self.normalized_company_type(row.get("company_type_ai"))
         if company_type not in {"", "unknown"}:
             return False
         return not (
-            self._has_real_icp_signal(row)
+            (
+                self._has_real_icp_signal(row)
+                or self._is_investigable_unknown_candidate(row)
+            )
             and self._has_minimum_job_signal(row)
-            and self.has_reachability_signal(row)
+            and (
+                self.has_real_reachability_signal(row)
+                or self._is_investigable_unknown_candidate(row)
+            )
         )
 
     def _is_vendor_like_or_competitor(self, row: Dict[str, Any]) -> bool:
         company_type = self.normalized_company_type(row.get("company_type_ai"))
         competitor_penalty = self.safe_float(row.get("score_penalty_competitor"))
+        haystack = " ".join(
+            [
+                self.safe_text(row.get("company_display")),
+                self.safe_text(row.get("company")),
+                self.safe_text(row.get("company_description")),
+                self.safe_text(row.get("industry")),
+                self.safe_text(row.get("resolved_domain")),
+                self.safe_text(row.get("linkedin_company_url")),
+            ]
+        ).lower()
+
         return bool(
-            company_type == "competitor"
-            or company_type in self.NON_ICP_TYPES
+            company_type in self.NON_ICP_TYPES
             or competitor_penalty <= -20
+            or any(hint in haystack for hint in self.VENDOR_COMPETITOR_HINTS)
         )
 
     def is_commercially_actionable(self, row: Dict[str, Any]) -> bool:
@@ -171,16 +247,32 @@ class CommercialSignalService:
 
         has_real_icp = self._has_real_icp_signal(row)
         has_job_signal = self._has_minimum_job_signal(row)
-        has_reachability = self.has_reachability_signal(row)
+        has_reachability = self.has_soft_reachability_signal(row)
 
-        if not has_reachability:
+        if not has_reachability and not (
+            company_type in {"", "unknown"}
+            and self._is_investigable_unknown_candidate(row)
+        ):
             return False
 
         if company_type == "end_client":
             return bool(
+                has_reachability
+                and (
+                    has_real_icp
+                    or opportunity_score >= 40
+                    or self.safe_float(row.get("score_icp_fit")) >= 12
+                )
+            )
+
+        if company_type in {"", "unknown"}:
+            return bool(
                 has_job_signal
-                or has_real_icp
-                or opportunity_score >= 40
+                and has_reachability
+                and (
+                    has_real_icp
+                    or self._is_investigable_unknown_candidate(row)
+                )
             )
 
         return has_real_icp and has_job_signal
@@ -212,12 +304,14 @@ class CommercialSignalService:
             return "possible_icp"
         if company_type == "end_client" and opportunity_score >= 25:
             return "possible_icp"
-        if company_type in {"", "unknown"} and opportunity_score >= 40 and has_job_signal:
+        if company_type in {"", "unknown"} and self._is_investigable_unknown_candidate(row):
+            return "possible_icp"
+        if company_type in {"", "unknown"} and opportunity_score >= 40 and has_job_signal and self.has_reachability_signal(row):
             return "possible_icp"
         return "weak_icp"
 
     def derived_reachability_ready(self, row: Dict[str, Any]) -> int:
-        return 1 if self.has_reachability_signal(row) else 0
+        return 1 if self.has_real_reachability_signal(row) else 0
 
     def derived_outreach_status(self, row: Dict[str, Any]) -> str:
         validation_status = self.safe_text(row.get("domain_validation_status")).lower()
@@ -247,7 +341,7 @@ class CommercialSignalService:
             return "low_fit_noise"
         if icp_bucket == "strong_icp":
             return "icp_target"
-        if company_type == "end_client" or has_real_icp:
+        if company_type == "end_client" or has_real_icp or self._is_investigable_unknown_candidate(row):
             return "partner_candidate"
         return "low_fit_noise"
 
@@ -261,6 +355,9 @@ class CommercialSignalService:
             row.get("best_lead_source") or row.get("lead_source")
         ).lower()
         company_type = self.normalized_company_type(row.get("company_type_ai"))
+
+        if not self.is_commercially_actionable(row):
+            return 0
 
         score = opportunity_score
 
@@ -293,9 +390,7 @@ class CommercialSignalService:
         elif validation_status not in {"", "accepted"}:
             score -= 12
 
-        if not self.is_commercially_actionable(row):
-            score -= 40
-
+        
         if company_type in {"competitor", *self.NON_ICP_TYPES}:
             score -= 80
         elif self.safe_float(row.get("score_penalty_competitor")) <= -20:
@@ -341,6 +436,8 @@ class CommercialSignalService:
         enriched["outreach_status"] = self.derived_outreach_status(enriched)
         enriched["icp_bucket"] = self.derived_icp_bucket(enriched)
         enriched["reachability_ready"] = self.derived_reachability_ready(enriched)
+        enriched["real_reachability_ready"] = 1 if self.has_real_reachability_signal(enriched) else 0
+        enriched["soft_reachability_ready"] = 1 if self.has_soft_reachability_signal(enriched) else 0
         enriched["commercial_bucket"] = self.derived_commercial_bucket(enriched)
         enriched["commercial_priority_score"] = self.derived_commercial_priority_score(enriched)
         enriched["commercially_actionable"] = self.is_commercially_actionable(enriched)

@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.provider_execution_service import ProviderExecutionService
+from oie.services.job_text_service import safe_job_description
 from oie.utils.domain_filters import is_job_board_domain, normalize_domain
 
 from oie.orchestration.run_context import RunContext
@@ -123,9 +124,13 @@ NEGATIVE_SIGNAL_TERMS = {
 }
 
 COMPETITOR_HINTS = {
+    "babel group",
     "bairesdev",
     "globant",
+    "michael page",
+    "pagegroup",
     "softserve",
+    "softtek",
     "staffing",
     "recruiting",
     "talent solutions",
@@ -174,7 +179,7 @@ class OpportunityScoringService:
             parts.extend(
                 [
                     str(job.get("title") or ""),
-                    str(job.get("description") or ""),
+                    safe_job_description(job),
                     str(job.get("location") or ""),
                 ]
             )
@@ -514,15 +519,36 @@ class OpportunityScoringService:
         score_icp_fit = _as_float(guarded.get("score_icp_fit"), 0.0)
         score_pain_urgency = _as_float(guarded.get("score_pain_urgency"), 0.0)
         buyer_persona_fit = str(guarded.get("buyer_persona_fit") or "").strip().lower()
-        reason = str(guarded.get("opportunity_score_reason") or "").strip()
+        reason = str(guarded.get("opportunity_score_reason") or guarded.get("reason") or "").strip()
+
+        icp_bucket = str(guarded.get("icp_bucket") or "").strip().lower()
+        commercial_bucket = str(guarded.get("commercial_bucket") or guarded.get("opportunity_label") or "").strip().lower()
+        pain_urgency = str(guarded.get("pain_urgency") or "").strip().lower()
+        recommended_service = str(guarded.get("recommended_service") or guarded.get("primary_service_fit") or "").strip().lower()
+
+        if icp_bucket not in {"strong", "medium", "weak"}:
+            icp_bucket = "strong" if score_icp_fit >= 24 else "medium" if score_icp_fit >= 12 else "weak"
+        if pain_urgency not in {"high", "medium", "low"}:
+            pain_urgency = "high" if score_pain_urgency >= 18 else "medium" if score_pain_urgency >= 8 else "low"
+        if commercial_bucket not in {"high", "medium", "low"}:
+            commercial_bucket = self._normalize_label(int(round(score)), None)
+        if not recommended_service:
+            recommended_service = str(guarded.get("primary_service_fit") or "unknown").strip().lower()
 
         has_reachability = self._has_reachability_signal(company)
         has_explicit_reachability_gap = self._has_explicit_reachability_gap(company)
 
+        vendor_like = self._is_competitor_or_vendor(company)
         has_real_icp = (
-            score_icp_fit >= 16
-            or score_pain_urgency >= 12
-            or self._has_real_icp_evidence(company)
+            not vendor_like
+            and (
+                score_icp_fit >= 16
+                or (
+                    score_pain_urgency >= 12
+                    and company_type == "end_client"
+                )
+                or self._has_real_icp_evidence(company)
+            )
         )
 
         if has_real_icp:
@@ -546,6 +572,25 @@ class OpportunityScoringService:
         guarded["reachability_ready"] = bool(has_reachability)
 
         reason_additions: List[str] = []
+
+        if icp_bucket == "weak" and score > 44:
+            score = 44.0
+            commercial_bucket = "low"
+            reason_additions.append("Cap aplicado por icp_bucket weak.")
+        elif icp_bucket == "medium" and score > 74:
+            score = 74.0
+            commercial_bucket = "medium"
+            reason_additions.append("Cap aplicado por icp_bucket medium.")
+
+        if pain_urgency == "low" and score > 54:
+            score = 54.0
+            commercial_bucket = "medium"
+            reason_additions.append("Cap aplicado por pain_urgency low.")
+
+        if buyer_persona_fit == "low" and score > 55:
+            score = 55.0
+            commercial_bucket = "medium"
+            reason_additions.append("Cap aplicado por buyer_persona_fit low.")
 
         if company_type in {"competitor", "staffing", "consulting", "marketplace", "job_board"}:
             guarded["score_penalty_competitor"] = min(
@@ -628,6 +673,12 @@ class OpportunityScoringService:
 
         guarded["opportunity_score"] = int(round(score))
         guarded["opportunity_label"] = label
+        guarded["commercial_bucket"] = label
+        guarded["icp_bucket"] = icp_bucket
+        guarded["pain_urgency"] = pain_urgency
+        guarded["recommended_service"] = recommended_service
+        guarded["primary_service_fit"] = recommended_service
+        guarded["reason"] = reason
         guarded["opportunity_score_reason"] = reason
         return guarded
 
@@ -658,13 +709,7 @@ class OpportunityScoringService:
         if company_type in {"competitor", "job_board"}:
             return False
 
-        if company_type == "end_client":
-            return True
-
-        if company_type in {"", "unknown"}:
-            return self._has_real_icp_evidence(company)
-
-        return self._has_real_icp_evidence(company)
+        return self._has_minimum_llm_scoring_evidence(company)
 
     def _score_company_with_llm(self, company: Dict[str, Any]) -> Dict[str, Any] | None:
         if not self._should_try_llm_scoring(company):
@@ -842,6 +887,8 @@ class OpportunityScoringService:
             enriched = dict(company)
 
             if llm_score:
+                rule_components = self._score_company(company)
+                enriched.update(rule_components)
                 enriched.update(llm_score)
                 llm_used += 1
             else:

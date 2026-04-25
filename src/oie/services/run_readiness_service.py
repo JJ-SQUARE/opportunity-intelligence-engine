@@ -3,13 +3,15 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.services.commercial_row_service import CommercialRowService
 from oie.services.commercial_signal_service import CommercialSignalService
 
 
 class RunReadinessService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.commercial_signal_service = CommercialSignalService()
+        self.commercial_row_service = CommercialRowService(ctx)
+        self.commercial_signal_service = self.commercial_row_service.commercial_signal_service
 
     def _int_metric(self, key: str) -> int:
         value = self.ctx.metrics.get(key, 0)
@@ -26,7 +28,23 @@ class RunReadinessService:
 
     def _has_output_artifact(self, paths: Dict[str, Any], key: str) -> bool:
         value = str(paths.get(key) or "").strip()
-        return bool(value)
+        if value:
+            return True
+
+        # run_metrics_summary_json se genera al final del pipeline, después del readiness.
+        # Si ya existe el summary en memoria, no debe bloquear readiness como missing.
+        if key == "run_metrics_summary_json":
+            return bool(self.ctx.provider_state.get("run_metrics_summary_counts"))
+
+        return False
+
+    def _commercial_readiness_thresholds(self) -> Dict[str, int]:
+        config = ((self.ctx.config or {}).get("readiness", {}) or {}).get("commercial", {}) or {}
+        return {
+            "min_actionable_companies": int(config.get("min_actionable_companies", 1) or 1),
+            "min_useful_leads": int(config.get("min_useful_leads", 1) or 1),
+            "min_trusted_jobs": int(config.get("min_trusted_jobs", 1) or 1),
+        }
 
     def build_report(
         self,
@@ -67,13 +85,46 @@ class RunReadinessService:
                 enabled_collectors.append(name)
 
         warnings: List[str] = []
+        commercial_warnings: List[str] = []
 
         counts_original = self.ctx.provider_state.get("run_metrics_summary_counts_original") or {}
         counts_effective = self.ctx.provider_state.get("run_metrics_summary_counts_effective") or {}
 
+        commercial_thresholds = self._commercial_readiness_thresholds()
+        resolved_companies = [self.commercial_signal_service.finalize_row(company) for company in companies]
+
+        actionable_companies = [
+            company for company in resolved_companies
+            if str(company.get("commercial_bucket") or "") in {"icp_target", "partner_candidate"}
+        ]
+
+        useful_leads = [
+            lead for lead in leads
+            if (
+                str(lead.get("email") or "").strip()
+                or str(lead.get("linkedin_url") or "").strip()
+            )
+        ]
+        trusted_jobs = [
+            job for job in jobs
+            if str(job.get("company_key") or "").strip()
+        ]
+        identity_validated_companies = [
+            company for company in resolved_companies
+            if str(company.get("domain_validation_status") or "").strip().lower() == "accepted"
+        ]
+        ai_scored_companies = [
+            company for company in resolved_companies
+            if (
+                str(company.get("scoring_provider") or "").strip()
+                and str(company.get("scoring_mode") or "").strip()
+                and company.get("opportunity_score") is not None
+            )
+        ]
+
         strong_icp_companies = 0
         strong_icp_without_reachability = 0
-        for company in companies:
+        for company in resolved_companies:
             finalized_company = self.commercial_signal_service.finalize_row(company)
             icp_bucket = str(finalized_company.get("icp_bucket") or "")
             has_reachability = bool(int(finalized_company.get("reachability_ready", 0) or 0))
@@ -233,18 +284,39 @@ class RunReadinessService:
                 f"Faltan artefactos de salida esperados: {', '.join(sorted(missing_outputs))}."
             )
 
+        if len(actionable_companies) < commercial_thresholds["min_actionable_companies"]:
+            commercial_warnings.append(
+                f"Comercial: compañías accionables insuficientes ({len(actionable_companies)}/{commercial_thresholds['min_actionable_companies']})."
+            )
+        if len(useful_leads) < commercial_thresholds["min_useful_leads"]:
+            commercial_warnings.append(
+                f"Comercial: leads útiles insuficientes ({len(useful_leads)}/{commercial_thresholds['min_useful_leads']})."
+            )
+        if len(trusted_jobs) < commercial_thresholds["min_trusted_jobs"]:
+            commercial_warnings.append(
+                f"Comercial: jobs confiables insuficientes ({len(trusted_jobs)}/{commercial_thresholds['min_trusted_jobs']})."
+            )
+        if not identity_validated_companies:
+            commercial_warnings.append("Comercial: no hay company identity validada.")
+        if not ai_scored_companies:
+            commercial_warnings.append("Comercial: no hay scoring IA completo.")
+
         run_useful = bool(jobs) and bool(companies)
-        is_ready = (
+        technical_ready_for_review = (
             run_useful
             and persistence_errors_count == 0
             and master_schema_errors_count == 0
             and not missing_outputs
         )
+        commercial_ready_for_review = technical_ready_for_review and not commercial_warnings
+        is_ready = technical_ready_for_review
 
         report = {
             "run_id": self.ctx.run_id,
             "run_date": self.ctx.run_date,
             "is_ready_for_review": is_ready,
+            "technical_ready_for_review": technical_ready_for_review,
+            "commercial_ready_for_review": commercial_ready_for_review,
             "run_useful": run_useful,
             "enabled_collectors": enabled_collectors,
             "jobs_count": len(jobs),
@@ -254,6 +326,15 @@ class RunReadinessService:
             "jobs_without_company_key": metrics.get("jobs_without_company_key", 0),
             "provider_events_count": len(self.ctx.provider_events),
             "warnings": warnings,
+            "commercial_warnings": commercial_warnings,
+            "commercial_readiness_summary": {
+                "thresholds": commercial_thresholds,
+                "actionable_companies": len(actionable_companies),
+                "useful_leads": len(useful_leads),
+                "trusted_jobs": len(trusted_jobs),
+                "identity_validated_companies": len(identity_validated_companies),
+                "ai_scored_companies": len(ai_scored_companies),
+            },
             "counts_original": {
                 "jobs_after_dedupe": original_jobs_after_dedupe,
                 "best_leads_selected": original_leads_selected,
@@ -300,7 +381,10 @@ class RunReadinessService:
         }
 
         self.ctx.metrics["run_readiness_ready"] = is_ready
+        self.ctx.metrics["run_readiness_technical_ready"] = technical_ready_for_review
+        self.ctx.metrics["run_readiness_commercial_ready"] = commercial_ready_for_review
         self.ctx.metrics["run_readiness_useful"] = run_useful
         self.ctx.metrics["run_readiness_warnings"] = len(warnings)
+        self.ctx.metrics["run_readiness_commercial_warnings"] = len(commercial_warnings)
         self.ctx.metrics["run_readiness_missing_outputs"] = len(missing_outputs)
         return report

@@ -91,7 +91,7 @@ class CommercialSelectionService:
             return actionable[:limit]
 
         if include_non_actionable_fallback:
-            return self.sort_companies(companies)[:limit]
+            return self.sort_companies_analytic(companies)[:limit]
 
         return []
 

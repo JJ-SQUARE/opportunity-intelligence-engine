@@ -1007,3 +1007,72 @@ def test_lead_generation_service_skips_rejected_domain_even_without_require_acce
     assert leads == []
     assert calls["apollo"] == 0
 
+def test_lead_generation_service_uses_buyer_persona_titles_for_apollo_search(tmp_path):
+    ctx = RunContext.create(
+        config={
+            "cache": {"base_dir": str(tmp_path / "http_cache")},
+            "providers": {
+                "limits": {"apollo": 5, "hunter": 5},
+                "clients": {
+                    "apollo": {"api_key": "fake-apollo"},
+                    "hunter": {"api_key": "fake-hunter"},
+                },
+            },
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    captured = {}
+
+    apollo_client = control.registry.get_client("apollo")
+
+    def fake_apollo(domain, titles):
+        captured["domain"] = domain
+        captured["titles"] = titles
+        return {
+            "people": [
+                {
+                    "name": "Dana Digital",
+                    "title": "Director of Digital Transformation",
+                    "email": "dana.digital@acme.com",
+                    "linkedin_url": "https://linkedin.com/in/danadigital",
+                }
+            ]
+        }
+
+    apollo_client.search_people_by_domain_and_titles = fake_apollo
+
+    hunter_client = control.registry.get_client("hunter")
+    hunter_client.search_domain_contacts = lambda domain: {"data": {"emails": []}}
+
+    service = LeadGenerationService(ctx, control)
+    leads = service.generate_leads(
+        [
+            {
+                "company_key": "cmp_acme",
+                "company_display": "Acme Inc.",
+                "resolved_domain": "acme.com",
+                "domain_validation_status": "accepted",
+                "company_type_ai": "end_client",
+                "classification_confidence_ai": 0.95,
+                "opportunity_score": 55,
+                "buyer_personas_ai": [
+                    {
+                        "persona": "Digital Transformation Leadership",
+                        "priority": "high",
+                        "target_titles": [
+                            "Director of Digital Transformation",
+                            "Head of Innovation",
+                        ],
+                    }
+                ],
+            }
+        ]
+    )
+
+    assert captured["domain"] == "acme.com"
+    assert "Director of Digital Transformation" in captured["titles"]
+    assert "Head of Innovation" in captured["titles"]
+    assert leads[0]["contact_title"] == "Director of Digital Transformation"

@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 from oie.orchestration.run_context import RunContext
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.provider_execution_service import ProviderExecutionService
+from oie.services.job_text_service import safe_job_description
 from oie.utils.domain_filters import is_job_board_domain
 
 
@@ -19,6 +20,9 @@ RULE_KEYWORDS = {
         "executive search",
         "talent partner",
         "talent acquisition",
+        "reclutamiento especializado",
+        "recruitment firm",
+        "staffing firm",
     ],
     "consulting": [
         "outsourcing",
@@ -85,9 +89,13 @@ END_CLIENT_HINTS = {
 
 
 COMPETITOR_HINTS = {
+    "babel group",
     "bairesdev",
     "globant",
+    "michael page",
+    "pagegroup",
     "softserve",
+    "softtek",
 }
 
 PLACEHOLDER_COMPANY_VALUES = {
@@ -140,7 +148,7 @@ class CompanyClassificationService:
             job_parts.extend(
                 [
                     str(job.get("title") or ""),
-                    str(job.get("description") or ""),
+                    safe_job_description(job),
                     str(job.get("location") or ""),
                 ]
             )
@@ -189,7 +197,7 @@ class CompanyClassificationService:
                 continue
             if (
                 str(job.get("title") or "").strip()
-                or str(job.get("description") or "").strip()
+                or safe_job_description(job)
                 or str(job.get("location") or "").strip()
             ):
                 return True
@@ -222,7 +230,7 @@ class CompanyClassificationService:
         has_hiring_signal = any(
             isinstance(job, dict) and (
                 str(job.get("title") or "").strip()
-                or str(job.get("description") or "").strip()
+                or safe_job_description(job)
             )
             for job in jobs
         )
@@ -247,6 +255,7 @@ class CompanyClassificationService:
                 "classification": "unknown",
                 "confidence": 0.0,
                 "provider": "rules",
+                "reason": "Placeholder or confidential company with insufficient classification evidence.",
             }
 
         if domain and is_job_board_domain(domain):
@@ -254,6 +263,7 @@ class CompanyClassificationService:
                 "classification": "job_board",
                 "confidence": 0.95,
                 "provider": "rules",
+                "reason": "Resolved domain is recognized as a job board or wrapper domain.",
             }
 
         if domain and any(hint in domain for hint in COMPETITOR_HINTS):
@@ -261,6 +271,7 @@ class CompanyClassificationService:
                 "classification": "competitor",
                 "confidence": 0.95,
                 "provider": "rules",
+                "reason": "Company/domain matches a configured competitor hint.",
             }
 
         if any(hint in text for hint in COMPETITOR_HINTS):
@@ -268,6 +279,7 @@ class CompanyClassificationService:
                 "classification": "competitor",
                 "confidence": 0.95,
                 "provider": "rules",
+                "reason": "Company text matches a configured competitor hint.",
             }
 
         for company_type, keywords in RULE_KEYWORDS.items():
@@ -279,6 +291,7 @@ class CompanyClassificationService:
                         "classification": normalized_type,
                         "confidence": confidence,
                         "provider": "rules",
+                        "reason": f"Matched rule keyword: {keyword}.",
                     }
 
         if self._has_end_client_evidence(company, text):
@@ -286,6 +299,7 @@ class CompanyClassificationService:
                 "classification": "end_client",
                 "confidence": 0.72,
                 "provider": "rules",
+                "reason": "Matched product/company evidence consistent with an end client.",
             }
 
         if text.strip():
@@ -293,6 +307,7 @@ class CompanyClassificationService:
                 "classification": "unknown",
                 "confidence": 0.2,
                 "provider": "rules",
+                "reason": "Evidence exists but rules could not classify the company confidently.",
             }
 
         return None
@@ -327,7 +342,7 @@ class CompanyClassificationService:
                 for job in jobs
             )
             has_job_descriptions = any(
-                isinstance(job, dict) and str(job.get("description") or "").strip()
+                isinstance(job, dict) and bool(safe_job_description(job))
                 for job in jobs
             )
             has_product_language = any(
@@ -386,6 +401,7 @@ class CompanyClassificationService:
                     enriched["company_type_ai"] = rule_result["classification"]
                     enriched["classification_confidence_ai"] = rule_result["confidence"]
                     enriched["classification_provider"] = rule_result["provider"]
+                    enriched["classification_reason"] = rule_result.get("reason")
                 classified.append(enriched)
 
             self.ctx.metrics["company_classification_skipped_no_llm"] = True
@@ -403,7 +419,7 @@ class CompanyClassificationService:
             enriched = dict(company)
             company_type = str(enriched.get("company_type_ai") or "").strip().lower()
 
-            if enriched.get("benchmark_only") or company_type == "competitor":
+            if enriched.get("benchmark_only"):
                 enriched["company_type_ai"] = "competitor"
                 enriched["classification_confidence_ai"] = float(
                     enriched.get("classification_confidence_ai") or 1.0
@@ -413,22 +429,15 @@ class CompanyClassificationService:
                     or enriched.get("classification_source")
                     or "benchmark_config"
                 )
+                enriched["classification_reason"] = (
+                    enriched.get("classification_reason")
+                    or "Company is configured as benchmark-only competitor."
+                )
                 classified.append(enriched)
                 continue
 
             rule_result = self._rule_based_classification(company)
-            if self._should_use_rule_override(rule_result, company):
-                classification = str(rule_result.get("classification") or "").strip().lower()
-                metric_key = (
-                    "company_classification_rule_override_end_client"
-                    if classification == "end_client"
-                    else "company_classification_rule_override_used"
-                )
-                self.ctx.metrics[metric_key] = (
-                    int(self.ctx.metrics.get(metric_key, 0) or 0) + 1
-                )
-                result = rule_result
-            elif not self._has_minimum_llm_classification_evidence(company):
+            if not self._has_minimum_llm_classification_evidence(company):
                 self.ctx.metrics["company_classification_llm_skipped_low_evidence"] = (
                     int(self.ctx.metrics.get("company_classification_llm_skipped_low_evidence", 0) or 0) + 1
                 )
@@ -436,6 +445,7 @@ class CompanyClassificationService:
                     "classification": "unknown",
                     "confidence": 0.0,
                     "provider": "rules",
+                    "reason": "Insufficient evidence for AI classification.",
                 }
             else:
                 try:
@@ -446,16 +456,24 @@ class CompanyClassificationService:
                         company,
                         cost=1,
                     )
+                    self.ctx.metrics["company_classification_ai_used"] = (
+                        int(self.ctx.metrics.get("company_classification_ai_used", 0) or 0) + 1
+                    )
                 except Exception:
                     result = rule_result or {
                         "classification": "unknown",
                         "confidence": 0.0,
                         "provider": "fallback_rules",
+                        "reason": "AI classification failed and no rule-based classification was available.",
                     }
+                    self.ctx.metrics["company_classification_fallback_rules_used"] = (
+                        int(self.ctx.metrics.get("company_classification_fallback_rules_used", 0) or 0) + 1
+                    )
 
             enriched["company_type_ai"] = self._normalize_classification(result.get("classification"))
             enriched["classification_confidence_ai"] = result.get("confidence")
             enriched["classification_provider"] = result.get("provider")
+            enriched["classification_reason"] = result.get("reason")
             classified.append(enriched)
 
         self.ctx.metrics["companies_classified"] = len(classified)

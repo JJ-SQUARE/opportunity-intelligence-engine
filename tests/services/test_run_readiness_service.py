@@ -248,3 +248,106 @@ def test_run_readiness_service_uses_shared_reachability_signal_for_email_only_co
 
     assert report["icp_reachability_summary"]["strong_icp_companies"] == 1
     assert report["icp_reachability_summary"]["strong_icp_without_reachability"] == 0
+
+
+def test_run_readiness_service_reports_commercial_ready_when_commercial_criteria_pass():
+    ctx = RunContext.create(
+        config={
+            "sources": {"google_jobs": {"enabled": True}},
+            "readiness": {
+                "commercial": {
+                    "min_actionable_companies": 1,
+                    "min_useful_leads": 1,
+                    "min_trusted_jobs": 1,
+                }
+            },
+        },
+        flags={},
+    )
+    ctx.paths["jobs_export"] = "/tmp/jobs_export.csv"
+    ctx.paths["companies_export"] = "/tmp/companies_export.csv"
+    ctx.paths["leads_export"] = "/tmp/leads_export.csv"
+    ctx.paths["commercial_pipeline_csv"] = "/tmp/commercial_pipeline.csv"
+    ctx.paths["apollo_import_csv"] = "/tmp/apollo_import.csv"
+    ctx.paths["commercial_report_md"] = "/tmp/commercial_report.md"
+    ctx.paths["run_metrics_summary_json"] = "/tmp/run_metrics_summary.json"
+
+    service = RunReadinessService(ctx)
+    report = service.build_report(
+        jobs=[{"title": "Backend Engineer", "company_key": "cmp_ready"}],
+        companies=[
+            {
+                "company_key": "cmp_ready",
+                "company_type_ai": "end_client",
+                "opportunity_score": 70,
+                "domain_validation_status": "accepted",
+                "resolved_domain": "readyco.com",
+                "scoring_provider": "openai",
+                "scoring_mode": "ai",
+            }
+        ],
+        leads=[
+            {
+                "company_key": "cmp_ready",
+                "contact_name": "Jane Doe",
+                "email": "jane@readyco.com",
+            }
+        ],
+    )
+
+    assert report["technical_ready_for_review"] is True
+    assert report["commercial_ready_for_review"] is True
+    assert report["commercial_warnings"] == []
+    assert report["commercial_readiness_summary"]["actionable_companies"] == 1
+    assert report["commercial_readiness_summary"]["useful_leads"] == 1
+    assert report["commercial_readiness_summary"]["trusted_jobs"] == 1
+    assert ctx.metrics["run_readiness_commercial_ready"] is True
+
+
+def test_run_readiness_service_reports_commercial_not_ready_when_commercial_criteria_fail():
+    ctx = RunContext.create(
+        config={
+            "sources": {"google_jobs": {"enabled": True}},
+            "readiness": {
+                "commercial": {
+                    "min_actionable_companies": 1,
+                    "min_useful_leads": 1,
+                    "min_trusted_jobs": 1,
+                }
+            },
+        },
+        flags={},
+    )
+    ctx.paths["jobs_export"] = "/tmp/jobs_export.csv"
+    ctx.paths["companies_export"] = "/tmp/companies_export.csv"
+    ctx.paths["leads_export"] = "/tmp/leads_export.csv"
+    ctx.paths["commercial_pipeline_csv"] = "/tmp/commercial_pipeline.csv"
+    ctx.paths["apollo_import_csv"] = "/tmp/apollo_import.csv"
+    ctx.paths["commercial_report_md"] = "/tmp/commercial_report.md"
+    ctx.paths["run_metrics_summary_json"] = "/tmp/run_metrics_summary.json"
+
+    service = RunReadinessService(ctx)
+    report = service.build_report(
+        jobs=[{"title": "Backend Engineer"}],
+        companies=[
+            {
+                "company_key": "cmp_not_ready",
+                "company_type_ai": "end_client",
+                "opportunity_score": 70,
+                "domain_validation_status": "rejected",
+                "resolved_domain": "",
+            }
+        ],
+        leads=[{"company_key": "cmp_not_ready"}],
+    )
+
+    commercial_warnings = " | ".join(report["commercial_warnings"])
+
+    assert report["technical_ready_for_review"] is True
+    assert report["commercial_ready_for_review"] is False
+    assert "leads útiles insuficientes" in commercial_warnings
+    assert "jobs confiables insuficientes" in commercial_warnings
+    assert "company identity validada" in commercial_warnings
+    assert "scoring IA completo" in commercial_warnings
+    assert ctx.metrics["run_readiness_commercial_ready"] is False
+    assert ctx.metrics["run_readiness_commercial_warnings"] >= 1

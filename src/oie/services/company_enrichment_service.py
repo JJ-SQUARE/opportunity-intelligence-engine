@@ -319,6 +319,8 @@ class CompanyEnrichmentService:
         enriched_companies: List[Dict[str, Any]] = []
         enriched_count = 0
         skipped_ttl_count = 0
+        rejected_by_ai_count = 0
+        buyer_personas_generated_count = 0
 
         eligible_indexes = [
             idx for idx, company in enumerate(companies)
@@ -371,8 +373,40 @@ class CompanyEnrichmentService:
                         ),
                     )
                 if payload:
+                    openai_client = self.provider_control_service.registry.get_client("openai")
+                    if openai_client is not None and hasattr(openai_client, "validate_company_enrichment"):
+                        try:
+                            validation = self.provider_execution_service.execute(
+                                "openai",
+                                "validate_company_enrichment",
+                                openai_client.validate_company_enrichment,
+                                {**record, "apollo_enrichment": payload},
+                            )
+                        except (ProviderExecutionBlockedError, ProviderExecutionError, ValueError, RuntimeError):
+                            validation = {}
+                        record.update(validation)
+                        if validation.get("enrichment_ai_decision") == "rejected":
+                            rejected_by_ai_count += 1
+                            enriched_companies.append(record)
+                            continue
+
                     mapped = self._map_apollo_payload(payload)
                     record.update(mapped)
+
+                    if openai_client is not None and hasattr(openai_client, "generate_buyer_personas"):
+                        try:
+                            personas = self.provider_execution_service.execute(
+                                "openai",
+                                "generate_buyer_personas",
+                                openai_client.generate_buyer_personas,
+                                record,
+                            )
+                        except (ProviderExecutionBlockedError, ProviderExecutionError, ValueError, RuntimeError):
+                            personas = {}
+                        if personas:
+                            record.update(personas)
+                            buyer_personas_generated_count += 1
+
                     enriched_count += 1
             except (ProviderExecutionBlockedError, ProviderExecutionError, ValueError):
                 if domain:
@@ -382,4 +416,6 @@ class CompanyEnrichmentService:
 
         self.ctx.metrics["companies_enriched"] = enriched_count
         self.ctx.metrics["companies_enrichment_skipped_ttl"] = skipped_ttl_count
+        self.ctx.metrics["companies_enrichment_rejected_by_ai"] = rejected_by_ai_count
+        self.ctx.metrics["companies_buyer_personas_generated"] = buyer_personas_generated_count
         return enriched_companies

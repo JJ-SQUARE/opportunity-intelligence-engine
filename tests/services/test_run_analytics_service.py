@@ -197,6 +197,49 @@ def test_run_analytics_service_builds_consolidated_payload():
     assert ctx.metrics["run_analytics_top_leads_count"] == 2
 
 
+
+def test_run_analytics_preserves_score_breakdown():
+    ctx = RunContext.create(config={}, flags={})
+    service = RunAnalyticsService(ctx)
+
+    analytics = service.build_analytics(
+        status="ok",
+        jobs=[],
+        companies=[
+            {
+                "company_key": "cmp_llm",
+                "company_display": "LLM Co",
+                "resolved_domain": "llm.com",
+                "company_type_ai": "end_client",
+                "classification_confidence_ai": 0.9,
+                "opportunity_score": 60,
+                "score_openings": 4,
+                "score_remote": 2,
+                "score_contractor": 1,
+                "score_multi_source": 0,
+                "score_company_type": 20,
+            }
+        ],
+        leads=[],
+        duplicate_jobs=[],
+        collector_metrics=[],
+        collector_contribution=[],
+        collector_roi=[],
+        provider_operation_metrics=[],
+        readiness_report={"is_ready_for_review": True, "warnings": []},
+        run_metrics_summary={},
+        executive_summary={},
+    )
+
+    company = analytics["top_companies"][0]
+
+    assert company["score_openings"] == 4
+    assert company["score_remote"] == 2
+    assert company["score_contractor"] == 1
+    assert company["score_multi_source"] == 0
+    assert company["score_company_type"] == 20
+
+
 def test_run_analytics_service_prefers_higher_quality_lead_on_tie():
     ctx = RunContext.create(config={}, flags={})
     service = RunAnalyticsService(ctx)

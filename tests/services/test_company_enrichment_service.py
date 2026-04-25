@@ -606,3 +606,59 @@ def test_company_enrichment_service_skips_suspicious_beta_domain_even_if_end_cli
     assert enriched[0].get("industry") in (None, "")
     assert ctx.metrics["company_enrichment_candidates_total"] == 0
 
+def test_company_enrichment_service_rejects_apollo_payload_when_openai_validation_rejects():
+    ctx = RunContext.create(
+        config={
+            "database": {"path": ":memory:"},
+            "providers": {
+                "limits": {"apollo": 5, "openai": 5},
+                "clients": {"apollo": {"api_key": "fake-key"}, "openai": {}},
+            },
+            "enrichment": {"apollo_company_ttl_days": 30},
+        },
+        flags={},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    apollo_client = control.registry.get_client("apollo")
+    apollo_client.enrich_company_by_domain = lambda domain: {
+        "organization": {
+            "name": "Different Co",
+            "industry": "Staffing",
+            "estimated_num_employees": "51-200",
+            "linkedin_url": "https://linkedin.com/company/different",
+            "short_description": "Unrelated staffing firm",
+        }
+    }
+
+    openai_client = control.registry.get_client("openai")
+    openai_client.validate_company_enrichment = lambda payload: {
+        "enrichment_ai_match": False,
+        "enrichment_ai_confidence": 0.94,
+        "enrichment_ai_decision": "rejected",
+        "enrichment_ai_reason": "Apollo data describes a different company.",
+        "enrichment_ai_provider": "openai",
+        "enrichment_ai_model": "gpt-4.1-mini",
+        "enrichment_ai_mode": "live_api",
+    }
+
+    service = CompanyEnrichmentService(ctx, control)
+    enriched = service.enrich_companies(
+        [
+            {
+                "company_key": "cmp_acme",
+                "company_display": "Acme Inc.",
+                "resolved_domain": "acme.com",
+                "domain_validation_status": "accepted",
+                "company_type_ai": "end_client",
+                "classification_confidence_ai": 0.95,
+                "opportunity_score": 35,
+            }
+        ]
+    )
+
+    assert enriched[0].get("industry") in (None, "")
+    assert enriched[0]["enrichment_ai_decision"] == "rejected"
+    assert ctx.metrics["companies_enriched"] == 0
+    assert ctx.metrics["companies_enrichment_rejected_by_ai"] == 1

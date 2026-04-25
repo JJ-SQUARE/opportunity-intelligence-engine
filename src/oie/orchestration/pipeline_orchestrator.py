@@ -16,6 +16,7 @@ from oie.services.company_enrichment_service import CompanyEnrichmentService
 from oie.services.commercial_selection_service import CommercialSelectionService
 from oie.services.commercial_signal_service import CommercialSignalService
 from oie.services.company_identity_service import CompanyIdentityService
+from oie.services.company_identity_ai_service import CompanyIdentityAIService
 from oie.services.db_export_service import DBExportService
 from oie.services.domain_resolution_service import DomainResolutionService
 from oie.services.domain_ai_validation_service import DomainAIValidationService
@@ -25,6 +26,7 @@ from oie.services.historical_export_service import HistoricalExportService
 from oie.services.historical_intelligence_service import HistoricalIntelligenceService
 from oie.services.hiring_signals_service import HiringSignalsService
 from oie.services.job_dedup_service import JobDedupService
+from oie.services.job_intelligence_service import JobIntelligenceService
 from oie.services.lead_generation_service import LeadGenerationService
 from oie.services.lead_ranking_service import LeadRankingService
 from oie.services.market_segmentation_export_service import MarketSegmentationExportService
@@ -62,6 +64,14 @@ class PipelineOrchestrator:
         self.hiring_signals_service = HiringSignalsService(ctx)
         self.company_identity_service = CompanyIdentityService(ctx)
         self.provider_control_service = ProviderControlService(ctx)
+        self.job_intelligence_service = JobIntelligenceService(
+            ctx,
+            self.provider_control_service,
+        )
+        self.company_identity_ai_service = CompanyIdentityAIService(
+            ctx,
+            self.provider_control_service,
+        )
         self.provider_execution_service = ProviderExecutionService(ctx, self.provider_control_service)
         self.domain_resolution_service = DomainResolutionService(ctx, self.provider_control_service)
         self.opportunity_scoring_service = OpportunityScoringService(
@@ -133,6 +143,7 @@ class PipelineOrchestrator:
     def run_initial_stages(self) -> List[Dict[str, Any]]:
         jobs = self.collection_service.collect()
         jobs = self.normalization_service.normalize(jobs)
+        jobs = self.job_intelligence_service.enrich_jobs(jobs)
         jobs = self.job_dedup_service.dedupe(jobs)
         return jobs
 
@@ -215,35 +226,43 @@ class PipelineOrchestrator:
             0,
         )
 
+        # No usar el commercial gate como filtro duro antes de persistir/exportar.
+        # La priorización comercial sigue viva en commercial_bucket/commercial_priority_score,
+        # pero el --limit ahora toma del ranking analítico completo para no perder señales útiles.
+        selection_pool = sorted_companies
+        used_commercial_gate = False
+        self.ctx.metrics["companies_limit_used_analytic_fallback"] = bool(sorted_companies)
+        self.ctx.metrics["companies_limit_commercial_gate_soft_only"] = True
+
         if raw_limit in (None, "", 0, "0", False):
             self.ctx.metrics["companies_limit_requested"] = 0
-            self.ctx.metrics["companies_limit_applied"] = len(actionable_companies)
+            self.ctx.metrics["companies_limit_applied"] = len(selection_pool)
             self.ctx.metrics["companies_limit_truncated"] = 0
-            self.ctx.metrics["companies_limit_used_commercial_gate"] = True
-            return actionable_companies
+            self.ctx.metrics["companies_limit_used_commercial_gate"] = used_commercial_gate
+            return selection_pool
 
         try:
             limit = int(raw_limit)
         except (TypeError, ValueError):
             self.ctx.metrics["companies_limit_invalid"] = True
             self.ctx.metrics["companies_limit_requested"] = 0
-            self.ctx.metrics["companies_limit_applied"] = len(actionable_companies)
+            self.ctx.metrics["companies_limit_applied"] = len(selection_pool)
             self.ctx.metrics["companies_limit_truncated"] = 0
-            self.ctx.metrics["companies_limit_used_commercial_gate"] = True
-            return actionable_companies
+            self.ctx.metrics["companies_limit_used_commercial_gate"] = used_commercial_gate
+            return selection_pool
 
         if limit <= 0:
             self.ctx.metrics["companies_limit_requested"] = limit
             self.ctx.metrics["companies_limit_applied"] = 0
-            self.ctx.metrics["companies_limit_truncated"] = len(actionable_companies)
-            self.ctx.metrics["companies_limit_used_commercial_gate"] = True
+            self.ctx.metrics["companies_limit_truncated"] = len(selection_pool)
+            self.ctx.metrics["companies_limit_used_commercial_gate"] = used_commercial_gate
             return []
 
-        limited = actionable_companies[:limit]
+        limited = selection_pool[:limit]
         self.ctx.metrics["companies_limit_requested"] = limit
         self.ctx.metrics["companies_limit_applied"] = len(limited)
-        self.ctx.metrics["companies_limit_truncated"] = max(len(actionable_companies) - len(limited), 0)
-        self.ctx.metrics["companies_limit_used_commercial_gate"] = True
+        self.ctx.metrics["companies_limit_truncated"] = max(len(selection_pool) - len(limited), 0)
+        self.ctx.metrics["companies_limit_used_commercial_gate"] = used_commercial_gate
         return limited
 
 
@@ -356,6 +375,7 @@ class PipelineOrchestrator:
         companies = self.hiring_signals_service.aggregate_by_company(unique_jobs)
         actionable_companies, benchmark_companies = self._split_benchmark_competitors(companies)
 
+        actionable_companies = self.company_identity_ai_service.enrich_companies(actionable_companies)
         actionable_companies = self.domain_resolution_service.resolve_domains(actionable_companies)
         actionable_companies = self.company_identity_service.enrich_company_identity(actionable_companies)
         actionable_companies = self.company_enrichment_service.enrich_companies(actionable_companies)
@@ -495,18 +515,21 @@ class PipelineOrchestrator:
             self.provider_operation_metrics_export_service.export_csv(provider_operation_metrics)
             self.provider_operation_metrics_export_service.export_json(provider_operation_metrics)
 
+            self.ctx.provider_state["run_metrics_summary_counts"] = {
+                "jobs_count": len(unique_jobs),
+                "companies_count": len(companies),
+                "leads_count": len(best_leads),
+            }
+
+            run_metrics_summary = self.run_metrics_summary_service.build_summary()
+            self.run_metrics_summary_export_service.export_json(run_metrics_summary)
+
             readiness_report = self.run_readiness_service.build_report(
                 jobs=unique_jobs,
                 companies=companies,
                 leads=best_leads,
             )
             self.run_readiness_export_service.export_json(readiness_report)
-
-            self.ctx.provider_state["run_metrics_summary_counts"] = {
-                "jobs_count": len(unique_jobs),
-                "companies_count": len(companies),
-                "leads_count": len(best_leads),
-            }
 
             run_metrics_summary = self.run_metrics_summary_service.build_summary()
             self.run_metrics_summary_export_service.export_json(run_metrics_summary)

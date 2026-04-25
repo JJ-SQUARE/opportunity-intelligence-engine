@@ -219,6 +219,60 @@ def test_opportunity_scoring_service_uses_llm_shape_when_available():
     assert scored[0]["scoring_mode"] == "live_api"
 
 
+
+def test_opportunity_scoring_service_preserves_rule_score_breakdown_when_llm_scores():
+    class DummyRegistry:
+        def get_client(self, name):
+            class DummyOpenAIClient:
+                def score_company(self, company_payload):
+                    return {
+                        "opportunity_score": 54,
+                        "opportunity_label": "medium",
+                        "score_icp_fit": 16,
+                        "score_pain_urgency": 12,
+                        "score_penalty_competitor": 0,
+                        "opportunity_score_reason": "LLM score without base breakdown.",
+                        "scoring_provider": "openai",
+                        "scoring_model": "gpt-4.1-mini",
+                        "scoring_mode": "live_api",
+                    }
+            return DummyOpenAIClient()
+
+    class DummyProviderControlService:
+        def __init__(self):
+            self.registry = DummyRegistry()
+
+    class DummyProviderExecutionService:
+        def execute(self, provider_name, operation_name, func, *args, **kwargs):
+            return func(*args)
+
+    ctx = RunContext.create(config={}, flags={})
+    service = OpportunityScoringService(ctx, DummyProviderControlService())
+    service.provider_execution_service = DummyProviderExecutionService()
+
+    scored = service.score_companies([
+        {
+            "company_key": "cmp_llm_breakdown",
+            "company_display": "Hopper",
+            "company_type_ai": "end_client",
+            "classification_confidence_ai": 0.9,
+            "resolved_domain": "hopper.com",
+            "total_openings": 1,
+            "remote_jobs": 1,
+            "contractor_jobs": 0,
+            "multi_source_signal": False,
+            "jobs": [{"title": "Senior Backend Developer", "description": "Scala GCP AI remote role."}],
+        }
+    ])
+
+    assert scored[0]["scoring_provider"] == "openai"
+    assert scored[0]["score_openings"] == 4
+    assert scored[0]["score_remote"] == 2
+    assert scored[0]["score_contractor"] == 0
+    assert scored[0]["score_multi_source"] == 0
+    assert scored[0]["score_company_type"] == 20
+
+
 def test_opportunity_scoring_service_passes_scoring_context_to_llm():
     captured = {}
 
@@ -613,8 +667,9 @@ def test_opportunity_scoring_service_skips_llm_for_unknown_with_weak_evidence():
     assert scored[0]["company_key"] == "cmp_weak_unknown"
     assert scored[0]["scoring_provider"] == "rules"
     assert scored[0]["scoring_mode"] == "fallback_rules"
-    assert service.provider_execution_service.calls == []
-    assert ctx.metrics["scoring_llm_skipped_unknown_weak_evidence"] == 1
+    assert service.provider_execution_service.calls == [("openai", "score_company")]
+    assert ctx.metrics["scoring_llm_used"] == 0
+    assert ctx.metrics["scoring_rules_used"] == 1
 
 
 def test_opportunity_scoring_service_caps_reachability_without_real_icp_evidence():
@@ -736,8 +791,9 @@ def test_opportunity_scoring_service_skips_llm_for_low_icp_evidence_even_if_stru
     assert len(scored) == 1
     assert scored[0]["scoring_provider"] == "rules"
     assert scored[0]["scoring_mode"] == "fallback_rules"
-    assert service.provider_execution_service.calls == []
-    assert ctx.metrics["scoring_llm_skipped_low_icp_evidence"] == 1
+    assert service.provider_execution_service.calls == [("openai", "score_company")]
+    assert ctx.metrics["scoring_llm_used"] == 0
+    assert ctx.metrics["scoring_rules_used"] == 1
 
 
 def test_opportunity_scoring_service_detects_real_icp_evidence_for_confident_end_client_with_supporting_signals():

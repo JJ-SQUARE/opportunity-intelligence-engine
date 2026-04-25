@@ -11,7 +11,9 @@ from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
 from oie.services.commercial_selection_service import CommercialSelectionService
+from oie.services.commercial_row_service import CommercialRowService
 from oie.services.commercial_signal_service import CommercialSignalService
+from oie.services.job_text_service import build_job_summary
 
 
 COMMERCIAL_PIPELINE_FIELDS = [
@@ -90,20 +92,13 @@ APOLLO_IMPORT_FIELDS = [
     "linkedin_url",
 ]
 
-TECH_HINTS = [
-    ".net", "react", "angular", "vue", "node", "node.js", "python", "fastapi",
-    "java", "spring", "aws", "azure", "gcp", "sql", "mysql", "postgres",
-    "graphql", "rest", "microservices", "docker", "kubernetes", "aem",
-    "javascript", "typescript", "php", "c#", "ai", "gemini", "codex"
-]
-
-
 class OutboundExportService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.db_path = self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
-        self.commercial_signal_service = CommercialSignalService()
-        self.commercial_selection_service = CommercialSelectionService(self.commercial_signal_service)
+        self.commercial_row_service = CommercialRowService(ctx)
+        self.db_path = self.commercial_row_service.db_path
+        self.commercial_signal_service = self.commercial_row_service.commercial_signal_service
+        self.commercial_selection_service = self.commercial_row_service.commercial_selection_service
 
     def _output_dir(self) -> Path:
         output_dir = Path(
@@ -115,13 +110,7 @@ class OutboundExportService:
         return output_dir
 
     def _query_rows(self, query: str, params: tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            rows = conn.execute(query, params).fetchall()
-            return [dict(row) for row in rows]
-        finally:
-            conn.close()
+        return self.commercial_row_service.query_rows(query, params)
 
     def _write_csv(self, path: Path, fieldnames: List[str], rows: List[Dict[str, Any]]) -> str:
         with path.open("w", newline="", encoding="utf-8") as f:
@@ -136,365 +125,7 @@ class OutboundExportService:
         return str(path)
 
     def _build_commercial_pipeline_rows(self) -> List[Dict[str, Any]]:
-        query = """
-        WITH ranked_leads AS (
-            SELECT
-                l.company_key,
-                l.contact_name,
-                l.contact_title,
-                l.email,
-                l.linkedin_url,
-                l.lead_source,
-                l.lead_confidence,
-                COALESCE(l.email_quality_score, 0) AS email_quality_score,
-                COALESCE(l.lead_capture_reason, '') AS lead_capture_reason,
-                COALESCE(l.lead_relevance_score, 0) AS lead_relevance_score,
-                COALESCE(l.lead_priority_label, '') AS lead_priority_label,
-                COALESCE(l.lead_decision_maker_score, 0) AS lead_decision_maker_score,
-                COALESCE(l.lead_icp_fit_score, 0) AS lead_icp_fit_score,
-                COALESCE(l.lead_contact_completeness_score, 0) AS lead_contact_completeness_score,
-                COALESCE(l.lead_penalty_negative_title, 0) AS lead_penalty_negative_title,
-                COALESCE(l.lead_score_reason, '') AS lead_score_reason,
-                COALESCE(l.lead_scoring_provider, '') AS lead_scoring_provider,
-                COALESCE(l.lead_scoring_model, '') AS lead_scoring_model,
-                COALESCE(l.lead_scoring_mode, '') AS lead_scoring_mode,
-                ROW_NUMBER() OVER (
-                    PARTITION BY l.company_key
-                    ORDER BY
-                        COALESCE(l.lead_relevance_score, 0) DESC,
-                        COALESCE(l.email_quality_score, 0) DESC,
-                        COALESCE(l.lead_confidence, 0) DESC,
-                        CASE LOWER(COALESCE(l.lead_source, ''))
-                            WHEN 'apollo_people' THEN 3
-                            WHEN 'hunter_domain_search' THEN 2
-                            WHEN 'stub_generation' THEN 1
-                            ELSE 0
-                        END DESC,
-                        CASE WHEN COALESCE(l.linkedin_url, '') <> '' THEN 1 ELSE 0 END DESC,
-                        COALESCE(l.contact_name, '') ASC
-                ) AS rn
-            FROM leads l
-            WHERE l.run_id = ?
-        ),
-        lead_stats AS (
-            SELECT
-                l.company_key,
-                COUNT(*) AS lead_count,
-                SUM(CASE WHEN LOWER(COALESCE(l.lead_source, '')) = 'apollo_people' THEN 1 ELSE 0 END) AS apollo_leads_count,
-                SUM(CASE WHEN LOWER(COALESCE(l.lead_source, '')) = 'hunter_domain_search' THEN 1 ELSE 0 END) AS hunter_leads_count,
-                SUM(CASE WHEN COALESCE(l.email, '') <> '' THEN 1 ELSE 0 END) AS contacts_with_email_count,
-                SUM(CASE WHEN COALESCE(l.linkedin_url, '') <> '' THEN 1 ELSE 0 END) AS contacts_with_linkedin_count
-            FROM leads l
-            WHERE l.run_id = ?
-            GROUP BY l.company_key
-        ),
-        best_leads AS (
-            SELECT
-                company_key,
-                contact_name AS best_contact_name,
-                contact_title AS best_contact_title,
-                email AS best_contact_email,
-                linkedin_url AS best_contact_linkedin_url,
-                lead_source AS best_lead_source,
-                lead_confidence AS best_lead_confidence,
-                lead_relevance_score AS best_lead_relevance_score,
-                email_quality_score AS best_email_quality_score,
-                lead_capture_reason AS best_lead_capture_reason,
-                COALESCE(lead_priority_label, '') AS best_lead_priority_label,
-                COALESCE(lead_decision_maker_score, 0) AS best_lead_decision_maker_score,
-                COALESCE(lead_icp_fit_score, 0) AS best_lead_icp_fit_score,
-                COALESCE(lead_contact_completeness_score, 0) AS best_lead_contact_completeness_score,
-                COALESCE(lead_penalty_negative_title, 0) AS best_lead_penalty_negative_title,
-                COALESCE(lead_score_reason, '') AS best_lead_score_reason,
-                COALESCE(lead_scoring_provider, '') AS best_lead_scoring_provider,
-                COALESCE(lead_scoring_model, '') AS best_lead_scoring_model,
-                COALESCE(lead_scoring_mode, '') AS best_lead_scoring_mode
-            FROM ranked_leads
-            WHERE rn = 1
-        ),
-        run_scores AS (
-            SELECT
-                cs.company_key,
-                cs.opportunity_score,
-                cs.opportunity_label,
-                cs.score_openings,
-                cs.score_remote,
-                cs.score_contractor,
-                cs.score_multi_source,
-                cs.score_company_type,
-                cs.score_icp_fit,
-                cs.score_pain_urgency,
-                cs.score_region_fit,
-                cs.score_company_scale,
-                cs.score_role_seniority_mix,
-                cs.score_penalty_competitor,
-                cs.score_penalty_negative_signals,
-                cs.primary_service_fit,
-                cs.buyer_persona_fit,
-                cs.opportunity_score_reason,
-                cs.scoring_provider,
-                cs.scoring_model,
-                cs.scoring_mode
-            FROM company_scores cs
-            WHERE cs.run_id = ?
-        )
-        SELECT
-            s.company_key,
-            COALESCE(c.company_display, '') AS company_display,
-            COALESCE(c.company_normalized, '') AS company_normalized,
-            COALESCE(c.resolved_domain, '') AS resolved_domain,
-            COALESCE(c.domain_source, '') AS domain_source,
-            COALESCE(c.domain_confidence, 0) AS domain_confidence,
-            COALESCE(c.domain_candidate, '') AS domain_candidate,
-            COALESCE(c.domain_validation_status, '') AS domain_validation_status,
-            COALESCE(c.domain_review_required, 0) AS domain_review_required,
-            COALESCE(c.domain_ai_decision, '') AS domain_ai_decision,
-            COALESCE(c.company_type_ai, '') AS company_type_ai,
-            COALESCE(c.classification_confidence_ai, 0) AS classification_confidence_ai,
-            COALESCE(c.industry, '') AS industry,
-            COALESCE(c.employee_range, '') AS employee_range,
-            COALESCE(c.company_size, '') AS company_size,
-            COALESCE(c.linkedin_company_url, '') AS linkedin_company_url,
-            COALESCE(c.company_description, '') AS company_description,
-            COALESCE(s.opportunity_score, 0) AS opportunity_score,
-            COALESCE(s.opportunity_label, '') AS opportunity_label,
-            COALESCE(s.score_openings, 0) AS score_openings,
-            COALESCE(s.score_remote, 0) AS score_remote,
-            COALESCE(s.score_contractor, 0) AS score_contractor,
-            COALESCE(s.score_multi_source, 0) AS score_multi_source,
-            COALESCE(s.score_company_type, 0) AS score_company_type,
-            COALESCE(s.score_icp_fit, 0) AS score_icp_fit,
-            COALESCE(s.score_pain_urgency, 0) AS score_pain_urgency,
-            COALESCE(s.score_region_fit, 0) AS score_region_fit,
-            COALESCE(s.score_company_scale, 0) AS score_company_scale,
-            COALESCE(s.score_role_seniority_mix, 0) AS score_role_seniority_mix,
-            COALESCE(s.score_penalty_competitor, 0) AS score_penalty_competitor,
-            COALESCE(s.score_penalty_negative_signals, 0) AS score_penalty_negative_signals,
-            COALESCE(s.primary_service_fit, '') AS primary_service_fit,
-            COALESCE(s.buyer_persona_fit, '') AS buyer_persona_fit,
-            COALESCE(s.opportunity_score_reason, '') AS opportunity_score_reason,
-            COALESCE(s.scoring_provider, '') AS scoring_provider,
-            COALESCE(s.scoring_model, '') AS scoring_model,
-            COALESCE(s.scoring_mode, '') AS scoring_mode,
-            COALESCE(ls.lead_count, 0) AS lead_count,
-            COALESCE(ls.apollo_leads_count, 0) AS apollo_leads_count,
-            COALESCE(ls.hunter_leads_count, 0) AS hunter_leads_count,
-            COALESCE(ls.contacts_with_email_count, 0) AS contacts_with_email_count,
-            COALESCE(ls.contacts_with_linkedin_count, 0) AS contacts_with_linkedin_count,
-            COALESCE(bl.best_contact_name, '') AS best_contact_name,
-            COALESCE(bl.best_contact_title, '') AS best_contact_title,
-            COALESCE(bl.best_contact_email, '') AS best_contact_email,
-            COALESCE(bl.best_contact_linkedin_url, '') AS best_contact_linkedin_url,
-            COALESCE(bl.best_lead_source, '') AS best_lead_source,
-            COALESCE(bl.best_lead_confidence, 0) AS best_lead_confidence,
-            COALESCE(bl.best_lead_relevance_score, 0) AS best_lead_relevance_score,
-            COALESCE(bl.best_email_quality_score, 0) AS best_email_quality_score,
-            COALESCE(bl.best_lead_capture_reason, '') AS best_lead_capture_reason,
-            COALESCE(bl.best_lead_priority_label, '') AS best_lead_priority_label,
-            COALESCE(bl.best_lead_decision_maker_score, 0) AS best_lead_decision_maker_score,
-            COALESCE(bl.best_lead_icp_fit_score, 0) AS best_lead_icp_fit_score,
-            COALESCE(bl.best_lead_contact_completeness_score, 0) AS best_lead_contact_completeness_score,
-            COALESCE(bl.best_lead_penalty_negative_title, 0) AS best_lead_penalty_negative_title,
-            COALESCE(bl.best_lead_score_reason, '') AS best_lead_score_reason,
-            COALESCE(bl.best_lead_scoring_provider, '') AS best_lead_scoring_provider,
-            COALESCE(bl.best_lead_scoring_model, '') AS best_lead_scoring_model,
-            COALESCE(bl.best_lead_scoring_mode, '') AS best_lead_scoring_mode,
-            CASE
-                WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 'email'
-                WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 'linkedin'
-                WHEN COALESCE(c.linkedin_company_url, '') <> '' THEN 'company_linkedin'
-                WHEN COALESCE(c.resolved_domain, '') <> '' THEN 'website_only'
-                ELSE 'no_channel'
-            END AS suggested_outreach_channel,
-            CASE
-                WHEN LOWER(COALESCE(c.company_type_ai, '')) IN ('competitor', 'staffing', 'staffing_agency', 'consulting')
-                    OR COALESCE(s.score_penalty_competitor, 0) <= -20
-                    THEN 'deprioritized_competitor'
-                WHEN COALESCE(c.domain_validation_status, '') = 'review' THEN 'review_domain'
-                WHEN COALESCE(c.domain_validation_status, '') <> 'accepted' THEN 'pending_domain'
-                WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 'ready_email'
-                WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 'ready_linkedin'
-                WHEN COALESCE(c.linkedin_company_url, '') <> '' OR COALESCE(c.resolved_domain, '') <> '' THEN 'research_needed'
-                ELSE 'insufficient_data'
-            END AS outreach_status,
-            CASE
-                WHEN LOWER(COALESCE(c.company_type_ai, '')) IN ('competitor')
-                    THEN 'benchmark_competitor'
-                WHEN LOWER(COALESCE(c.company_type_ai, '')) IN ('staffing', 'staffing_agency', 'consulting', 'marketplace', 'job_board')
-                    THEN 'non_icp'
-                WHEN COALESCE(c.company_type_ai, '') = 'end_client'
-                     AND COALESCE(s.opportunity_score, 0) >= 55
-                    THEN 'strong_icp'
-                WHEN COALESCE(c.company_type_ai, '') = 'end_client'
-                     AND COALESCE(s.opportunity_score, 0) >= 25
-                    THEN 'possible_icp'
-                WHEN COALESCE(s.opportunity_score, 0) >= 40
-                    THEN 'possible_icp'
-                ELSE 'weak_icp'
-            END AS icp_bucket,
-            CASE
-                WHEN (
-                    COALESCE(c.domain_validation_status, '') = 'accepted'
-                    AND COALESCE(c.resolved_domain, '') <> ''
-                )
-                OR COALESCE(bl.best_contact_email, '') <> ''
-                OR COALESCE(bl.best_contact_linkedin_url, '') <> ''
-                OR COALESCE(c.linkedin_company_url, '') <> ''
-                    THEN 1
-                ELSE 0
-            END AS reachability_ready,
-            CASE
-                WHEN LOWER(COALESCE(c.company_type_ai, '')) IN ('competitor', 'staffing', 'staffing_agency', 'consulting')
-                    OR COALESCE(s.score_penalty_competitor, 0) <= -20
-                    THEN 'competitor_watchlist'
-                WHEN COALESCE(c.company_type_ai, '') = 'end_client'
-                     AND COALESCE(s.opportunity_score, 0) >= 55
-                    THEN 'icp_target'
-                WHEN COALESCE(s.opportunity_score, 0) >= 40
-                     OR (
-                        COALESCE(c.company_type_ai, '') = 'end_client'
-                        AND COALESCE(s.opportunity_score, 0) >= 25
-                     )
-                    THEN 'partner_candidate'
-                ELSE 'low_fit_noise'
-            END AS commercial_bucket,
-            MAX(
-                0,
-                (
-                    COALESCE(s.opportunity_score, 0)
-                    + CASE WHEN COALESCE(c.domain_validation_status, '') = 'accepted' THEN 8 ELSE 0 END
-                    + CASE WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 10 ELSE 0 END
-                    + CASE WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 4 ELSE 0 END
-                    + CASE WHEN COALESCE(bl.best_email_quality_score, 0) >= 80 THEN 5
-                           WHEN COALESCE(bl.best_email_quality_score, 0) >= 50 THEN 2
-                           ELSE 0 END
-                    + CASE WHEN COALESCE(bl.best_lead_source, '') = 'apollo_people' THEN 4
-                           WHEN COALESCE(bl.best_lead_source, '') = 'hunter_domain_search' THEN 2
-                           ELSE 0 END
-                    + CASE WHEN COALESCE(c.company_type_ai, '') = 'end_client' THEN 6 ELSE 0 END
-                    + CASE WHEN COALESCE(c.linkedin_company_url, '') <> '' THEN 2 ELSE 0 END
-                    - CASE WHEN COALESCE(c.domain_validation_status, '') = 'review' THEN 20 ELSE 0 END
-                    - CASE WHEN COALESCE(c.domain_validation_status, '') NOT IN ('', 'accepted', 'review') THEN 12 ELSE 0 END
-                    - CASE
-                        WHEN LOWER(COALESCE(c.company_type_ai, '')) IN ('competitor', 'staffing', 'staffing_agency', 'consulting')
-                             THEN 80
-                        WHEN COALESCE(s.score_penalty_competitor, 0) <= -20
-                             THEN 60
-                        ELSE 0
-                      END
-                    - CASE
-                        WHEN (
-                            COALESCE(s.opportunity_score, 0) < 30
-                            AND COALESCE(c.company_type_ai, '') NOT IN ('end_client')
-                        ) THEN 15
-                        ELSE 0
-                      END
-                )
-            ) AS commercial_priority_score
-        FROM run_scores s
-        LEFT JOIN companies c
-            ON c.company_key = s.company_key
-        LEFT JOIN lead_stats ls
-            ON ls.company_key = s.company_key
-        LEFT JOIN best_leads bl
-            ON bl.company_key = s.company_key
-        ORDER BY
-            CASE
-                WHEN LOWER(COALESCE(c.company_type_ai, '')) IN ('competitor', 'staffing', 'staffing_agency', 'consulting')
-                    OR COALESCE(s.score_penalty_competitor, 0) <= -20
-                    THEN 0
-                WHEN COALESCE(c.company_type_ai, '') = 'end_client'
-                     AND COALESCE(s.opportunity_score, 0) >= 55
-                    THEN 3
-                WHEN COALESCE(s.opportunity_score, 0) >= 40
-                     OR (
-                        COALESCE(c.company_type_ai, '') = 'end_client'
-                        AND COALESCE(s.opportunity_score, 0) >= 25
-                     )
-                    THEN 2
-                ELSE 1
-            END DESC,
-            commercial_priority_score DESC,
-            COALESCE(s.opportunity_score, 0) DESC,
-            CASE WHEN COALESCE(c.domain_validation_status, '') = 'accepted' THEN 1 ELSE 0 END DESC,
-            CASE WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 1 ELSE 0 END DESC,
-            CASE WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 1 ELSE 0 END DESC,
-            c.company_display ASC
-        """
-        rows = self._query_rows(query, (self.ctx.run_id, self.ctx.run_id, self.ctx.run_id))
-        rows = self._finalize_commercial_rows(rows)
-        rows = self._recompute_best_commercial_leads(rows)
-        return rows
-
-    def _clear_best_lead_fields(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        cleaned = dict(row)
-        cleaned["best_contact_name"] = ""
-        cleaned["best_contact_title"] = ""
-        cleaned["best_contact_email"] = ""
-        cleaned["best_contact_linkedin_url"] = ""
-        cleaned["best_lead_source"] = ""
-        cleaned["best_lead_confidence"] = 0
-        cleaned["best_lead_relevance_score"] = 0
-        cleaned["best_email_quality_score"] = 0
-        cleaned["best_lead_capture_reason"] = ""
-        cleaned["best_lead_priority_label"] = ""
-        cleaned["best_lead_decision_maker_score"] = 0
-        cleaned["best_lead_icp_fit_score"] = 0
-        cleaned["best_lead_contact_completeness_score"] = 0
-        cleaned["best_lead_penalty_negative_title"] = 0
-        cleaned["best_lead_score_reason"] = ""
-        cleaned["best_lead_scoring_provider"] = ""
-        cleaned["best_lead_scoring_model"] = ""
-        cleaned["best_lead_scoring_mode"] = ""
-        return cleaned
-
-    def _apply_best_lead_to_row(
-        self,
-        row: Dict[str, Any],
-        best_lead: Dict[str, Any] | None,
-    ) -> Dict[str, Any]:
-        updated = self._clear_best_lead_fields(row)
-
-        if not best_lead:
-            return self._finalize_commercial_row(updated)
-
-        updated["best_contact_name"] = best_lead.get("contact_name", "")
-        updated["best_contact_title"] = best_lead.get("contact_title", "")
-        updated["best_contact_email"] = best_lead.get("email", "")
-        updated["best_contact_linkedin_url"] = best_lead.get("linkedin_url", "")
-        updated["best_lead_source"] = best_lead.get("lead_source", "")
-        updated["best_lead_confidence"] = best_lead.get("lead_confidence", 0)
-        updated["best_lead_relevance_score"] = best_lead.get("lead_relevance_score", 0)
-        updated["best_email_quality_score"] = best_lead.get("email_quality_score", 0)
-        updated["best_lead_capture_reason"] = best_lead.get("lead_capture_reason", "")
-        updated["best_lead_priority_label"] = best_lead.get("lead_priority_label", "")
-        updated["best_lead_decision_maker_score"] = best_lead.get("lead_decision_maker_score", 0)
-        updated["best_lead_icp_fit_score"] = best_lead.get("lead_icp_fit_score", 0)
-        updated["best_lead_contact_completeness_score"] = best_lead.get("lead_contact_completeness_score", 0)
-        updated["best_lead_penalty_negative_title"] = best_lead.get("lead_penalty_negative_title", 0)
-        updated["best_lead_score_reason"] = best_lead.get("lead_score_reason", "")
-        updated["best_lead_scoring_provider"] = best_lead.get("lead_scoring_provider", "")
-        updated["best_lead_scoring_model"] = best_lead.get("lead_scoring_model", "")
-        updated["best_lead_scoring_mode"] = best_lead.get("lead_scoring_mode", "")
-
-        return self._finalize_commercial_row(updated)
-
-    def _recompute_best_commercial_leads(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        recomputed: List[Dict[str, Any]] = []
-
-        for row in rows:
-            company_key = self._hubspot_safe_text(row.get("company_key"))
-            contacts = self._build_company_contacts(company_key) if company_key else []
-            selected_contacts = self.commercial_selection_service.select_contacts(
-                company_key=company_key,
-                contacts=contacts,
-                max_contacts=1,
-                min_relevance_score=45,
-            )
-            best_lead = selected_contacts[0] if selected_contacts else None
-            recomputed.append(self._apply_best_lead_to_row(row, best_lead))
-
-        return recomputed
+        return self.commercial_row_service.build_commercial_pipeline_rows()
 
     def _build_company_jobs(self, company_key: str) -> List[Dict[str, Any]]:
         queries = [
@@ -577,149 +208,8 @@ class OutboundExportService:
         """
         return self._query_rows(query, (self.ctx.run_id, company_key))
 
-    def _extract_budget(self, text: str) -> str:
-        value = (text or "").replace("\n", " ")
-        patterns = [
-            r"(USD\s?\$?\s?[\d,]+(?:\s?-\s?USD\s?\$?\s?[\d,]+)?)",
-            r"(\$\s?[\d,]+(?:\s?-\s?\$\s?[\d,]+)?)",
-            r"(MXN\s?\$?\s?[\d,]+(?:\s?-\s?MXN\s?\$?\s?[\d,]+)?)",
-            r"(S/\.\s?[\d,]+(?:\s?-\s?S/\.\s?[\d,]+)?)",
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, value, flags=re.IGNORECASE)
-            if match:
-                return match.group(1).strip()
-        return ""
-
-    def _extract_techs(self, text: str, limit: int = 6) -> str:
-        lowered = (text or "").lower()
-        found = []
-        for hint in TECH_HINTS:
-            if hint.lower() in lowered:
-                found.append(hint)
-        deduped = []
-        seen = set()
-        for item in found:
-            key = item.lower()
-            if key not in seen:
-                seen.add(key)
-                deduped.append(item)
-        return ", ".join(deduped[:limit])
-
-    def _truncate(self, text: str, limit: int = 260) -> str:
-        value = " ".join((text or "").split())
-        if len(value) <= limit:
-            return value
-        return value[: limit - 3].rstrip() + "..."
-
-    def _normalize_match_text(self, value: Any) -> str:
-        text = str(value or "").strip().lower()
-        text = re.sub(r"[^a-z0-9+#\.\s]", " ", text)
-        return re.sub(r"\s+", " ", text).strip()
-
-    def _title_match_tokens(self, title: str) -> List[str]:
-        stopwords = {
-            "the", "and", "for", "with", "from", "at", "para", "con", "del", "las", "los",
-            "remote", "remoto", "latam", "software", "engineer", "developer", "desarrollador",
-            "senior", "sênior", "sr", "lead", "mid", "level", "full", "time"
-        }
-        normalized = self._normalize_match_text(title)
-        tokens: List[str] = []
-        for token in normalized.split():
-            if len(token) <= 2:
-                continue
-            if token in stopwords:
-                continue
-            if token.isdigit():
-                continue
-            tokens.append(token)
-        deduped: List[str] = []
-        seen = set()
-        for token in tokens:
-            if token not in seen:
-                seen.add(token)
-                deduped.append(token)
-        return deduped[:8]
-
-    def _description_looks_contaminated(self, job: Dict[str, Any]) -> bool:
-        description = self._normalize_match_text(job.get("description", ""))
-        title = str(job.get("title", "") or "")
-        source = str(job.get("source", "") or "").strip().lower()
-
-        if not description:
-            return True
-
-        title_tokens = self._title_match_tokens(title)
-        if not title_tokens:
-            return False
-
-        token_hits = sum(1 for token in title_tokens if token in description)
-
-        # Snippet corto/genérico sin intersección con el título real.
-        if token_hits == 0 and len(description) < 280:
-            return True
-
-        # Caso típico de SERP contaminado: muchas elipsis / frases agregadas / resultado relacionado.
-        suspicious_markers = (
-            " ...",
-            "expand",
-            "hace ",
-            "há ",
-            "ago",
-            "job summary",
-            "platform support engineer",
-        )
-        suspicious_hits = sum(1 for marker in suspicious_markers if marker in description)
-
-        if source == "linkedin_serpapi" and token_hits == 0 and suspicious_hits >= 1:
-            return True
-
-        if token_hits == 0 and source in {"linkedin_serpapi", "google_jobs"} and len(title_tokens) >= 2:
-            return True
-
-        return False
-
-    def _safe_job_description_for_summary(self, job: Dict[str, Any]) -> str:
-        description = " ".join(str(job.get("description", "") or "").split()).strip()
-        if not description:
-            return ""
-        if self._description_looks_contaminated(job):
-            return ""
-        return description
-
     def _job_summary(self, job: Dict[str, Any]) -> str:
-        workplace = []
-        if job.get("is_remote"):
-            workplace.append("remote")
-        if job.get("is_full_time"):
-            workplace.append("full-time")
-        if job.get("is_contractor"):
-            workplace.append("contractor")
-        workplace_text = ", ".join(workplace) if workplace else "N/D"
-
-        safe_description = self._safe_job_description_for_summary(job)
-        text_for_extraction = " ".join([str(job.get("title", "") or ""), safe_description])
-
-        budget = self._extract_budget(safe_description) or "No detectado"
-        techs = self._extract_techs(text_for_extraction) or "No detectadas"
-
-        if safe_description:
-            summary_text = self._truncate(safe_description)
-        else:
-            summary_text = (
-                f"Descripción no confiable desde {job.get('source') or 'fuente desconocida'}; "
-                f"usar título, URL y apply URL para validación manual."
-            )
-
-        summary = (
-            f"{job.get('title', 'Sin título')}. "
-            f"Ubicación: {job.get('location') or 'N/D'}. "
-            f"Modalidad: {workplace_text}. "
-            f"Budget: {budget}. "
-            f"Skills/stack detectados: {techs}. "
-            f"Resumen: {summary_text}"
-        )
-        return summary
+        return build_job_summary(job)
 
     def _safe_float(self, value: Any, default: float = 0.0) -> float:
         try:
@@ -752,26 +242,13 @@ class OutboundExportService:
         return self.commercial_signal_service.derived_commercial_priority_score(row)
 
     def _finalize_commercial_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        return self.commercial_signal_service.finalize_row(row)
+        return self.commercial_row_service.finalize_row(row)
 
     def _finalize_commercial_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        finalized = [self._finalize_commercial_row(row) for row in rows]
-        finalized.sort(
-            key=lambda row: (
-                0 if self._commercial_bucket(row) == "competitor_watchlist" else 1,
-                self._safe_int(row.get("commercial_priority_score")),
-                self._safe_float(row.get("opportunity_score")),
-                1 if self._hubspot_safe_text(row.get("domain_validation_status")).lower() == "accepted" else 0,
-                1 if self._hubspot_safe_text(row.get("best_contact_email")) else 0,
-                1 if self._hubspot_safe_text(row.get("best_contact_linkedin_url")) else 0,
-                self._hubspot_safe_text(row.get("company_display")).lower(),
-            ),
-            reverse=True,
-        )
-        return finalized
+        return self.commercial_row_service.finalize_rows(rows)
 
     def export_commercial_pipeline(self) -> str:
-        rows = self._finalize_commercial_rows(self._build_commercial_pipeline_rows())
+        rows = self._build_commercial_pipeline_rows()
         path = self._output_dir() / "commercial_pipeline.csv"
         output = self._write_csv(path, COMMERCIAL_PIPELINE_FIELDS, rows)
         self.ctx.paths["commercial_pipeline_csv"] = output
@@ -782,7 +259,7 @@ class OutboundExportService:
         return str(row.get("commercial_bucket") or "").strip().lower()
 
     def _rows_for_apollo_import(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return self.commercial_selection_service.rows_for_apollo_import(rows)
+        return self.commercial_row_service.commercial_selection_service.rows_for_apollo_import(rows)
 
     def export_apollo_import(self) -> str:
         rows = self._rows_for_apollo_import(self._build_commercial_pipeline_rows())
@@ -966,16 +443,14 @@ class OutboundExportService:
         return due.isoformat().replace("+00:00", "Z")
 
     def _select_hubspot_contacts(self, company_key: str, limit: int | None = None) -> List[Dict[str, Any]]:
-        contacts = self._build_company_contacts(company_key)
         max_contacts = limit
         if max_contacts is None:
             max_contacts = int(
                 ((self.ctx.config.get("hubspot", {}) or {}).get("max_contacts_per_company", 3) or 3)
             )
 
-        return self.commercial_selection_service.select_contacts(
-            company_key=company_key,
-            contacts=contacts,
+        return self.commercial_row_service.select_contacts(
+            company_key,
             max_contacts=max_contacts,
             min_relevance_score=45,
         )
@@ -984,21 +459,11 @@ class OutboundExportService:
         return self.commercial_selection_service.is_deprioritized_for_outreach(row)
 
     def _rows_with_selected_contacts(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        contacts_by_company: Dict[str, List[Dict[str, Any]]] = {}
-
-        for row in rows:
-            company_key = self._hubspot_safe_text(row.get("company_key"))
-            if not company_key:
-                continue
-            contacts_by_company[company_key] = self._build_company_contacts(company_key)
-
         max_contacts = int(
             ((self.ctx.config.get("hubspot", {}) or {}).get("max_contacts_per_company", 3) or 3)
         )
-
-        return self.commercial_selection_service.rows_with_selected_contacts(
-            rows=rows,
-            contacts_by_company=contacts_by_company,
+        return self.commercial_row_service.rows_with_selected_contacts(
+            rows,
             max_contacts=max_contacts,
             min_relevance_score=45,
         )
@@ -1559,6 +1024,19 @@ class OutboundExportService:
                 lines.append(f"- Company type: {row.get('company_type_ai') or 'N/D'}")
                 lines.append(f"- Commercial bucket: {row.get('commercial_bucket') or 'N/D'}")
                 lines.append(f"- Opportunity score: {row.get('opportunity_score') or 0}")
+                lines.append("- Score breakdown:")
+                lines.append(f"  - Openings: {row.get('score_openings', 0)}")
+                lines.append(f"  - Remote: {row.get('score_remote', 0)}")
+                lines.append(f"  - Contractor: {row.get('score_contractor', 0)}")
+                lines.append(f"  - Multi-source: {row.get('score_multi_source', 0)}")
+                lines.append(f"  - Company type: {row.get('score_company_type', 0)}")
+                lines.append(f"  - ICP fit: {row.get('score_icp_fit', 0)}")
+                lines.append(f"  - Pain urgency: {row.get('score_pain_urgency', 0)}")
+                lines.append(f"  - Region fit: {row.get('score_region_fit', 0)}")
+                lines.append(f"  - Company scale: {row.get('score_company_scale', 0)}")
+                lines.append(f"  - Seniority mix: {row.get('score_role_seniority_mix', 0)}")
+                lines.append(f"  - Penalty competitor: {row.get('score_penalty_competitor', 0)}")
+                lines.append(f"  - Negative signals: {row.get('score_penalty_negative_signals', 0)}")
                 lines.append(f"- Opportunity label: {row.get('opportunity_label') or 'N/D'}")
                 lines.append(f"- Commercial priority score: {row.get('commercial_priority_score') or 0}")
                 lines.append(f"- Outreach status: {row.get('outreach_status') or 'N/D'}")
@@ -1567,7 +1045,9 @@ class OutboundExportService:
                 lines.append(f"- Best contact: {row.get('best_contact_name') or 'N/D'} | {row.get('best_contact_title') or 'N/D'}")
                 lines.append(f"- Best contact email: {row.get('best_contact_email') or 'N/D'}")
                 lines.append(f"- Best contact LinkedIn: {row.get('best_contact_linkedin_url') or 'N/D'}")
-                lines.append(f"- Reason: {self._hubspot_safe_text(row.get('opportunity_score_reason') or 'N/D', 500)}")
+                lines.append(f"- Why opportunity: {self._hubspot_safe_text(row.get('opportunity_score_reason') or 'N/D', 500)}")
+                lines.append(f"- AI signals: provider={row.get('scoring_provider') or 'N/D'} | model={row.get('scoring_model') or 'N/D'} | mode={row.get('scoring_mode') or 'N/D'}")
+                lines.append(f"- Recommended outreach angle: {self._hubspot_safe_text(row.get('best_lead_score_reason') or row.get('opportunity_score_reason') or 'N/D', 500)}")
                 lines.append("")
 
                 jobs = self._build_company_jobs(company_key) if company_key else []

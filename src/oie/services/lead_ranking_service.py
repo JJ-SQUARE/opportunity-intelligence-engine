@@ -353,6 +353,11 @@ class LeadRankingService:
                 "lead_contact_completeness_score": int(result.get("lead_contact_completeness_score", 0) or 0),
                 "lead_penalty_negative_title": int(result.get("lead_penalty_negative_title", 0) or 0),
                 "lead_score_reason": str(result.get("lead_score_reason") or "").strip(),
+                "lead_role_type": str(result.get("lead_role_type") or "").strip(),
+                "why_selected": str(result.get("why_selected") or "").strip(),
+                "outreach_angle": str(result.get("outreach_angle") or "").strip(),
+                "expected_relevance": str(result.get("expected_relevance") or "").strip(),
+                "risk_or_uncertainty": str(result.get("risk_or_uncertainty") or "").strip(),
                 "lead_scoring_provider": str(result.get("lead_scoring_provider") or "openai").strip().lower(),
                 "lead_scoring_model": str(result.get("lead_scoring_model") or "").strip(),
                 "lead_scoring_mode": str(result.get("lead_scoring_mode") or "llm").strip().lower(),
@@ -401,6 +406,11 @@ class LeadRankingService:
             enriched["lead_score_company_penalty"] = company_penalty
             enriched["lead_priority_label"] = self._normalize_lead_label(lead_relevance_score, None)
             enriched["lead_score_reason"] = ""
+            enriched["lead_role_type"] = ""
+            enriched["why_selected"] = ""
+            enriched["outreach_angle"] = ""
+            enriched["expected_relevance"] = ""
+            enriched["risk_or_uncertainty"] = ""
             enriched["lead_scoring_provider"] = "rules"
             enriched["lead_scoring_model"] = ""
             enriched["lead_scoring_mode"] = "fallback_rules"
@@ -426,7 +436,18 @@ class LeadRankingService:
             ),
             reverse=True,
         )
+        leads_useful = sum(
+            1
+            for lead in ranked
+            if int(lead.get("lead_relevance_score", 0) or 0) >= 45
+            and (
+                str(lead.get("email") or "").strip()
+                or str(lead.get("linkedin_url") or "").strip()
+            )
+        )
+
         self.ctx.metrics["leads_ranked"] = len(ranked)
+        self.ctx.metrics["leads_useful"] = leads_useful
         self.ctx.metrics["lead_scoring_llm_used"] = llm_used
         self.ctx.metrics["lead_scoring_rules_used"] = rules_used
         return ranked
@@ -479,6 +500,11 @@ class LeadRankingService:
                 "lead_score_company_penalty": lead.get("lead_score_company_penalty", 0),
                 "lead_priority_label": lead.get("lead_priority_label", ""),
                 "lead_score_reason": lead.get("lead_score_reason", ""),
+                "lead_role_type": lead.get("lead_role_type", ""),
+                "why_selected": lead.get("why_selected", ""),
+                "outreach_angle": lead.get("outreach_angle", ""),
+                "expected_relevance": lead.get("expected_relevance", ""),
+                "risk_or_uncertainty": lead.get("risk_or_uncertainty", ""),
                 "lead_scoring_provider": lead.get("lead_scoring_provider", ""),
                 "lead_scoring_model": lead.get("lead_scoring_model", ""),
                 "lead_scoring_mode": lead.get("lead_scoring_mode", ""),

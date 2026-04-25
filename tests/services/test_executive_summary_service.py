@@ -68,6 +68,41 @@ def test_executive_summary_service_builds_and_writes_summary(tmp_path):
     assert Path(output_path).parent == Path(ctx.paths["output_dir"])
 
 
+
+def test_executive_summary_preserves_score_breakdown_from_llm(tmp_path):
+    ctx = RunContext.create(
+        config={"outputs": {"path": str(tmp_path / "outputs")}},
+        flags={},
+    )
+    service = ExecutiveSummaryService(ctx)
+
+    companies = [
+        {
+            "company_key": "cmp_llm",
+            "company_display": "LLM Co",
+            "opportunity_score": 60,
+            "company_type_ai": "end_client",
+            "classification_confidence_ai": 0.9,
+            "resolved_domain": "llm.com",
+            "score_openings": 4,
+            "score_remote": 2,
+            "score_contractor": 1,
+            "score_multi_source": 0,
+            "score_company_type": 20,
+        }
+    ]
+
+    summary = service.build_summary(companies, [])
+
+    breakdown = summary["top_companies"][0]["score_breakdown"]
+
+    assert breakdown["score_openings"] == 4
+    assert breakdown["score_remote"] == 2
+    assert breakdown["score_contractor"] == 1
+    assert breakdown["score_multi_source"] == 0
+    assert breakdown["score_company_type"] == 20
+
+
 def test_executive_summary_service_prefers_higher_quality_lead_on_tie(tmp_path):
     ctx = RunContext.create(
         config={"outputs": {"path": str(tmp_path / "outputs")}},

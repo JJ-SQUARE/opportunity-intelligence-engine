@@ -168,64 +168,236 @@ class OpenAIAdapter(ProviderClient):
             return text
         return text[: limit - 3].rstrip() + "..."
 
-    def _company_scoring_prompts(self, company_payload: Dict[str, Any]) -> tuple[str, str]:
-        system_prompt = '''
-Act as a Senior B2B Sales Analyst for Tekton Labs. Your task is to qualify outbound prospecting opportunities for the following services:
-Talent as a Service
-Agile Solution Delivery
-Managed IT Services
-Priority Strategy: Focus on the Ideal Customer Profile (ICP). Apply heavy penalties to direct competitors, staffing firms, software consultancies, and outsourcing shops, regardless of their hiring volume.
-Output Format: Return ONLY a valid JSON object. Do not include preamble or conversational text. Use this exact schema:
+    def _enrichment_validation_prompts(self, payload: Dict[str, Any]) -> tuple[str, str]:
+        system_prompt = """
+Act as a Senior Company Data Validation Analyst for Tekton Labs.
+Your task is to validate whether an Apollo company enrichment result belongs to the intended company.
+
+Return ONLY a valid JSON object with this exact schema:
 {
-  "opportunity_score": 0,
-  "opportunity_label": "high|medium|low",
-  "score_icp_fit": 0,
-  "score_pain_urgency": 0,
-  "score_region_fit": 0,
-  "score_company_scale": 0,
-  "score_role_seniority_mix": 0,
-  "score_penalty_competitor": 0,
-  "score_penalty_negative_signals": 0,
-  "primary_service_fit": "talent_as_a_service|agile_solution_delivery|managed_it_services|mixed|unknown",
-  "buyer_persona_fit": "high|medium|low",
-  "one_liner_reason": "max 2 líneas"
+  "is_match": true,
+  "confidence": 0.0,
+  "decision": "accepted|review|rejected",
+  "reason": "max 1 línea"
 }
 
-Scoring Logic (Final Scale 0-100):
-- score_icp_fit: 0-30
-- score_pain_urgency: 0-25
-- score_region_fit: 0-10
-- score_company_scale: 0-10
-- score_role_seniority_mix: 0-10
-- score_penalty_competitor: 0 a -30
-- score_penalty_negative_signals: 0 a -15
+Rules:
+- Accept only when the enriched organization clearly matches the company name/domain.
+- Reject if Apollo data appears to describe a different company, job board, staffing firm, or unrelated domain.
+- Use review when evidence is partial, generic, ambiguous, or incomplete.
+- Never hallucinate missing evidence.
+""".strip()
 
-Interpretación:
-- HIGH: >= 75 y además buen fit ICP + dolor real
-- MEDIUM: 45-74
-- LOW: < 45
+        user_prompt = f"""
+Validate this Apollo enrichment result.
 
-Target Buyer Personas: Strategic C-Level and Directors with budget authority and urgent pain points. 
+company_display: {payload.get("company_display") or payload.get("company") or ""}
+resolved_domain: {payload.get("resolved_domain") or ""}
+domain_validation_status: {payload.get("domain_validation_status") or ""}
+company_type_ai: {payload.get("company_type_ai") or ""}
+classification_confidence_ai: {payload.get("classification_confidence_ai") or ""}
 
-Focus on: CTO, COO, CDO, VP of Engineering, Engineering Manager/Director, IT Manager, Innovation Manager, and Digital Channels Manager.
+apollo_enrichment:
+{self._truncate(json.dumps(payload.get("apollo_enrichment") or {}, ensure_ascii=False), 5000)}
 
-Priority Industries: Focus on high-intent sectors: BFSI (key for legacy modernization) , Insurance, Aerospace/Airlines, Technology, Healthcare/Life Sciences, and Logistics/Transportation.
+Return strict JSON only.
+""".strip()
 
-Company Scale: Strictly Enterprise and Mid-Market. Disregard small entities, local government, or low-scale municipal banks.
+        return system_prompt, user_prompt
 
-Geographic Focus: USA and Canada (Priority Market) and core LATAM regions: México, Panamá, Colombia, Chile, Ecuador, Argentina, Uruguay, Perú, Guatemala, El Salvador, Costa Rica, República Dominicana, Bolivia, and Paraguay.
+    def validate_company_enrichment(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        system_prompt, user_prompt = self._enrichment_validation_prompts(payload)
+        result = self._chat_completion_json(system_prompt, user_prompt)
 
-High-Value Signals: (Urgency: Roles open +30 days, "Urgent hiring", or "Critical role".) AND (Tech Stack: Node, React, Python, Java, Cloud, and AI.) AND (Strategic Shifts: New leadership (CTO/VP) in last 3-6 months , geographic expansion, or legacy-to-cloud migration)
+        try:
+            confidence = float(result.get("confidence", 0.0) or 0.0)
+        except Exception:
+            confidence = 0.0
 
-Medium Signals: Steady hiring; AI/IoT exploration; innovation webinars/events.
+        decision = str(result.get("decision") or "review").strip().lower()
+        if decision not in {"accepted", "review", "rejected"}:
+            decision = "review"
 
-Negative Signals: Focus on juniors/trainees; "Direct hire only/No agencies"; layoffs; hiring freeze; budget cuts; direct competitors (Software factories, staffing, outsourcing).
+        return {
+            "enrichment_ai_match": bool(result.get("is_match")),
+            "enrichment_ai_confidence": max(0.0, min(confidence, 1.0)),
+            "enrichment_ai_decision": decision,
+            "enrichment_ai_reason": str(result.get("reason") or "").strip(),
+            "enrichment_ai_provider": self.provider_name,
+            "enrichment_ai_model": self._openai_model(),
+            "enrichment_ai_mode": "live_api",
+        }
 
 
-Core Instructions:
-- If the target is a competitor/staffing vendor, apply maximum penalty but do not discard.
-- If the company size is ideal but the industry is non-core, retain but penalize.
-- If data is missing, infer conservatively.
+    def _buyer_persona_prompts(self, company_payload: Dict[str, Any]) -> tuple[str, str]:
+        system_prompt = """
+Act as a Senior B2B Buyer Persona Analyst for Tekton Labs.
+
+Your task is to infer the best target buyer personas for outbound prospecting into a company.
+
+Return ONLY a valid JSON object with this exact schema:
+{
+  "buyer_personas": [
+    {
+      "persona": "CTO",
+      "priority": "high|medium|low",
+      "rationale": "max 1 línea",
+      "target_titles": ["CTO", "VP Engineering"],
+      "title_search_patterns": ["engineering leadership", "digital transformation"],
+      "pain_alignment": "max 1 línea",
+      "recommended_channel": "email|linkedin|phone|multi_channel"
+    }
+  ],
+  "reason": "max 2 líneas"
+}
+
+Rules:
+- Recommend only personas relevant to Tekton Labs services: engineering staffing, agile delivery, modernization, cloud, AI, managed IT.
+- Prefer decision makers and strong influencers.
+- Use company industry, jobs, pain signals, company size, and enrichment evidence.
+- Never hallucinate specific people.
+- Keep target_titles concise and searchable.
+- Include title_search_patterns as AI-generated semantic matching hints, not regex syntax.
+- Include why this persona aligns to the company's likely pain.
+- Recommend the most practical outbound channel.
+""".strip()
+
+        user_prompt = f"""
+Generate buyer personas for this company.
+
+company_display: {company_payload.get("company_display") or company_payload.get("company") or ""}
+company_type_ai: {company_payload.get("company_type_ai") or ""}
+industry: {company_payload.get("industry") or ""}
+company_size: {company_payload.get("company_size") or company_payload.get("employee_range") or ""}
+resolved_domain: {company_payload.get("resolved_domain") or ""}
+linkedin_company_url: {company_payload.get("linkedin_company_url") or ""}
+company_description: {self._truncate(company_payload.get("company_description") or "", 1800)}
+opportunity_score: {company_payload.get("opportunity_score") or 0}
+opportunity_label: {company_payload.get("opportunity_label") or ""}
+recommended_service: {company_payload.get("recommended_service") or company_payload.get("primary_service_fit") or ""}
+
+jobs_summary:
+{self._truncate(json.dumps(company_payload.get("jobs") or [], ensure_ascii=False), 5000)}
+
+Return strict JSON only.
+""".strip()
+
+        return system_prompt, user_prompt
+
+    def generate_buyer_personas(self, company_payload: Dict[str, Any]) -> Dict[str, Any]:
+        system_prompt, user_prompt = self._buyer_persona_prompts(company_payload)
+        result = self._chat_completion_json(system_prompt, user_prompt)
+
+        personas = result.get("buyer_personas") or []
+        if not isinstance(personas, list):
+            personas = []
+
+        normalized_personas: List[Dict[str, Any]] = []
+        for item in personas[:5]:
+            if not isinstance(item, dict):
+                continue
+
+            priority = str(item.get("priority") or "medium").strip().lower()
+            if priority not in {"high", "medium", "low"}:
+                priority = "medium"
+
+            titles = item.get("target_titles") or item.get("suggested_titles") or []
+            if not isinstance(titles, list):
+                titles = []
+            clean_titles = [str(title).strip() for title in titles if str(title or "").strip()][:8]
+
+            patterns = item.get("title_search_patterns") or []
+            if not isinstance(patterns, list):
+                patterns = []
+            clean_patterns = [str(pattern).strip() for pattern in patterns if str(pattern or "").strip()][:8]
+
+            normalized_personas.append(
+                {
+                    "persona": str(item.get("persona") or "").strip(),
+                    "priority": priority,
+                    "rationale": str(item.get("rationale") or "").strip(),
+                    "target_titles": clean_titles,
+                    "suggested_titles": clean_titles,
+                    "title_search_patterns": clean_patterns,
+                    "pain_alignment": str(item.get("pain_alignment") or "").strip(),
+                    "recommended_channel": str(item.get("recommended_channel") or "").strip(),
+                }
+            )
+
+        return {
+            "buyer_personas_ai": normalized_personas,
+            "buyer_personas_ai_reason": str(result.get("reason") or "").strip(),
+            "buyer_personas_ai_provider": self.provider_name,
+            "buyer_personas_ai_model": self._openai_model(),
+            "buyer_personas_ai_mode": "live_api",
+        }
+
+
+    def _company_scoring_prompts(self, company_payload: Dict[str, Any]) -> tuple[str, str]:
+        system_prompt = '''
+Act as a Senior B2B Sales Analyst for Tekton Labs.
+
+Your task is to STRICTLY qualify outbound prospecting opportunities based on REAL commercial viability, not hiring noise.
+
+You are NOT scoring interest. You are scoring probability of creating a real sales opportunity for Tekton Labs.
+
+Tekton Labs sells:
+- Talent as a Service: senior engineers / technical experts integrated quickly into client teams.
+- Agile Solution Delivery: end-to-end product delivery, modernization, cloud, AI, and engineering squads.
+- Managed IT Services: operation, support, maintenance, and continuity for critical platforms.
+
+Return ONLY a valid JSON object. No markdown, no prose outside JSON.
+
+Required schema:
+{
+  "opportunity_score": 0,
+  "icp_bucket": "strong|medium|weak",
+  "commercial_bucket": "high|medium|low",
+  "pain_urgency": "high|medium|low",
+  "buyer_persona_fit": "high|medium|low",
+  "recommended_service": "talent_as_a_service|agile_solution_delivery|managed_it_services|mixed|unknown",
+  "reason": "max 2 líneas"
+}
+
+NON-NEGOTIABLE SCORING RULES:
+
+1. ICP first:
+If icp_bucket is weak, opportunity_score MUST be below 45 and commercial_bucket MUST be low.
+
+2. Vendor / competitor penalty:
+If company_type_ai is competitor, staffing, consulting, outsourcing, software factory, marketplace, or job_board:
+- commercial_bucket MUST be low.
+- opportunity_score MUST be below 40.
+- Do not reward hiring volume from vendor-like companies.
+
+3. Hiring volume is not enough:
+Many open roles, remote roles, or contractor roles must NOT produce high scores unless there is strong ICP, real pain, and buyer relevance.
+
+4. Buyer persona gating:
+If buyer_persona_fit is low, opportunity_score MUST be <= 55.
+
+5. Reachability and credibility:
+If domain, LinkedIn, enrichment, or domain validation signals are weak/missing, do not return high unless ICP and pain evidence are exceptionally clear.
+
+6. Conservative default:
+If evidence is incomplete, ambiguous, generic, or mostly inferred, return low or medium. Never hallucinate missing facts.
+
+Commercial bucket consistency:
+- high: score >= 75 AND icp_bucket=strong AND pain_urgency=high AND buyer_persona_fit is medium/high.
+- medium: score 45-74 OR good but incomplete evidence.
+- low: score <45 OR weak ICP OR vendor-like target.
+
+Target buyer personas:
+CTO, COO, CDO, VP Engineering, Head of Engineering, Engineering Director, Engineering Manager, IT Manager, Innovation Manager, Digital Channels Manager.
+
+Priority ICP industries:
+BFSI, banking, financial services, insurance, airlines, aerospace, technology, healthcare, life sciences, logistics, transportation.
+
+High-value pain signals:
+Cloud migration, legacy modernization, AI initiatives, platform rebuilds, microservices, urgent senior technical hiring, multiple strategic engineering roles, new technical leadership, expansion.
+
+Negative signals:
+Junior-only hiring, trainees, internships, no agencies, direct hire only, layoffs, hiring freeze, budget cuts, unclear company identity, job boards, staffing, consulting, outsourcing.
 '''.strip()
 
         scoring_context = company_payload.get("scoring_context") or {}
@@ -239,10 +411,16 @@ ICP / commercial context:
 company_display: {company_payload.get("company_display") or company_payload.get("company") or ""}
 company_type_ai: {company_payload.get("company_type_ai") or ""}
 classification_confidence_ai: {company_payload.get("classification_confidence_ai") or ""}
+classification_reason: {company_payload.get("classification_reason") or ""}
 industry: {company_payload.get("industry") or ""}
 company_size: {company_payload.get("company_size") or company_payload.get("employee_range") or ""}
 resolved_domain: {company_payload.get("resolved_domain") or ""}
+domain_confidence: {company_payload.get("domain_confidence") or ""}
+domain_validation_status: {company_payload.get("domain_validation_status") or ""}
+domain_ai_decision: {company_payload.get("domain_ai_decision") or ""}
+domain_ai_confidence: {company_payload.get("domain_ai_confidence") or ""}
 linkedin_company_url: {company_payload.get("linkedin_company_url") or ""}
+enrichment_source: {company_payload.get("enrichment_source") or ""}
 company_description: {self._truncate(company_payload.get("company_description") or "", 1800)}
 
 total_openings: {company_payload.get("total_openings") or 0}
@@ -256,7 +434,13 @@ sources: {company_payload.get("sources") or []}
 jobs_summary:
 {self._truncate(json.dumps(company_payload.get("jobs") or [], ensure_ascii=False), 5000)}
 
-I need a score oriented toward the real commercial ICP, not gross vacancy volume.
+Score ONLY based on real commercial potential.
+
+Ignore hiring volume if ICP fit is weak.
+
+If data is incomplete, ambiguous, generic, or low credibility, assume LOW confidence and score conservatively.
+
+Return strict JSON only.
 '''.strip()
 
         return system_prompt, user_prompt
@@ -272,19 +456,45 @@ I need a score oriented toward the real commercial ICP, not gross vacancy volume
 
         opportunity_score = max(0, min(opportunity_score, 100))
 
+        commercial_bucket = str(
+            result.get("commercial_bucket")
+            or result.get("opportunity_label")
+            or "low"
+        ).strip().lower()
+        icp_bucket = str(result.get("icp_bucket") or "weak").strip().lower()
+        pain_urgency = str(result.get("pain_urgency") or "low").strip().lower()
+        recommended_service = str(
+            result.get("recommended_service")
+            or result.get("primary_service_fit")
+            or "unknown"
+        ).strip().lower()
+        reason = str(
+            result.get("reason")
+            or result.get("one_liner_reason")
+            or ""
+        ).strip()
+
+        bucket_to_score = {"strong": 28, "medium": 16, "weak": 6}
+        urgency_to_score = {"high": 22, "medium": 12, "low": 4}
+
         return {
             "opportunity_score": opportunity_score,
-            "opportunity_label": str(result.get("opportunity_label") or "low").strip().lower(),
-            "score_icp_fit": int(result.get("score_icp_fit", 0) or 0),
-            "score_pain_urgency": int(result.get("score_pain_urgency", 0) or 0),
+            "icp_bucket": icp_bucket,
+            "commercial_bucket": commercial_bucket,
+            "pain_urgency": pain_urgency,
+            "recommended_service": recommended_service,
+            "reason": reason,
+            "opportunity_label": commercial_bucket,
+            "score_icp_fit": int(result.get("score_icp_fit", bucket_to_score.get(icp_bucket, 6)) or 0),
+            "score_pain_urgency": int(result.get("score_pain_urgency", urgency_to_score.get(pain_urgency, 4)) or 0),
             "score_region_fit": int(result.get("score_region_fit", 0) or 0),
             "score_company_scale": int(result.get("score_company_scale", 0) or 0),
             "score_role_seniority_mix": int(result.get("score_role_seniority_mix", 0) or 0),
             "score_penalty_competitor": int(result.get("score_penalty_competitor", 0) or 0),
             "score_penalty_negative_signals": int(result.get("score_penalty_negative_signals", 0) or 0),
-            "primary_service_fit": str(result.get("primary_service_fit") or "unknown").strip().lower(),
+            "primary_service_fit": recommended_service,
             "buyer_persona_fit": str(result.get("buyer_persona_fit") or "low").strip().lower(),
-            "opportunity_score_reason": str(result.get("one_liner_reason") or "").strip(),
+            "opportunity_score_reason": reason,
             "scoring_provider": self.provider_name,
             "scoring_model": self._openai_model(),
             "scoring_mode": "live_api",
@@ -303,6 +513,11 @@ Return ONLY a valid JSON object with this exact schema:
   "lead_icp_fit_score": 0,
   "lead_contact_completeness_score": 0,
   "lead_penalty_negative_title": 0,
+  "lead_role_type": "primary_decision_maker|technical_influencer|business_sponsor|operations_stakeholder|fallback_contact",
+  "why_selected": "max 1 línea",
+  "outreach_angle": "max 1 línea",
+  "expected_relevance": "high|medium|low",
+  "risk_or_uncertainty": "max 1 línea",
   "lead_score_reason": "max 2 líneas"
 }
 
@@ -318,6 +533,17 @@ Interpretación:
 - LOW: < 45
 
 Prioritize technical and budget-relevant decision makers such as CTO, VP Engineering, Head of Engineering, Director of Engineering, Engineering Manager, IT Manager, Innovation Manager, and Digital Channels Manager.
+
+Classify each contact as one of:
+- primary_decision_maker
+- technical_influencer
+- business_sponsor
+- operations_stakeholder
+- fallback_contact
+
+Evaluate seniority, area, decision power, relation to detected pain, available channel, and fit with the suggested buyer persona.
+
+Do not discard useful leads only because their title is not in a rigid title list. Use the full buyer persona context.
 
 Use conservative judgment when data is missing.
 '''.strip()
@@ -344,6 +570,13 @@ lead_source: {lead_payload.get("lead_source") or ""}
 lead_confidence: {lead_payload.get("lead_confidence") or 0}
 email_quality_score: {lead_payload.get("email_quality_score") or 0}
 lead_capture_reason: {self._truncate(lead_payload.get("lead_capture_reason") or "", 800)}
+target_persona: {lead_payload.get("target_persona") or ""}
+suggested_titles: {lead_payload.get("suggested_titles") or ""}
+title_search_patterns: {lead_payload.get("title_search_patterns") or ""}
+search_reason: {lead_payload.get("search_reason") or ""}
+pain_alignment: {lead_payload.get("pain_alignment") or ""}
+priority: {lead_payload.get("priority") or ""}
+recommended_channel: {lead_payload.get("recommended_channel") or ""}
 '''.strip()
 
         return system_prompt, user_prompt
@@ -366,10 +599,159 @@ lead_capture_reason: {self._truncate(lead_payload.get("lead_capture_reason") or 
             "lead_icp_fit_score": int(result.get("lead_icp_fit_score", 0) or 0),
             "lead_contact_completeness_score": int(result.get("lead_contact_completeness_score", 0) or 0),
             "lead_penalty_negative_title": int(result.get("lead_penalty_negative_title", 0) or 0),
+            "lead_role_type": str(result.get("lead_role_type") or "fallback_contact").strip().lower(),
+            "why_selected": str(result.get("why_selected") or "").strip(),
+            "outreach_angle": str(result.get("outreach_angle") or "").strip(),
+            "expected_relevance": str(result.get("expected_relevance") or "").strip().lower(),
+            "risk_or_uncertainty": str(result.get("risk_or_uncertainty") or "").strip(),
             "lead_score_reason": str(result.get("lead_score_reason") or "").strip(),
             "lead_scoring_provider": self.provider_name,
             "lead_scoring_model": self._openai_model(),
             "lead_scoring_mode": "live_api",
+        }
+
+    def _job_intelligence_prompts(self, job_payload: Dict[str, Any]) -> tuple[str, str]:
+        system_prompt = """
+Act as a Senior Job Intelligence Analyst for Tekton Labs.
+Your task is to interpret one collected job record and return only structured JSON.
+
+Return ONLY a valid JSON object with this exact schema:
+{
+  "is_real_job": true,
+  "is_contaminated": false,
+  "real_company_name": "",
+  "confidence": 0.0,
+  "usable_for_scoring": true,
+  "role": "",
+  "seniority": "",
+  "tech_stack": [],
+  "budget": "",
+  "workplace_type": "",
+  "commercial_signals": []
+}
+
+Rules:
+- Identify whether the record is a real job posting or a contaminated SERP snippet.
+- If the snippet mentions another company different from the apparent employer, set is_contaminated=true.
+- real_company_name must be the company that is actually hiring when inferable.
+- usable_for_scoring=false when the job is contaminated, fake, aggregator-only, or insufficient.
+- tech_stack and commercial_signals must be arrays of concise strings.
+- Use conservative judgment when evidence is missing.
+""".strip()
+
+        user_prompt = f"""
+Analyze this collected job record.
+
+source: {job_payload.get("source") or ""}
+title: {job_payload.get("title") or job_payload.get("job_title") or ""}
+company: {job_payload.get("company") or ""}
+location: {job_payload.get("location") or ""}
+description: {self._truncate(job_payload.get("description") or "", 2500)}
+job_url: {job_payload.get("job_url") or job_payload.get("url") or ""}
+apply_url: {job_payload.get("apply_url") or ""}
+source_meta: {self._truncate(json.dumps(job_payload.get("source_meta") or {}, ensure_ascii=False), 1500)}
+raw: {self._truncate(json.dumps(job_payload.get("raw") or {}, ensure_ascii=False), 2500)}
+""".strip()
+
+        return system_prompt, user_prompt
+
+    def analyze_job_intelligence(self, job_payload: Dict[str, Any]) -> Dict[str, Any]:
+        system_prompt, user_prompt = self._job_intelligence_prompts(job_payload)
+        result = self._chat_completion_json(system_prompt, user_prompt)
+
+        try:
+            confidence = float(result.get("confidence", 0.0) or 0.0)
+        except Exception:
+            confidence = 0.0
+
+        tech_stack = result.get("tech_stack") or []
+        commercial_signals = result.get("commercial_signals") or []
+        if not isinstance(tech_stack, list):
+            tech_stack = []
+        if not isinstance(commercial_signals, list):
+            commercial_signals = []
+
+        return {
+            "is_real_job": bool(result.get("is_real_job")),
+            "is_contaminated": bool(result.get("is_contaminated")),
+            "real_company_name": str(result.get("real_company_name") or "").strip(),
+            "confidence": max(0.0, min(confidence, 1.0)),
+            "usable_for_scoring": bool(result.get("usable_for_scoring")),
+            "role": str(result.get("role") or "").strip(),
+            "seniority": str(result.get("seniority") or "").strip(),
+            "tech_stack": [str(item).strip() for item in tech_stack if str(item).strip()],
+            "budget": str(result.get("budget") or "").strip(),
+            "workplace_type": str(result.get("workplace_type") or "").strip(),
+            "commercial_signals": [str(item).strip() for item in commercial_signals if str(item).strip()],
+            "job_intelligence_provider": self.provider_name,
+            "job_intelligence_model": self._openai_model(),
+            "job_intelligence_mode": "live_api",
+        }
+
+    def _company_identity_prompts(self, company_payload: Dict[str, Any]) -> tuple[str, str]:
+        system_prompt = """
+Act as a Senior Company Identity Analyst for Tekton Labs.
+Your task is to determine the real hiring company behind collected SERP/job records.
+
+Return ONLY a valid JSON object with this exact schema:
+{
+  "company_name": "",
+  "source": "title|snippet|url|content|job_intelligence|unknown",
+  "confidence": 0.0,
+  "is_contaminated": false,
+  "is_ambiguous": false,
+  "usable_for_commercial": true,
+  "reason": ""
+}
+
+Rules:
+- Prefer job_intelligence when present and confident.
+- Mark contaminated=true when the visible company appears to come from another job, wrapper, job board, or unrelated snippet.
+- Mark ambiguous=true when there is not enough evidence to create a commercial company.
+- usable_for_commercial=false when contaminated, ambiguous, placeholder, or not a real company.
+- Use conservative judgment when evidence is missing.
+""".strip()
+
+        user_prompt = f"""
+Resolve the company identity for this aggregated company/job signal.
+
+company_display: {company_payload.get("company_display") or ""}
+company: {company_payload.get("company") or ""}
+resolved_domain: {company_payload.get("resolved_domain") or ""}
+domain_source: {company_payload.get("domain_source") or ""}
+domain_validation_status: {company_payload.get("domain_validation_status") or ""}
+linkedin_company_url: {company_payload.get("linkedin_company_url") or ""}
+company_description: {self._truncate(company_payload.get("company_description") or "", 1500)}
+jobs: {self._truncate(json.dumps(company_payload.get("jobs") or [], ensure_ascii=False), 4500)}
+sources: {company_payload.get("sources") or []}
+""".strip()
+
+        return system_prompt, user_prompt
+
+    def resolve_company_identity(self, company_payload: Dict[str, Any]) -> Dict[str, Any]:
+        system_prompt, user_prompt = self._company_identity_prompts(company_payload)
+        result = self._chat_completion_json(system_prompt, user_prompt)
+
+        try:
+            confidence = float(result.get("confidence", 0.0) or 0.0)
+        except Exception:
+            confidence = 0.0
+
+        source = str(result.get("source") or "unknown").strip().lower()
+        if source not in {"title", "snippet", "url", "content", "job_intelligence", "unknown"}:
+            source = "unknown"
+
+        return {
+            "company_name": str(result.get("company_name") or "").strip(),
+            "source": source,
+            "confidence": max(0.0, min(confidence, 1.0)),
+            "is_contaminated": bool(result.get("is_contaminated")),
+            "is_ambiguous": bool(result.get("is_ambiguous")),
+            "usable_for_commercial": bool(result.get("usable_for_commercial")),
+            "reason": str(result.get("reason") or "").strip(),
+            "provider": self.provider_name,
+            "model": self._openai_model(),
+            "mode": "live_api",
         }
 
     # aliases defensivos para no depender del nombre exacto usado por el service

@@ -3,29 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
-
-
-TRUSTED_DESCRIPTION_SOURCES = {
-    "google_jobs",
-    "greenhouse",
-    "lever",
-    "workable",
-    "direct",
-    "company_site",
-}
-
-LOW_TRUST_DESCRIPTION_SOURCES = {
-    "linkedin_serpapi",
-}
-
-SUSPICIOUS_DESCRIPTION_MARKERS = (
-    " ...",
-    "job summary",
-    "expand",
-    "hace ",
-    "ago",
-    "platform support engineer",
-)
+from oie.services.job_text_service import description_looks_contaminated
 
 
 class HiringSignalsService:
@@ -34,18 +12,18 @@ class HiringSignalsService:
 
     def _description_priority(self, job: Dict[str, Any]) -> int:
         source = str(job.get("source") or "").strip().lower()
-        description = " ".join(str(job.get("description") or "").split()).strip().lower()
+        description = " ".join(str(job.get("description") or "").split()).strip()
 
         if not description:
             return 0
 
-        if source in TRUSTED_DESCRIPTION_SOURCES:
+        if description_looks_contaminated(job):
+            return 0
+
+        if source in {"google_jobs", "greenhouse", "lever", "workable", "direct", "company_site"}:
             return 3
 
-        if source in LOW_TRUST_DESCRIPTION_SOURCES:
-            token_hits = sum(1 for marker in SUSPICIOUS_DESCRIPTION_MARKERS if marker in description)
-            if token_hits >= 1:
-                return 0
+        if source == "linkedin_serpapi":
             return 1
 
         return 2

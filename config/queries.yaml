@@ -72,6 +72,10 @@ llm:
   top_n: 40
   cache_path: "data/processed/company_ai_cache.json"
 
+job_intelligence:
+  enabled: true
+  max_jobs_to_analyze: 30
+
 queries:
   - name: "Focused Fullstack ES"
     q: "desarrollador full stack remoto"
@@ -149,12 +153,16 @@ providers:
 
   operation_limits:
     openai:
-      classify_company: 120
+      analyze_job_intelligence: 30
+      resolve_company_identity: 20
+      validate_company_enrichment: 10
+      generate_buyer_personas: 10
+      classify_company: 20
       domain_ai_validation: 30
-      score_company: 120
-      score_company_opportunity: 120
-      score_opportunity: 120
-      score_lead: 160
+      score_company: 20
+      score_company_opportunity: 20
+      score_opportunity: 20
+      score_lead: 10
     serpapi:
       search_google: 60
     apollo:

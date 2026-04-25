@@ -3,6 +3,15 @@ from oie.services.company_classification_service import CompanyClassificationSer
 from oie.services.provider_control_service import ProviderControlService
 
 
+class DummyProviderExecutionService:
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, provider_name, operation_name, func, *args, **kwargs):
+        self.calls.append((provider_name, operation_name))
+        return func(*args)
+
+
 def test_company_classification_service_uses_openai_heuristic_classification():
     ctx = RunContext.create(
         config={"providers": {"limits": {"openai": 5}}},
@@ -75,6 +84,7 @@ def test_company_classification_service_preserves_benchmark_competitor_without_l
     )
     control = DummyProviderControlService()
     service = CompanyClassificationService(ctx, control)
+    service.provider_execution_service = DummyProviderExecutionService()
 
     companies = [
         {
@@ -255,12 +265,17 @@ def test_company_classification_service_detects_job_board_from_blocked_wrapper_d
     assert result[0]["classification_confidence_ai"] >= 0.9
 
 
-def test_company_classification_service_uses_rule_override_for_competitor_even_with_llm_available():
+def test_company_classification_service_uses_ai_primary_even_for_competitor_rule_match():
     class DummyRegistry:
         def get_client(self, name):
             class DummyOpenAIClient:
                 def classify_company(self, company_payload):
-                    raise AssertionError("OpenAI no debería ejecutarse para competitor con regla fuerte")
+                    return {
+                        "classification": "competitor",
+                        "confidence": 0.96,
+                        "provider": "openai",
+                        "reason": "AI classified the company as a competitor.",
+                    }
             return DummyOpenAIClient()
 
     class DummyProviderControlService:
@@ -273,6 +288,7 @@ def test_company_classification_service_uses_rule_override_for_competitor_even_w
     )
     control = DummyProviderControlService()
     service = CompanyClassificationService(ctx, control)
+    service.provider_execution_service = DummyProviderExecutionService()
 
     companies = [
         {
@@ -288,8 +304,10 @@ def test_company_classification_service_uses_rule_override_for_competitor_even_w
 
     assert len(result) == 1
     assert result[0]["company_type_ai"] == "competitor"
-    assert result[0]["classification_provider"] == "rules"
+    assert result[0]["classification_provider"] == "openai"
     assert result[0]["classification_confidence_ai"] >= 0.9
+    assert result[0]["classification_reason"] == "AI classified the company as a competitor."
+    assert ctx.metrics["company_classification_ai_used"] == 1
 
 def test_company_classification_service_uses_jobs_text_for_rules_without_llm():
     ctx = RunContext.create(
@@ -422,12 +440,17 @@ def test_company_classification_service_detects_end_client_when_product_evidence
     assert result[0]["classification_provider"] == "rules"
     assert result[0]["classification_confidence_ai"] >= 0.72
 
-def test_company_classification_service_uses_rule_override_for_strong_end_client_even_with_llm_available():
+def test_company_classification_service_uses_ai_primary_even_for_strong_end_client_rule_match():
     class DummyRegistry:
         def get_client(self, name):
             class DummyOpenAIClient:
                 def classify_company(self, company_payload):
-                    raise AssertionError("OpenAI no debería ejecutarse para end_client con evidencia fuerte por reglas")
+                    return {
+                        "classification": "end_client",
+                        "confidence": 0.89,
+                        "provider": "openai",
+                        "reason": "AI classified the company as an end client.",
+                    }
             return DummyOpenAIClient()
 
     class DummyProviderControlService:
@@ -440,6 +463,7 @@ def test_company_classification_service_uses_rule_override_for_strong_end_client
     )
     control = DummyProviderControlService()
     service = CompanyClassificationService(ctx, control)
+    service.provider_execution_service = DummyProviderExecutionService()
 
     companies = [
         {
@@ -462,9 +486,10 @@ def test_company_classification_service_uses_rule_override_for_strong_end_client
 
     assert len(result) == 1
     assert result[0]["company_type_ai"] == "end_client"
-    assert result[0]["classification_provider"] == "rules"
+    assert result[0]["classification_provider"] == "openai"
     assert result[0]["classification_confidence_ai"] >= 0.72
-    assert ctx.metrics["company_classification_rule_override_end_client"] == 1
+    assert result[0]["classification_reason"] == "AI classified the company as an end client."
+    assert ctx.metrics["company_classification_ai_used"] == 1
 
 
 def test_company_classification_service_skips_llm_for_low_evidence_unknown_when_rules_are_enough():
@@ -558,3 +583,30 @@ def test_company_classification_service_does_not_force_end_client_override_when_
     assert result[0]["company_type_ai"] == "unknown"
     assert ctx.metrics.get("company_classification_rule_override_end_client", 0) == 0
 
+
+
+def test_company_classification_service_detects_softtek_as_competitor_without_llm():
+    ctx = RunContext.create(
+        config={"providers": {"limits": {"openai": 5}}},
+        flags={"no_llm": True},
+    )
+    control = ProviderControlService(ctx)
+    control.initialize()
+
+    service = CompanyClassificationService(ctx, control)
+
+    result = service.classify_companies(
+        [
+            {
+                "company": "Softtek",
+                "company_display": "Softtek",
+                "company_description": "Digital transformation services company.",
+                "industry": "Information Technology and Services",
+                "resolved_domain": "softtek.com",
+            }
+        ]
+    )
+
+    assert result[0]["company_type_ai"] == "competitor"
+    assert result[0]["classification_provider"] == "rules"
+    assert result[0]["classification_confidence_ai"] >= 0.9
