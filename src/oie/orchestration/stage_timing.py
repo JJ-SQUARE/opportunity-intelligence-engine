@@ -1,0 +1,11 @@
+from __future__ import annotations
+
+import time
+
+
+def start_timer() -> float:
+    return time.perf_counter()
+
+
+def elapsed_seconds(start_time: float) -> float:
+    return round(time.perf_counter() - start_time, 6)

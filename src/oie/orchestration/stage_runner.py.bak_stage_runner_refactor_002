@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+import json
+import time
+from typing import Any, Dict, Type
+
+from oie.orchestration.run_manifest import update_stage_status
+from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index
+from oie.orchestration.stage_base import Stage
+
+
+class StageRunner:
+    def __init__(self, ctx: Any) -> None:
+        self.ctx = ctx
+
+    def initial_checkpoint(self, stage: Stage, status: str = "running") -> Dict[str, Any]:
+        return build_initial_checkpoint(self.ctx, stage, status)
+
+    def write_checkpoint(self, stage: Stage, checkpoint: Dict[str, Any]) -> None:
+        paths = stage.artifact_paths()
+        paths["stage_dir"].mkdir(parents=True, exist_ok=True)
+        paths["checkpoint"].write_text(
+            json.dumps(checkpoint, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def write_metrics(self, stage: Stage, checkpoint: Dict[str, Any]) -> None:
+        paths = stage.artifact_paths()
+        metrics = {
+            "run_id": checkpoint["run_id"],
+            "stage": checkpoint["stage"],
+            "status": checkpoint["status"],
+            "input_count": checkpoint["input_count"],
+            "processed_count": checkpoint["processed_count"],
+            "output_count": checkpoint["output_count"],
+            "rejected_count": checkpoint["rejected_count"],
+            "error_count": len(checkpoint["errors"]),
+            "provider_usage": checkpoint["provider_usage"],
+            "cost_estimate": checkpoint["cost_estimate"],
+            "processing_time_seconds": checkpoint["processing_time_seconds"],
+        }
+        paths["metrics"].write_text(
+            json.dumps(metrics, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def append_output(self, stage: Stage, item: Dict[str, Any]) -> None:
+        paths = stage.artifact_paths()
+        paths["stage_dir"].mkdir(parents=True, exist_ok=True)
+        with paths["output"].open("a", encoding="utf-8") as output_file:
+            output_file.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+    def read_output(self, stage: Stage) -> list[Dict[str, Any]]:
+        paths = stage.artifact_paths()
+        if not paths["output"].exists():
+            return []
+        return [
+            json.loads(line)
+            for line in paths["output"].read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+    def read_checkpoint(self, stage: Stage) -> Dict[str, Any] | None:
+        paths = stage.artifact_paths()
+        if not paths["checkpoint"].exists():
+            return None
+        return json.loads(paths["checkpoint"].read_text(encoding="utf-8"))
+
+    def run_stage(self, stage_cls: Type[Stage]) -> Dict[str, Any]:
+        stage = stage_cls(self.ctx)
+        stage.ensure_stage_dir()
+        update_stage_status(self.ctx, stage.name, "running")
+        checkpoint = self.initial_checkpoint(stage)
+        previous_checkpoint = self.read_checkpoint(stage)
+        checkpoint = merge_previous_checkpoint(checkpoint, previous_checkpoint)
+        inputs = list(stage.load_input())
+        checkpoint["input_count"] = len(inputs)
+        start_index = next_start_index(checkpoint)
+        self.write_checkpoint(stage, checkpoint)
+        start_time = time.perf_counter()
+
+        try:
+            for index, item in enumerate(inputs[start_index:], start=start_index):
+                output_item = stage.process_item(item)
+                self.append_output(stage, output_item)
+                checkpoint["processed_count"] += 1
+                checkpoint["output_count"] += 1
+                checkpoint["last_processed_index"] = index
+                checkpoint["last_processed_id"] = output_item.get("id")
+                self.write_checkpoint(stage, checkpoint)
+        except Exception as exc:
+            failure_status = "partial_success" if checkpoint["processed_count"] > 0 else "failed"
+            checkpoint["status"] = failure_status
+            checkpoint["errors"].append(
+                {
+                    "error_type": exc.__class__.__name__,
+                    "error_message": str(exc),
+                }
+            )
+            checkpoint["processing_time_seconds"] = round(time.perf_counter() - start_time, 6)
+            self.write_checkpoint(stage, checkpoint)
+            self.write_metrics(stage, checkpoint)
+            update_stage_status(self.ctx, stage.name, failure_status)
+            raise
+
+        checkpoint["status"] = "completed"
+        checkpoint["processing_time_seconds"] = round(time.perf_counter() - start_time, 6)
+        self.write_checkpoint(stage, checkpoint)
+        self.write_metrics(stage, checkpoint)
+        update_stage_status(self.ctx, stage.name, "completed")
+        return checkpoint

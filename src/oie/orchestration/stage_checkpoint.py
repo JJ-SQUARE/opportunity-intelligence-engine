@@ -1,0 +1,60 @@
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from oie.orchestration.stage_base import Stage
+from oie.orchestration.stage_errors import build_error_record
+from oie.orchestration.stage_status import failure_status_for_checkpoint
+from oie.orchestration.stage_timing import elapsed_seconds
+
+
+def build_initial_checkpoint(ctx: Any, stage: Stage, status: str = "running") -> Dict[str, Any]:
+    return {
+        "run_id": ctx.run_id,
+        "stage": stage.name,
+        "status": status,
+        "input_count": 0,
+        "processed_count": 0,
+        "output_count": 0,
+        "rejected_count": 0,
+        "last_processed_index": None,
+        "last_processed_id": None,
+        "errors": [],
+        "provider_usage": {},
+        "cost_estimate": {},
+        "processing_time_seconds": 0.0,
+    }
+
+
+def merge_previous_checkpoint(checkpoint: Dict[str, Any], previous_checkpoint: Dict[str, Any] | None) -> Dict[str, Any]:
+    if previous_checkpoint:
+        checkpoint.update(previous_checkpoint)
+        checkpoint["status"] = "running"
+        checkpoint["errors"] = []
+    return checkpoint
+
+
+def next_start_index(checkpoint: Dict[str, Any]) -> int:
+    if checkpoint.get("last_processed_index") is None:
+        return 0
+    return int(checkpoint["last_processed_index"]) + 1
+
+
+def record_processed_item(checkpoint: Dict[str, Any], index: int, output_item: Dict[str, Any]) -> None:
+    checkpoint["processed_count"] += 1
+    checkpoint["output_count"] += 1
+    checkpoint["last_processed_index"] = index
+    checkpoint["last_processed_id"] = output_item.get("id")
+
+
+def record_stage_failure(checkpoint: Dict[str, Any], exc: Exception, start_time: float) -> str:
+    failure_status = failure_status_for_checkpoint(checkpoint)
+    checkpoint["status"] = failure_status
+    checkpoint["errors"].append(build_error_record(exc))
+    checkpoint["processing_time_seconds"] = elapsed_seconds(start_time)
+    return failure_status
+
+
+def record_stage_completion(checkpoint: Dict[str, Any], start_time: float) -> None:
+    checkpoint["status"] = "completed"
+    checkpoint["processing_time_seconds"] = elapsed_seconds(start_time)

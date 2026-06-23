@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
+import time
 from typing import Any, Dict, Type
 
 from oie.orchestration.run_manifest import update_stage_status
-from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, record_processed_item, record_stage_completion, record_stage_failure
+from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index
 from oie.orchestration.stage_metrics import build_stage_metrics
-from oie.orchestration.stage_io import append_jsonl_item, read_json_file, read_jsonl_file, write_json_file
 from oie.orchestration.stage_base import Stage
 
 
@@ -19,25 +20,40 @@ class StageRunner:
     def write_checkpoint(self, stage: Stage, checkpoint: Dict[str, Any]) -> None:
         paths = stage.artifact_paths()
         paths["stage_dir"].mkdir(parents=True, exist_ok=True)
-        write_json_file(paths["checkpoint"], checkpoint)
+        paths["checkpoint"].write_text(
+            json.dumps(checkpoint, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
     def write_metrics(self, stage: Stage, checkpoint: Dict[str, Any]) -> None:
         paths = stage.artifact_paths()
         metrics = build_stage_metrics(checkpoint)
-        write_json_file(paths["metrics"], metrics)
+        paths["metrics"].write_text(
+            json.dumps(metrics, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
     def append_output(self, stage: Stage, item: Dict[str, Any]) -> None:
         paths = stage.artifact_paths()
         paths["stage_dir"].mkdir(parents=True, exist_ok=True)
-        append_jsonl_item(paths["output"], item)
+        with paths["output"].open("a", encoding="utf-8") as output_file:
+            output_file.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     def read_output(self, stage: Stage) -> list[Dict[str, Any]]:
         paths = stage.artifact_paths()
-        return read_jsonl_file(paths["output"])
+        if not paths["output"].exists():
+            return []
+        return [
+            json.loads(line)
+            for line in paths["output"].read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
 
     def read_checkpoint(self, stage: Stage) -> Dict[str, Any] | None:
         paths = stage.artifact_paths()
-        return read_json_file(paths["checkpoint"])
+        if not paths["checkpoint"].exists():
+            return None
+        return json.loads(paths["checkpoint"].read_text(encoding="utf-8"))
 
     def run_stage(self, stage_cls: Type[Stage]) -> Dict[str, Any]:
         stage = stage_cls(self.ctx)
@@ -50,22 +66,34 @@ class StageRunner:
         checkpoint["input_count"] = len(inputs)
         start_index = next_start_index(checkpoint)
         self.write_checkpoint(stage, checkpoint)
-        start_time = __import__("time").perf_counter()
+        start_time = time.perf_counter()
 
         try:
             for index, item in enumerate(inputs[start_index:], start=start_index):
                 output_item = stage.process_item(item)
                 self.append_output(stage, output_item)
-                record_processed_item(checkpoint, index, output_item)
+                checkpoint["processed_count"] += 1
+                checkpoint["output_count"] += 1
+                checkpoint["last_processed_index"] = index
+                checkpoint["last_processed_id"] = output_item.get("id")
                 self.write_checkpoint(stage, checkpoint)
         except Exception as exc:
-            failure_status = record_stage_failure(checkpoint, exc, start_time)
+            failure_status = "partial_success" if checkpoint["processed_count"] > 0 else "failed"
+            checkpoint["status"] = failure_status
+            checkpoint["errors"].append(
+                {
+                    "error_type": exc.__class__.__name__,
+                    "error_message": str(exc),
+                }
+            )
+            checkpoint["processing_time_seconds"] = round(time.perf_counter() - start_time, 6)
             self.write_checkpoint(stage, checkpoint)
             self.write_metrics(stage, checkpoint)
             update_stage_status(self.ctx, stage.name, failure_status)
             raise
 
-        record_stage_completion(checkpoint, start_time)
+        checkpoint["status"] = "completed"
+        checkpoint["processing_time_seconds"] = round(time.perf_counter() - start_time, 6)
         self.write_checkpoint(stage, checkpoint)
         self.write_metrics(stage, checkpoint)
         update_stage_status(self.ctx, stage.name, "completed")
