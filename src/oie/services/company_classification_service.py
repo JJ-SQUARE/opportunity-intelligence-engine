@@ -120,7 +120,6 @@ PLACEHOLDER_COMPANY_PATTERNS = (
 CLASSIFICATION_ALIASES = {
     "outsourcing": "consulting",
     "staffing_agency": "staffing",
-    "product_company": "end_client",
 }
 
 

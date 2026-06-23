@@ -12,6 +12,7 @@ from oie.orchestration.run_context import RunContext
 
 CLASSIFICATION_WEIGHTS = {
     "end_client": 20,
+    "product_company": 20,
     "consulting": -20,
     "staffing": -25,
     "marketplace": -12,
@@ -143,7 +144,6 @@ COMPETITOR_HINTS = {
 }
 
 CLASSIFICATION_ALIASES = {
-    "product_company": "end_client",
     "staffing_agency": "staffing",
     "outsourcing": "consulting",
 }
@@ -213,7 +213,7 @@ class OpportunityScoringService:
         # porque el score puede depender de openings / mix / contexto comercial
         # aunque todavía no haya enrichment completo.
         company_type = self._normalized_company_type(company.get("company_type_ai") or "")
-        if company_type == "end_client":
+        if company_type in {"end_client", "product_company"}:
             return any(
                 [
                     str(company.get("company_display") or company.get("company") or "").strip(),
@@ -253,7 +253,7 @@ class OpportunityScoringService:
         has_priority_industry = priority_hits >= 1
         has_stack_or_seniority = stack_hits >= 1 or senior_hits >= 1
         has_strong_openings_signal = total_openings >= 2 and (stack_hits >= 1 or senior_hits >= 1)
-        is_confident_end_client = company_type == "end_client" and classification_confidence >= 0.7
+        is_confident_end_client = company_type in {"end_client", "product_company"} and classification_confidence >= 0.7
 
         if has_priority_industry and has_stack_or_seniority:
             return True
@@ -299,7 +299,7 @@ class OpportunityScoringService:
         if secondary_hits > 0:
             return 16
 
-        return 6 if company_type == "end_client" and text else 0
+        return 6 if company_type in {"end_client", "product_company"} and text else 0
 
     def _region_fit_score(self, company: Dict[str, Any], text: str) -> int:
         hits = self._count_term_hits(text, PRIORITY_REGION_TERMS)

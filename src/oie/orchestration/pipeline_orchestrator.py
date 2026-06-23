@@ -368,12 +368,44 @@ class PipelineOrchestrator:
         self.ctx.metrics["benchmark_competitors_skipped_for_leads"] = skipped
         return filtered
 
+    def _apply_ai_company_gate(
+        self,
+        companies: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        advanced: List[Dict[str, Any]] = []
+        rejected = 0
+        hard_reject_types = {"job_board", "marketplace", "staffing", "staffing_agency", "confidential", "noise", "generic"}
+
+        for company in companies:
+            record = dict(company)
+            gate_type = str(record.get("ai_company_gate_company_type") or "").strip().lower()
+            gate_relevance = str(record.get("ai_company_gate_relevance") or "").strip().lower()
+            should_advance = record.get("ai_company_gate_should_advance")
+
+            hard_reject = gate_type in hard_reject_types
+            soft_reject = should_advance is False and gate_relevance not in {"medium", "high"}
+
+            if hard_reject or soft_reject:
+                rejected += 1
+                record["company_identity_ai_discarded"] = True
+                self.ctx.metrics[f"companies_rejected_by_ai_{gate_type or 'unknown'}"] = (
+                    int(self.ctx.metrics.get(f"companies_rejected_by_ai_{gate_type or 'unknown'}", 0) or 0) + 1
+                )
+                continue
+
+            advanced.append(record)
+
+        self.ctx.metrics["companies_rejected_by_ai"] = rejected
+        self.ctx.metrics["companies_advanced_by_ai"] = len(advanced)
+        return advanced
+
     def run_company_pipeline(self) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         jobs = self.run_initial_stages()
         unique_jobs, duplicate_jobs = self.master_dedup_service.dedupe_jobs_against_master(jobs)
 
         companies = self.hiring_signals_service.aggregate_by_company(unique_jobs)
         actionable_companies, benchmark_companies = self._split_benchmark_competitors(companies)
+        actionable_companies = self._apply_ai_company_gate(actionable_companies)
 
         actionable_companies = self.company_identity_ai_service.enrich_companies(actionable_companies)
         actionable_companies = self.domain_resolution_service.resolve_domains(actionable_companies)

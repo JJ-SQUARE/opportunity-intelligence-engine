@@ -26,7 +26,10 @@ COMMERCIAL_PIPELINE_FIELDS = [
     "domain_candidate",
     "domain_validation_status",
     "domain_review_required",
+    "domain_ai_validated",
     "domain_ai_decision",
+    "domain_ai_confidence",
+    "domain_ai_reason",
     "company_type_ai",
     "classification_confidence_ai",
     "industry",
@@ -83,6 +86,13 @@ COMMERCIAL_PIPELINE_FIELDS = [
     "commercial_priority_score",
     "icp_bucket",
     "reachability_ready",
+    "real_reachability_ready",
+    "soft_reachability_ready",
+    "commercially_actionable",
+    "company_domain_usable",
+    "commercial_domain_usable",
+    "contact_channel_ready",
+    "company_channel_ready",
 ]
 
 
@@ -328,6 +338,9 @@ class OutboundExportService:
     def _normalize_hubspot_source_tag(self) -> str:
         return str(self._hubspot_config().get("source_tag") or "OIE").strip() or "OIE"
 
+    def _hubspot_custom_properties_enabled(self) -> bool:
+        return bool(self._hubspot_config().get("custom_properties_enabled", False))
+
     def _run_timestamp_label(self) -> str:
         raw = str(self.ctx.run_date or "").strip()
         if not raw:
@@ -368,15 +381,83 @@ class OutboundExportService:
         normalized = re.sub(r"_+", "_", normalized).strip("_")
 
         aliases = {
+            "DEFENSE_AND_SPACE": "DEFENSE_SPACE",
+            "DEFENSE_AEROSPACE": "DEFENSE_SPACE",
+            "AEROSPACE_DEFENSE": "DEFENSE_SPACE",
+            "AVIATION_AND_AEROSPACE": "AVIATION_AEROSPACE",
             "IT_SERVICES": "INFORMATION_TECHNOLOGY_AND_SERVICES",
             "INFORMATION_TECHNOLOGY": "INFORMATION_TECHNOLOGY_AND_SERVICES",
+            "INFORMATION_TECHNOLOGY_SERVICES": "INFORMATION_TECHNOLOGY_AND_SERVICES",
+            "TECHNOLOGY": "INFORMATION_TECHNOLOGY_AND_SERVICES",
+            "TECH": "INFORMATION_TECHNOLOGY_AND_SERVICES",
             "SOFTWARE": "COMPUTER_SOFTWARE",
-            "STAFFING": "STAFFING_AND_RECRUITING",
-            "STAFFING_RECRUITING": "STAFFING_AND_RECRUITING",
+            "SAAS": "COMPUTER_SOFTWARE",
+            "FINTECH": "FINANCIAL_SERVICES",
+            "BANKING_AND_FINANCIAL_SERVICES": "FINANCIAL_SERVICES",
+            "BFSI": "FINANCIAL_SERVICES",
+            "HEALTHCARE": "HOSPITAL_HEALTH_CARE",
+            "HEALTH_CARE": "HOSPITAL_HEALTH_CARE",
+            "HEALTH_TECH": "HOSPITAL_HEALTH_CARE",
+            "HEALTHTECH": "HOSPITAL_HEALTH_CARE",
+            "LOGISTICS": "LOGISTICS_AND_SUPPLY_CHAIN",
+            "SUPPLY_CHAIN": "LOGISTICS_AND_SUPPLY_CHAIN",
+            "LOGISTICS_SUPPLY_CHAIN": "LOGISTICS_AND_SUPPLY_CHAIN",
+            "TRANSPORTATION": "LOGISTICS_AND_SUPPLY_CHAIN",
+            "E_COMMERCE": "INTERNET",
+            "ECOMMERCE": "INTERNET",
+            "EDTECH": "E_LEARNING",
+            "EDUCATION_TECHNOLOGY": "E_LEARNING",
+            "STAFFING": "HUMAN_RESOURCES",
+            "STAFFING_RECRUITING": "HUMAN_RESOURCES",
+            "STAFFING_AND_RECRUITING": "HUMAN_RESOURCES",
+            "RECRUITING": "HUMAN_RESOURCES",
+            "HUMAN_RESOURCES_SERVICES": "HUMAN_RESOURCES",
             "COMPUTER_AND_NETWORK_SECURITY": "COMPUTER_NETWORK_SECURITY",
-            "COMPUTER_NETWORK_SECURITY": "COMPUTER_NETWORK_SECURITY",
         }
-        return aliases.get(normalized, normalized)
+
+        allowed = {
+            "ACCOUNTING", "AIRLINES_AVIATION", "ALTERNATIVE_DISPUTE_RESOLUTION",
+            "ALTERNATIVE_MEDICINE", "ANIMATION", "APPAREL_FASHION",
+            "ARCHITECTURE_PLANNING", "ARTS_AND_CRAFTS", "AUTOMOTIVE",
+            "AVIATION_AEROSPACE", "BANKING", "BIOTECHNOLOGY",
+            "BROADCAST_MEDIA", "BUILDING_MATERIALS",
+            "BUSINESS_SUPPLIES_AND_EQUIPMENT", "CAPITAL_MARKETS", "CHEMICALS",
+            "CIVIC_SOCIAL_ORGANIZATION", "CIVIL_ENGINEERING",
+            "COMMERCIAL_REAL_ESTATE", "COMPUTER_NETWORK_SECURITY",
+            "COMPUTER_GAMES", "COMPUTER_HARDWARE", "COMPUTER_NETWORKING",
+            "COMPUTER_SOFTWARE", "INTERNET", "CONSTRUCTION",
+            "CONSUMER_ELECTRONICS", "CONSUMER_GOODS", "CONSUMER_SERVICES",
+            "COSMETICS", "DAIRY", "DEFENSE_SPACE", "DESIGN",
+            "EDUCATION_MANAGEMENT", "E_LEARNING",
+            "ELECTRICAL_ELECTRONIC_MANUFACTURING", "ENTERTAINMENT",
+            "ENVIRONMENTAL_SERVICES", "EVENTS_SERVICES", "EXECUTIVE_OFFICE",
+            "FACILITIES_SERVICES", "FARMING", "FINANCIAL_SERVICES",
+            "FINE_ART", "FISHERY", "FOOD_BEVERAGES", "FOOD_PRODUCTION",
+            "FUND_RAISING", "FURNITURE", "GAMBLING_CASINOS",
+            "GLASS_CERAMICS_CONCRETE", "GOVERNMENT_ADMINISTRATION",
+            "GOVERNMENT_RELATIONS", "GRAPHIC_DESIGN",
+            "HEALTH_WELLNESS_AND_FITNESS", "HIGHER_EDUCATION",
+            "HOSPITAL_HEALTH_CARE", "HOSPITALITY", "HUMAN_RESOURCES",
+            "IMPORT_AND_EXPORT", "INDIVIDUAL_FAMILY_SERVICES",
+            "INDUSTRIAL_AUTOMATION", "INFORMATION_SERVICES",
+            "INFORMATION_TECHNOLOGY_AND_SERVICES", "INSURANCE",
+            "INTERNATIONAL_AFFAIRS", "INTERNATIONAL_TRADE_AND_DEVELOPMENT",
+            "INVESTMENT_BANKING", "INVESTMENT_MANAGEMENT", "JUDICIARY",
+            "LAW_ENFORCEMENT", "LAW_PRACTICE", "LEGAL_SERVICES",
+            "LEGISLATIVE_OFFICE", "LEISURE_TRAVEL_TOURISM", "LIBRARIES",
+            "LOGISTICS_AND_SUPPLY_CHAIN", "LUXURY_GOODS_JEWELRY",
+            "MACHINERY", "MANAGEMENT_CONSULTING", "MARITIME",
+            "MARKET_RESEARCH", "MARKETING_AND_ADVERTISING",
+            "MECHANICAL_OR_INDUSTRIAL_ENGINEERING", "MEDIA_PRODUCTION",
+            "MEDICAL_DEVICES", "MEDICAL_PRACTICE", "MENTAL_HEALTH_CARE",
+            "MILITARY", "MINING_METALS", "MOTION_PICTURES_AND_FILM",
+            "MUSEUMS_AND_INSTITUTIONS", "MUSIC", "NANOTECHNOLOGY",
+            "NEWSPAPERS", "NON_PROFIT_ORGANIZATION_MANAGEMENT",
+            "OIL_ENERGY",
+        }
+
+        mapped = aliases.get(normalized, normalized)
+        return mapped if mapped in allowed else ""
 
     def _hubspot_company_description(self, row: Dict[str, Any]) -> str:
         lines = [
@@ -530,6 +611,16 @@ class OutboundExportService:
                 "type": "PROSPECT",
                 "description": self._hubspot_safe_text(self._hubspot_company_description(row), 5000),
             }
+            if self._hubspot_custom_properties_enabled():
+                properties.update(
+                    {
+                        "company_type_ai": self._hubspot_safe_text(row.get("company_type_ai")),
+                        "commercial_relevance": self._hubspot_safe_text(row.get("commercial_bucket")),
+                        "ai_confidence": self._hubspot_safe_text(row.get("classification_confidence_ai")),
+                        "reachability_status": self._hubspot_safe_text(row.get("outreach_status")),
+                        "pain_signals": self._hubspot_safe_text(row.get("opportunity_score_reason"), 1000),
+                    }
+                )
 
             industry = self._map_hubspot_industry(row.get("industry"))
             if industry:
@@ -592,6 +683,14 @@ class OutboundExportService:
                     "company": company_name,
                     "lifecyclestage": "opportunity",
                 }
+                if self._hubspot_custom_properties_enabled():
+                    properties.update(
+                        {
+                            "buyer_persona_type": self._hubspot_safe_text(contact.get("target_persona") or contact.get("lead_role_type")),
+                            "lead_quality_score": self._hubspot_safe_text(contact.get("lead_relevance_score")),
+                            "reachability_status": "ready_email",
+                        }
+                    )
                 if owner_id and owner_id.isdigit():
                     properties["hubspot_owner_id"] = owner_id
 

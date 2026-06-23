@@ -69,6 +69,11 @@ class HiringSignalsService:
                     "description": None,
                     "description_source": None,
                     "source_meta": {},
+                    "ai_company_gate_company_type": None,
+                    "ai_company_gate_relevance": None,
+                    "ai_company_gate_should_advance": True,
+                    "ai_company_gate_reason": None,
+                    "ai_company_gate_domain_guess": None,
                 }
 
             grouped[company]["jobs"].append(job)
@@ -111,6 +116,16 @@ class HiringSignalsService:
 
             if not grouped[company]["source_meta"] and job.get("source_meta"):
                 grouped[company]["source_meta"] = job.get("source_meta") or {}
+
+            if job.get("ai_company_gate_company_type") and not grouped[company]["ai_company_gate_company_type"]:
+                grouped[company]["ai_company_gate_company_type"] = job.get("ai_company_gate_company_type")
+            if job.get("ai_company_gate_relevance") and not grouped[company]["ai_company_gate_relevance"]:
+                grouped[company]["ai_company_gate_relevance"] = job.get("ai_company_gate_relevance")
+            if job.get("ai_company_gate_domain_guess") and not grouped[company]["ai_company_gate_domain_guess"]:
+                grouped[company]["ai_company_gate_domain_guess"] = job.get("ai_company_gate_domain_guess")
+            if job.get("ai_company_gate_should_advance") is False:
+                grouped[company]["ai_company_gate_should_advance"] = False
+                grouped[company]["ai_company_gate_reason"] = job.get("ai_company_gate_reason")
 
         companies = []
         for company_data in grouped.values():

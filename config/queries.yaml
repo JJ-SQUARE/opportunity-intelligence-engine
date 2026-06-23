@@ -19,6 +19,15 @@ sources:
     location_mode: "matrix"
     locations:
       - "Mexico"
+      - "United States"
+      - "Peru"
+      - "Colombia"
+      - "Ecuador"
+      - "Chile"
+      - "Argentina"
+      - "Canada"
+      - "Panama"
+      - "Guatemala"
     num_pages: 2
     sleep_s: 1.0
 
@@ -74,31 +83,58 @@ llm:
 
 job_intelligence:
   enabled: true
-  max_jobs_to_analyze: 30
+  max_jobs_to_analyze: 650
 
 queries:
-  - name: "Focused Fullstack ES"
-    q: "desarrollador full stack remoto"
-
-  - name: "Focused Backend ES"
-    q: "desarrollador backend remoto"
-
-  - name: "Focused Python ES"
-    q: "desarrollador python remoto"
-
-  - name: "Focused QA ES"
-    q: "qa automation remoto"
-
-  - name: "Focused Software Engineer EN"
-    q: "software engineer remote latam"
-
-  - name: "Focused Backend Engineer EN"
-    q: "backend engineer remote latam"
+  - name: "Software Engineer Remote"
+    q: "software engineer remote"
+  - name: "Software Developer Remote"
+    q: "software developer remote"
+  - name: "Backend Engineer Remote"
+    q: "backend engineer remote"
+  - name: "Frontend Developer Remote"
+    q: "frontend developer remote"
+  - name: "Fullstack Engineer Remote"
+    q: "full stack engineer remote"
+  - name: "Developer Hiring Remote"
+    q: "developer hiring remote"
+  - name: "Engineer Hiring Remote"
+    q: "engineer hiring remote"
+  - name: "Tech Lead Hiring Remote"
+    q: "tech lead hiring remote"
+  - name: "React Remote"
+    q: "React remote"
+  - name: "Angular Remote"
+    q: "Angular remote"
+  - name: "Node.js Remote"
+    q: "Node.js remote"
+  - name: ".NET Remote"
+    q: ".NET remote"
+  - name: "API Remote"
+    q: "API remote"
+  - name: "Microservices Remote"
+    q: "microservices remote"
+  - name: "Cloud Remote"
+    q: "cloud remote"
+  - name: "SaaS Remote"
+    q: "SaaS remote"
+  - name: "Cloud Backend .NET Remote"
+    q: "Azure remote"
+  - name: "Cloud engineer Remote"
+    q: "AWS remote"
 
 domain_resolution:
   enabled: true
   mode: "serpapi"
-  top_n: 25
+  top_n: 150
+  serpapi_fallback_limit: 120
+  domain_ai_enabled: true
+  domain_ai_validation_limit: 120
+  domain_ai_max_calls_per_run: 120
+  domain_ai_max_candidates: 5
+  domain_ai_min_candidate_score: 0.10
+  ai_min_score_for_review: 0.10
+  ai_max_score_for_review: 0.95
 
 sales_intel:
   enabled: true
@@ -145,46 +181,52 @@ providers:
       base_url: "https://api.hubapi.com"
 
   limits:
-    serpapi: 60
-    apollo: 40
-    hunter: 20
-    openai: 120
+    serpapi: 120
+    apollo: 80
+    hunter: 60
+    openai: 2500
     hubspot: 120
 
   operation_limits:
     openai:
-      analyze_job_intelligence: 30
-      resolve_company_identity: 20
-      validate_company_enrichment: 10
-      generate_buyer_personas: 10
-      classify_company: 20
-      domain_ai_validation: 30
-      score_company: 20
-      score_company_opportunity: 20
-      score_opportunity: 20
-      score_lead: 10
+      analyze_job_intelligence: 650
+      resolve_company_identity: 500
+      validate_company_enrichment: 150
+      generate_buyer_personas: 150
+      classify_company: 500
+      domain_ai_validation: 250
+      score_company: 500
+      score_company_opportunity: 500
+      score_opportunity: 500
+      score_lead: 200
     serpapi:
-      search_google: 60
+      search_google: 120
     apollo:
-      enrich_company_by_domain: 40
-      search_people_by_domain_and_titles: 40
+      enrich_company_by_domain: 80
+      search_people_by_domain_and_titles: 80
     hunter:
-      search_domain_contacts: 20
+      search_domain_contacts: 60
     hubspot:
-      create_company: 40
-      create_contact: 80
-      create_task: 80
-      create_note: 80
+      search_company_by_domain: 120
+      search_contact_by_email: 120
+      search_task_by_subject: 120
+      create_company: 120
+      create_contact: 120
+      create_task: 120
+      create_note: 120
+      associate_contact_company: 120
+      associate_task_company: 120
+      associate_note_company: 120
 
 enrichment:
   apollo_company_ttl_days: 30
-  max_companies_per_run: 50
+  max_companies_per_run: 100
   min_opportunity_score: 10
   require_accepted_domain: true
-  allowed_company_types: ["end_client", "unknown", ""]
+  allowed_company_types: ["end_client", "product_company", "unknown", ""]
 
 lead_generation:
-  max_companies_per_run: 50
+  max_companies_per_run: 100
   min_opportunity_score: 10
   require_accepted_domain: true
   enable_stub_leads: false
@@ -197,6 +239,7 @@ hubspot:
   enabled: true
   push_enabled: true
   pause_before_push: false
+  custom_properties_enabled: false
   owner_id: "${HUBSPOT_USER_ID}"
   target_account: "${HUBSPOT_COMPANY_ID}"
   source_tag: "OIE"

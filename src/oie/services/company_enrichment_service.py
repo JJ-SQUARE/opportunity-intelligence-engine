@@ -31,7 +31,6 @@ PLACEHOLDER_COMPANY_VALUES = {
 
 
 COMPANY_TYPE_ALIASES = {
-    "product_company": "end_client",
     "staffing_agency": "staffing",
     "outsourcing": "consulting",
 }
@@ -187,10 +186,10 @@ class CompanyEnrichmentService:
         classification_confidence = float(company.get("classification_confidence_ai") or 0.0)
         opportunity_score = float(company.get("opportunity_score") or 0.0)
 
-        if validation_status != "accepted":
+        if validation_status not in {"accepted", "accepted_ai_validated"}:
             return False
 
-        if company_type != "end_client":
+        if company_type not in {"end_client", "product_company"}:
             return False
 
         if classification_confidence < 0.90:
@@ -259,7 +258,7 @@ class CompanyEnrichmentService:
         if self._is_suspicious_domain_for_enrichment(domain):
             return False
 
-        if self.require_accepted_domain and validation_status and validation_status != "accepted":
+        if self.require_accepted_domain and validation_status and validation_status not in {"accepted", "accepted_ai_validated"}:
             return False
 
         if validation_status == "review":
@@ -287,8 +286,8 @@ class CompanyEnrichmentService:
         recently_enriched = self._is_recently_enriched(company.get("company_key") or "")
 
         return (
-            1 if validation_status == "accepted" else 0,
-            1 if company_type == "end_client" else 0,
+            1 if validation_status in {"accepted", "accepted_ai_validated"} else 0,
+            1 if company_type in {"end_client", "product_company"} else 0,
             0 if recently_enriched else 1,
             opportunity_score,
         )

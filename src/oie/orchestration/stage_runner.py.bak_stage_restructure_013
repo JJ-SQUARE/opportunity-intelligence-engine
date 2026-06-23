@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+import json
+from typing import Any, Dict, Type
+
+from oie.orchestration.stage_base import Stage
+
+
+class StageRunner:
+    def __init__(self, ctx: Any) -> None:
+        self.ctx = ctx
+
+    def initial_checkpoint(self, stage: Stage, status: str = "running") -> Dict[str, Any]:
+        return {
+            "run_id": self.ctx.run_id,
+            "stage": stage.name,
+            "status": status,
+            "input_count": 0,
+            "processed_count": 0,
+            "output_count": 0,
+            "rejected_count": 0,
+            "last_processed_index": None,
+            "last_processed_id": None,
+            "errors": [],
+        }
+
+    def write_checkpoint(self, stage: Stage, checkpoint: Dict[str, Any]) -> None:
+        paths = stage.artifact_paths()
+        paths["stage_dir"].mkdir(parents=True, exist_ok=True)
+        paths["checkpoint"].write_text(
+            json.dumps(checkpoint, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def run_stage(self, stage_cls: Type[Stage]) -> Dict[str, Any]:
+        stage = stage_cls(self.ctx)
+        stage.ensure_stage_dir()
+        checkpoint = self.initial_checkpoint(stage)
+        self.write_checkpoint(stage, checkpoint)
+        return checkpoint

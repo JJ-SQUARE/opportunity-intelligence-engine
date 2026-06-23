@@ -6,7 +6,6 @@ from typing import Any, Dict
 from uuid import uuid4
 
 from oie.models.provider_event import ProviderEventRecord
-from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 
 
 @dataclass
@@ -47,8 +46,6 @@ class RunContext:
         run_date = now.isoformat()
 
         db_path = config.get("database", {}).get("path", "data/oie.db")
-        runs_base_dir = config.get("runs", {}).get("path", "data/runs")
-        run_dir = f"{runs_base_dir}/{run_id}"
 
         return cls(
             run_id=run_id,
@@ -58,13 +55,6 @@ class RunContext:
             flags=flags,
             paths={
                 "db_path": db_path,
-                "runs_base_dir": runs_base_dir,
-                "run_dir": run_dir,
-                "manifest_path": f"{run_dir}/manifest.json",
-                "stage_dirs": {
-                    stage: f"{run_dir}/{index:02d}_{stage}"
-                    for index, stage in enumerate(PIPELINE_STAGES, start=1)
-                },
             },
         )
 

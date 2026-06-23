@@ -58,6 +58,14 @@ BLOCKED_DOMAINS = {
     "www.grabjobs.co",
     "jobleads.com",
     "www.jobleads.com",
+    "dailyremote.com",
+    "www.dailyremote.com",
+    "lensa.com",
+    "www.lensa.com",
+    "bebee.com",
+    "www.bebee.com",
+    "builtinchicago.org",
+    "www.builtinchicago.org",
     "oficinaempleo.com",
     "www.oficinaempleo.com",
     "quierolaburo.com",
@@ -296,6 +304,19 @@ class DomainResolutionService:
     def _build_direct_candidates(self, company: Dict[str, Any]) -> List[Dict[str, Any]]:
         candidates: List[Dict[str, Any]] = []
 
+        ai_domain_guess = self._extract_domain(company.get("ai_company_gate_domain_guess"))
+        if ai_domain_guess and not self._is_blocked_domain(ai_domain_guess):
+            candidates.append(
+                {
+                    "domain": ai_domain_guess,
+                    "source": "ai_company_gate_domain_guess",
+                    "serp_rank": None,
+                    "title": str(company.get("company_display") or company.get("company") or ""),
+                    "snippet": str(company.get("description") or ""),
+                    "is_aggregator": False,
+                }
+            )
+
         for source_field, url in [
             ("apply_url", company.get("apply_url")),
             ("url", company.get("url")),
@@ -375,7 +396,9 @@ class DomainResolutionService:
             return []
 
         queries = [
-            f"{company_name} official website",
+            f'"{company_name}" official website',
+            f'"{company_name}" company',
+            f'"{company_name}" linkedin company',
             f"{company_name} company official site",
         ]
 
@@ -515,17 +538,42 @@ class DomainResolutionService:
             }
 
         if blocked:
+            if (
+                not is_aggregator
+                and source == "serpapi_fallback"
+                and self.domain_ai_validation_service is not None
+                and self._can_attempt_domain_resolution(company_name)
+            ):
+                ai_result = self.domain_ai_validation_service.validate(company_name or "", [best])
+                if (
+                    ai_result.get("decision") == "accepted"
+                    and ai_result.get("selected_domain") == domain
+                ):
+                    return {
+                        "domain": domain,
+                        "source": source,
+                        "score": max(score, float(ai_result.get("confidence", score) or score)),
+                        "candidate": domain,
+                        "validation_status": "accepted_ai_validated",
+                        "review_required": False,
+                        "ai_validated": 1,
+                        "ai_decision": ai_result.get("decision"),
+                        "ai_confidence": ai_result.get("confidence"),
+                        "ai_reason": ai_result.get("reason"),
+                    }
+
+            rejected_status = "rejected_aggregator" if is_aggregator else "rejected_low_confidence"
             return {
                 "domain": None,
                 "source": source,
                 "score": 0.0,
                 "candidate": domain,
-                "validation_status": "rejected",
+                "validation_status": rejected_status,
                 "review_required": False,
                 "ai_validated": 0,
                 "ai_decision": None,
                 "ai_confidence": None,
-                "ai_reason": None,
+                "ai_reason": "aggregator_or_job_board_domain" if is_aggregator else None,
             }
 
         ai_validated = 0
@@ -552,12 +600,12 @@ class DomainResolutionService:
                 ai_result.get("decision") == "accepted"
                 and ai_result.get("selected_domain") == domain
             ):
-                validation_status = "accepted"
+                validation_status = "accepted_ai_validated"
                 review_required = False
                 score = max(score, float(ai_result.get("confidence", score)))
 
         return {
-            "domain": domain if validation_status == "accepted" else None,
+            "domain": domain if validation_status in {"accepted", "accepted_ai_validated"} else None,
             "source": source,
             "score": score,
             "candidate": domain,
@@ -582,7 +630,7 @@ class DomainResolutionService:
         best_direct = self._evaluate_best_candidate(company_name, direct_candidates)
 
         # Si el directo ya quedó aceptado con dominio válido, lo usamos.
-        if best_direct["validation_status"] == "accepted":
+        if best_direct["validation_status"] in {"accepted", "accepted_ai_validated"}:
             return best_direct
 
         # Si el directo es review (por ejemplo, apply_url de agregador),
@@ -590,7 +638,7 @@ class DomainResolutionService:
         serp_candidates = self._resolve_domain_via_serpapi(company_name)
         best_serp = self._evaluate_best_candidate(company_name, serp_candidates)
 
-        if best_serp["validation_status"] == "accepted":
+        if best_serp["validation_status"] in {"accepted", "accepted_ai_validated"}:
             return best_serp
 
         if best_serp["candidate"]:
@@ -664,7 +712,7 @@ class DomainResolutionService:
                 record["domain_ai_confidence"] = outcome.get("ai_confidence")
                 record["domain_ai_reason"] = outcome.get("ai_reason")
 
-                if validation_status == "accepted":
+                if validation_status in {"accepted", "accepted_ai_validated"}:
                     accepted_count += 1
                 elif validation_status == "review":
                     review_count += 1

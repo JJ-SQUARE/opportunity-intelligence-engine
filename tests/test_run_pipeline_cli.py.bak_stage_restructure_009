@@ -1,0 +1,53 @@
+from pathlib import Path
+
+import yaml
+
+from run_pipeline import build_runtime_flags, load_config, parse_args
+
+
+def test_parse_args_and_build_runtime_flags():
+    args = parse_args(
+        [
+            "--dry-run",
+            "--no-llm",
+            "--cache-only",
+            "--config",
+            "config/test.yaml",
+            "--stage",
+            "collect",
+            "--stop-after",
+            "dedupe",
+            "--resume-from",
+            "normalize",
+            "--orchestrator-preview",
+        ]
+    )
+
+    flags = build_runtime_flags(args)
+
+    assert flags["dry_run"] is True
+    assert flags["no_llm"] is True
+    assert flags["cache_only"] is True
+    assert flags["config_path"] == "config/test.yaml"
+    assert flags["stage"] == "collect"
+    assert flags["stop_after"] == "dedupe"
+    assert flags["resume_from"] == "normalize"
+    assert flags["orchestrator_preview"] is True
+
+
+def test_load_config_reads_yaml(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "database": {"path": "data/test.db"},
+                "providers": {"limits": {"openai": 5}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(str(config_path))
+
+    assert config["database"]["path"] == "data/test.db"
+    assert config["providers"]["limits"]["openai"] == 5

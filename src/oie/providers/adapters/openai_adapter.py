@@ -627,7 +627,13 @@ Return ONLY a valid JSON object with this exact schema:
   "tech_stack": [],
   "budget": "",
   "workplace_type": "",
-  "commercial_signals": []
+  "commercial_signals": [],
+  "canonical_company_name": "",
+  "company_type": "end_client|product_company|consulting|staffing_agency|marketplace|job_board|competitor|confidential|noise|unknown",
+  "official_domain_guess": "",
+  "commercial_relevance": "high|medium|low|blocked",
+  "should_advance": true,
+  "advance_reason": ""
 }
 
 Rules:
@@ -637,6 +643,14 @@ Rules:
 - usable_for_scoring=false when the job is contaminated, fake, aggregator-only, or insufficient.
 - tech_stack and commercial_signals must be arrays of concise strings.
 - Use conservative judgment when evidence is missing.
+- Act like a human first-pass commercial filter for Tekton Labs.
+- canonical_company_name must be the best normalized hiring company name, not the job board/wrapper.
+- company_type must classify the real entity: end_client, product_company, consulting, staffing_agency, marketplace, job_board, competitor, confidential, noise, or unknown.
+- official_domain_guess should be the likely corporate domain only when inferable; never use job boards, LinkedIn job URLs, or apply wrappers as corporate domains.
+- commercial_relevance=blocked and should_advance=false for job boards, staffing marketplaces, confidential/noise, fake jobs, or aggregator-only records.
+- product_company and end_client should usually advance when the job is real and the company is identifiable.
+- staffing_agency, consulting, marketplace, and competitor may be real but should usually be low/blocked unless clearly useful for benchmark or partner analysis.
+- advance_reason must briefly explain why this job/company should advance or be blocked.
 """.strip()
 
         user_prompt = f"""
@@ -683,6 +697,12 @@ raw: {self._truncate(json.dumps(job_payload.get("raw") or {}, ensure_ascii=False
             "budget": str(result.get("budget") or "").strip(),
             "workplace_type": str(result.get("workplace_type") or "").strip(),
             "commercial_signals": [str(item).strip() for item in commercial_signals if str(item).strip()],
+            "canonical_company_name": str(result.get("canonical_company_name") or result.get("real_company_name") or "").strip(),
+            "company_type": str(result.get("company_type") or "unknown").strip().lower(),
+            "official_domain_guess": str(result.get("official_domain_guess") or "").strip().lower(),
+            "commercial_relevance": str(result.get("commercial_relevance") or "low").strip().lower(),
+            "should_advance": bool(result.get("should_advance", result.get("usable_for_scoring"))),
+            "advance_reason": str(result.get("advance_reason") or "").strip(),
             "job_intelligence_provider": self.provider_name,
             "job_intelligence_model": self._openai_model(),
             "job_intelligence_mode": "live_api",
@@ -832,15 +852,94 @@ sources: {company_payload.get("sources") or []}
 
     def classify_company(self, company_payload: Dict[str, Any]) -> Dict[str, Any]:
         company_name = company_payload.get("company_display") or company_payload.get("company") or "unknown"
-        classification, confidence = self._rule_based_company_classification(company_payload)
 
-        return {
-            "company_name": company_name,
-            "classification": classification,
-            "confidence": confidence,
-            "provider": self.provider_name,
-            "mode": "heuristic_rules",
-        }
+        system_prompt = """
+Act as a Senior B2B Company Classification Analyst for Tekton Labs.
+
+Classify the company using commercial evidence, not only keyword rules.
+
+Return ONLY valid JSON with this exact schema:
+{
+  "company_name": "",
+  "classification": "end_client|product_company|staffing|consulting|marketplace|job_board|competitor|unknown",
+  "confidence": 0.0,
+  "reason": "max 1 line"
+}
+
+Definitions:
+- product_company: SaaS, software platform, workflow/product/AI platform, venture-backed or product-led company selling its own product.
+- end_client: non-vendor company hiring for its own internal/product/IT teams.
+- staffing: recruiting, staffing agency, talent acquisition, headhunting, staff augmentation seller.
+- consulting: software consulting, outsourcing, nearshore services, systems integrator, professional services.
+- marketplace: talent marketplace, freelance marketplace, contributor platform.
+- job_board: job board, job aggregator, career portal/wrapper.
+- competitor: company competing directly with Tekton Labs services.
+- unknown: insufficient or conflicting evidence.
+
+Rules:
+- Prefer product_company for real SaaS/product/platform companies even when industry is missing.
+- Do not classify real product companies as unknown only because Apollo/enrichment data is incomplete.
+- Penalize/identify staffing, consulting, marketplaces, job boards, and competitors clearly.
+- Use job descriptions, enrichment, LinkedIn, domain, tech stack, and hiring signals.
+- Never hallucinate missing facts.
+""".strip()
+
+        user_prompt = f"""
+Classify this company.
+
+company_display: {company_payload.get("company_display") or ""}
+company: {company_payload.get("company") or ""}
+ai_company_gate_company_type: {company_payload.get("ai_company_gate_company_type") or ""}
+ai_company_gate_relevance: {company_payload.get("ai_company_gate_relevance") or ""}
+industry: {company_payload.get("industry") or ""}
+company_size: {company_payload.get("company_size") or company_payload.get("employee_range") or ""}
+resolved_domain: {company_payload.get("resolved_domain") or ""}
+domain_validation_status: {company_payload.get("domain_validation_status") or ""}
+linkedin_company_url: {company_payload.get("linkedin_company_url") or ""}
+company_description: {self._truncate(company_payload.get("company_description") or "", 1800)}
+jobs: {self._truncate(json.dumps(company_payload.get("jobs") or [], ensure_ascii=False), 5000)}
+
+Return strict JSON only.
+""".strip()
+
+        try:
+            result = self._chat_completion_json(system_prompt, user_prompt)
+            classification = str(result.get("classification") or "unknown").strip().lower()
+            if classification not in {
+                "end_client",
+                "product_company",
+                "staffing",
+                "consulting",
+                "marketplace",
+                "job_board",
+                "competitor",
+                "unknown",
+            }:
+                classification = "unknown"
+
+            try:
+                confidence = float(result.get("confidence", 0.0) or 0.0)
+            except Exception:
+                confidence = 0.0
+
+            return {
+                "company_name": str(result.get("company_name") or company_name).strip(),
+                "classification": classification,
+                "confidence": max(0.0, min(confidence, 1.0)),
+                "provider": self.provider_name,
+                "mode": "live_api",
+                "reason": str(result.get("reason") or "").strip(),
+            }
+        except Exception:
+            classification, confidence = self._rule_based_company_classification(company_payload)
+            return {
+                "company_name": company_name,
+                "classification": classification,
+                "confidence": confidence,
+                "provider": self.provider_name,
+                "mode": "fallback_heuristic_rules",
+                "reason": "AI classification failed; fallback heuristic classification used.",
+            }
 
     def _normalize_text(self, value: Any) -> str:
         return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()

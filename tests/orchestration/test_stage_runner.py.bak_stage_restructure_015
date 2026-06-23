@@ -1,0 +1,29 @@
+import json
+
+from oie.orchestration.run_context import RunContext
+from oie.orchestration.stage_base import Stage
+from oie.orchestration.stage_runner import StageRunner
+
+
+class RunnerDummyStage(Stage):
+    name = "collect_jobs"
+    order = 1
+
+
+def test_stage_runner_writes_initial_checkpoint(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(RunnerDummyStage)
+    checkpoint_path = RunnerDummyStage(ctx).artifact_paths()["checkpoint"]
+    saved = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+
+    assert checkpoint["run_id"] == ctx.run_id
+    assert checkpoint["stage"] == "collect_jobs"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 0
+    assert checkpoint["processed_count"] == 0
+    assert checkpoint["output_count"] == 0
+    assert saved == checkpoint

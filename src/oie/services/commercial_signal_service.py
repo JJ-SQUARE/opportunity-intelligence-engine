@@ -95,7 +95,7 @@ class CommercialSignalService:
     def has_usable_company_domain(self, row: Dict[str, Any]) -> bool:
         validation_status = self.safe_text(row.get("domain_validation_status")).lower()
         resolved_domain = row.get("resolved_domain")
-        return validation_status == "accepted" and self._domain_is_commercially_usable(resolved_domain)
+        return validation_status in {"accepted", "accepted_ai_validated"} and self._domain_is_commercially_usable(resolved_domain)
 
     def has_contact_email(self, row: Dict[str, Any]) -> bool:
         best_contact_email = self.safe_text(
@@ -326,7 +326,7 @@ class CommercialSignalService:
             return "ready_linkedin"
         if self.has_company_linkedin(row) or self.has_usable_company_domain(row):
             return "research_needed"
-        if validation_status in {"rejected", "review"}:
+        if validation_status in {"rejected", "rejected_aggregator", "rejected_confidential", "rejected_low_confidence", "review"}:
             return "pending_domain"
         return "insufficient_data"
 
@@ -363,7 +363,7 @@ class CommercialSignalService:
 
         if self.has_usable_company_domain(row):
             score += 8
-        elif validation_status == "accepted":
+        elif validation_status in {"accepted", "accepted_ai_validated"}:
             score -= 6
 
         if self.has_contact_email(row):
@@ -387,7 +387,7 @@ class CommercialSignalService:
 
         if validation_status == "review":
             score -= 20
-        elif validation_status not in {"", "accepted"}:
+        elif validation_status not in {"", "accepted", "accepted_ai_validated"}:
             score -= 12
 
         

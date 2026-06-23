@@ -19,6 +19,12 @@ DEFAULT_JOB_INTELLIGENCE = {
     "budget": "",
     "workplace_type": "",
     "commercial_signals": [],
+    "canonical_company_name": "",
+    "company_type": "unknown",
+    "official_domain_guess": "",
+    "commercial_relevance": "low",
+    "should_advance": True,
+    "advance_reason": "",
 }
 
 
@@ -84,6 +90,14 @@ class JobIntelligenceService:
         normalized["seniority"] = str(normalized.get("seniority") or "").strip()
         normalized["budget"] = str(normalized.get("budget") or "").strip()
         normalized["workplace_type"] = str(normalized.get("workplace_type") or "").strip()
+        normalized["canonical_company_name"] = str(
+            normalized.get("canonical_company_name") or normalized.get("real_company_name") or ""
+        ).strip()
+        normalized["company_type"] = str(normalized.get("company_type") or "unknown").strip().lower()
+        normalized["official_domain_guess"] = str(normalized.get("official_domain_guess") or "").strip().lower()
+        normalized["commercial_relevance"] = str(normalized.get("commercial_relevance") or "low").strip().lower()
+        normalized["should_advance"] = bool(normalized.get("should_advance", normalized.get("usable_for_scoring")))
+        normalized["advance_reason"] = str(normalized.get("advance_reason") or "").strip()
 
         try:
             normalized["confidence"] = float(normalized.get("confidence") or 0.0)
@@ -103,8 +117,15 @@ class JobIntelligenceService:
         updated["job_ai_usable_for_scoring"] = bool(intelligence.get("usable_for_scoring"))
         updated["job_ai_is_contaminated"] = bool(intelligence.get("is_contaminated"))
         updated["job_ai_confidence"] = float(intelligence.get("confidence") or 0.0)
+        updated["ai_company_gate_company_type"] = intelligence.get("company_type")
+        updated["ai_company_gate_relevance"] = intelligence.get("commercial_relevance")
+        updated["ai_company_gate_should_advance"] = bool(intelligence.get("should_advance", True))
+        updated["ai_company_gate_reason"] = intelligence.get("advance_reason")
+        updated["ai_company_gate_domain_guess"] = intelligence.get("official_domain_guess")
 
-        real_company_name = str(intelligence.get("real_company_name") or "").strip()
+        real_company_name = str(
+            intelligence.get("canonical_company_name") or intelligence.get("real_company_name") or ""
+        ).strip()
         if (
             real_company_name
             and bool(intelligence.get("is_real_job"))

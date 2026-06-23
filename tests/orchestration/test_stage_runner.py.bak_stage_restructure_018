@@ -1,0 +1,71 @@
+import json
+
+from oie.orchestration.run_context import RunContext
+from oie.orchestration.stage_base import Stage
+from oie.orchestration.stage_runner import StageRunner
+
+
+class RunnerDummyStage(Stage):
+    name = "collect_jobs"
+    order = 1
+
+
+class RunnerItemsStage(Stage):
+    name = "company_gate"
+    order = 2
+
+    def load_input(self):
+        return [
+            {"id": "item_1", "value": 1},
+            {"id": "item_2", "value": 2},
+        ]
+
+    def process_item(self, item):
+        return {
+            "id": item["id"],
+            "value": item["value"] * 10,
+        }
+
+
+def test_stage_runner_writes_initial_checkpoint(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(RunnerDummyStage)
+    checkpoint_path = RunnerDummyStage(ctx).artifact_paths()["checkpoint"]
+    saved = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+
+    assert checkpoint["run_id"] == ctx.run_id
+    assert checkpoint["stage"] == "collect_jobs"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 0
+    assert checkpoint["processed_count"] == 0
+    assert checkpoint["output_count"] == 0
+    assert saved == checkpoint
+
+def test_stage_runner_persists_output_jsonl_and_updates_checkpoint(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(RunnerItemsStage)
+    paths = RunnerItemsStage(ctx).artifact_paths()
+
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+    saved_checkpoint = json.loads(paths["checkpoint"].read_text(encoding="utf-8"))
+
+    assert [json.loads(line) for line in output_lines] == [
+        {"id": "item_1", "value": 10},
+        {"id": "item_2", "value": 20},
+    ]
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 2
+    assert checkpoint["processed_count"] == 2
+    assert checkpoint["output_count"] == 2
+    assert checkpoint["last_processed_index"] == 1
+    assert checkpoint["last_processed_id"] == "item_2"
+    assert saved_checkpoint == checkpoint
+

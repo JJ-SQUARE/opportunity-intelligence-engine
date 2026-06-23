@@ -418,8 +418,8 @@ class LeadGenerationService:
         has_domain = bool((company.get("resolved_domain") or "").strip())
 
         return (
-            1 if validation_status == "accepted" else 0,
-            1 if company_type == "end_client" else 0,
+            1 if validation_status in {"accepted", "accepted_ai_validated"} else 0,
+            1 if company_type in {"end_client", "product_company"} else 0,
             1 if has_domain else 0,
             1 if company_type == "unknown" and opportunity_score >= max(self.min_opportunity_score, 20) else 0,
             1 if has_jobs else 0,
@@ -752,7 +752,7 @@ class LeadGenerationService:
         # Ahora: solo excluimos si además tiene bajo opportunity_score
         if (
             company_type
-            and company_type not in {"", "unknown", "end_client"}
+            and company_type not in {"", "unknown", "end_client", "product_company"}
             and classification_confidence >= 0.75
             and opportunity_score < self.min_opportunity_score
         ):
@@ -855,7 +855,7 @@ class LeadGenerationService:
         if company_type in DEPRIORITIZED_COMPANY_TYPES:
             return False
 
-        if validation_status == "accepted" and opportunity_score >= self.min_opportunity_score:
+        if validation_status in {"accepted", "accepted_ai_validated"} and opportunity_score >= self.min_opportunity_score:
             return True
 
         if has_jobs and opportunity_score >= self.min_opportunity_score:
@@ -867,19 +867,19 @@ class LeadGenerationService:
         if has_description and has_domain and opportunity_score >= max(self.min_opportunity_score, 20):
             return True
 
-        if company_type == "end_client" and opportunity_score >= max(self.min_opportunity_score, 12):
+        if company_type in {"end_client", "product_company"} and opportunity_score >= max(self.min_opportunity_score, 12):
             return True
 
         if (
             company_type == "unknown"
-            and validation_status == "accepted"
+            and validation_status in {"accepted", "accepted_ai_validated"}
             and opportunity_score >= max(self.min_opportunity_score, 20)
         ):
             return True
 
         if (
             company_type
-            and company_type not in {"unknown", "end_client"}
+            and company_type not in {"unknown", "end_client", "product_company"}
             and classification_confidence >= 0.75
             and opportunity_score >= max(self.min_opportunity_score, 20)
             and has_real_enrichment

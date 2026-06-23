@@ -80,32 +80,3 @@ def test_run_writes_finalized_manifest(tmp_path, monkeypatch):
     assert manifest["status"] == "company_pipeline_completed"
     assert manifest["errors"] == []
 
-
-def test_run_marks_manifest_failed_when_orchestrator_raises(tmp_path, monkeypatch):
-    class BoomOrchestrator:
-        def __init__(self, ctx):
-            self.ctx = ctx
-
-        def run(self):
-            raise RuntimeError("controlled failure")
-
-    monkeypatch.setattr(run_pipeline, "PipelineOrchestrator", BoomOrchestrator)
-
-    try:
-        run(
-            config={"runs": {"path": str(tmp_path / "runs")}},
-            flags={"config_path": "config/test.yaml"},
-        )
-    except RuntimeError:
-        pass
-    else:
-        raise AssertionError("Expected RuntimeError")
-
-    manifest_paths = list((tmp_path / "runs").glob("*/manifest.json"))
-    assert len(manifest_paths) == 1
-
-    manifest = json.loads(manifest_paths[0].read_text(encoding="utf-8"))
-    assert manifest["status"] == "failed"
-    assert manifest["errors"][0]["error_type"] == "RuntimeError"
-    assert manifest["errors"][0]["error_message"] == "controlled failure"
-

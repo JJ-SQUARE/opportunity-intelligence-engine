@@ -1,6 +1,6 @@
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
+from oie.orchestration.run_manifest import build_initial_manifest
 
 
 def test_run_context_add_provider_event_derives_status_code_from_metadata():
@@ -61,9 +61,6 @@ def test_run_context_exposes_restructure_run_paths():
     assert ctx.paths["runs_base_dir"] == "tmp/runs"
     assert ctx.paths["run_dir"] == f"tmp/runs/{ctx.run_id}"
     assert ctx.paths["manifest_path"] == f"tmp/runs/{ctx.run_id}/manifest.json"
-    assert ctx.paths["stage_dirs"]["collect_jobs"] == f"tmp/runs/{ctx.run_id}/01_collect_jobs"
-    assert ctx.paths["stage_dirs"]["delivery"] == f"tmp/runs/{ctx.run_id}/08_delivery"
-    assert set(ctx.paths["stage_dirs"]) == set(PIPELINE_STAGES)
 
 def test_build_initial_manifest_uses_restructure_stages():
     ctx = RunContext.create(
@@ -81,17 +78,4 @@ def test_build_initial_manifest_uses_restructure_stages():
     assert manifest["config_path"] == "config/queries.yaml"
     assert manifest["errors"] == []
     assert manifest["stages"] == {stage: "pending" for stage in PIPELINE_STAGES}
-
-def test_write_manifest_creates_manifest_json(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={"config_path": "config/queries.yaml"},
-    )
-    manifest = build_initial_manifest(ctx)
-
-    manifest_path = write_manifest(ctx, manifest)
-
-    assert manifest_path.exists()
-    assert manifest_path.as_posix() == ctx.paths["manifest_path"]
-    assert '"run_id": "' + ctx.run_id + '"' in manifest_path.read_text(encoding="utf-8")
 

@@ -58,7 +58,7 @@ class CommercialRowService:
                 0 if self.safe_text(row.get("commercial_bucket")).lower() == "competitor_watchlist" else 1,
                 self.safe_int(row.get("commercial_priority_score")),
                 self.safe_float(row.get("opportunity_score")),
-                1 if self.safe_text(row.get("domain_validation_status")).lower() == "accepted" else 0,
+                1 if self.safe_text(row.get("domain_validation_status")).lower() in {"accepted", "accepted_ai_validated"} else 0,
                 1 if self.safe_text(row.get("best_contact_email")) else 0,
                 1 if self.safe_text(row.get("best_contact_linkedin_url")) else 0,
                 self.safe_text(row.get("company_display")).lower(),
@@ -243,7 +243,7 @@ class CommercialRowService:
                     OR COALESCE(s.score_penalty_competitor, 0) <= -20
                     THEN 'deprioritized_competitor'
                 WHEN COALESCE(c.domain_validation_status, '') = 'review' THEN 'review_domain'
-                WHEN COALESCE(c.domain_validation_status, '') <> 'accepted' THEN 'pending_domain'
+                WHEN COALESCE(c.domain_validation_status, '') NOT IN ('accepted', 'accepted_ai_validated') THEN 'pending_domain'
                 WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 'ready_email'
                 WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 'ready_linkedin'
                 WHEN COALESCE(c.linkedin_company_url, '') <> '' OR COALESCE(c.resolved_domain, '') <> '' THEN 'research_needed'
@@ -254,10 +254,10 @@ class CommercialRowService:
                     THEN 'benchmark_competitor'
                 WHEN LOWER(COALESCE(c.company_type_ai, '')) IN ('staffing', 'staffing_agency', 'consulting', 'marketplace', 'job_board')
                     THEN 'non_icp'
-                WHEN COALESCE(c.company_type_ai, '') = 'end_client'
+                WHEN COALESCE(c.company_type_ai, '') IN ('end_client', 'product_company')
                      AND COALESCE(s.opportunity_score, 0) >= 55
                     THEN 'strong_icp'
-                WHEN COALESCE(c.company_type_ai, '') = 'end_client'
+                WHEN COALESCE(c.company_type_ai, '') IN ('end_client', 'product_company')
                      AND COALESCE(s.opportunity_score, 0) >= 25
                     THEN 'possible_icp'
                 WHEN COALESCE(s.opportunity_score, 0) >= 40
@@ -279,12 +279,12 @@ class CommercialRowService:
                 WHEN LOWER(COALESCE(c.company_type_ai, '')) IN ('competitor', 'staffing', 'staffing_agency', 'consulting')
                     OR COALESCE(s.score_penalty_competitor, 0) <= -20
                     THEN 'competitor_watchlist'
-                WHEN COALESCE(c.company_type_ai, '') = 'end_client'
+                WHEN COALESCE(c.company_type_ai, '') IN ('end_client', 'product_company')
                      AND COALESCE(s.opportunity_score, 0) >= 55
                     THEN 'icp_target'
                 WHEN COALESCE(s.opportunity_score, 0) >= 40
                      OR (
-                        COALESCE(c.company_type_ai, '') = 'end_client'
+                        COALESCE(c.company_type_ai, '') IN ('end_client', 'product_company')
                         AND COALESCE(s.opportunity_score, 0) >= 25
                      )
                     THEN 'partner_candidate'
@@ -294,7 +294,7 @@ class CommercialRowService:
                 0,
                 (
                     COALESCE(s.opportunity_score, 0)
-                    + CASE WHEN COALESCE(c.domain_validation_status, '') = 'accepted' THEN 8 ELSE 0 END
+                    + CASE WHEN COALESCE(c.domain_validation_status, '') IN ('accepted', 'accepted_ai_validated') THEN 8 ELSE 0 END
                     + CASE WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 10 ELSE 0 END
                     + CASE WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 4 ELSE 0 END
                     + CASE WHEN COALESCE(bl.best_email_quality_score, 0) >= 80 THEN 5
@@ -303,10 +303,10 @@ class CommercialRowService:
                     + CASE WHEN COALESCE(bl.best_lead_source, '') = 'apollo_people' THEN 4
                            WHEN COALESCE(bl.best_lead_source, '') = 'hunter_domain_search' THEN 2
                            ELSE 0 END
-                    + CASE WHEN COALESCE(c.company_type_ai, '') = 'end_client' THEN 6 ELSE 0 END
+                    + CASE WHEN COALESCE(c.company_type_ai, '') IN ('end_client', 'product_company') THEN 6 ELSE 0 END
                     + CASE WHEN COALESCE(c.linkedin_company_url, '') <> '' THEN 2 ELSE 0 END
                     - CASE WHEN COALESCE(c.domain_validation_status, '') = 'review' THEN 20 ELSE 0 END
-                    - CASE WHEN COALESCE(c.domain_validation_status, '') NOT IN ('', 'accepted', 'review') THEN 12 ELSE 0 END
+                    - CASE WHEN COALESCE(c.domain_validation_status, '') NOT IN ('', 'accepted', 'accepted_ai_validated', 'review') THEN 12 ELSE 0 END
                     - CASE
                         WHEN LOWER(COALESCE(c.company_type_ai, '')) IN ('competitor', 'staffing', 'staffing_agency', 'consulting')
                              THEN 80
@@ -317,7 +317,7 @@ class CommercialRowService:
                     - CASE
                         WHEN (
                             COALESCE(s.opportunity_score, 0) < 30
-                            AND COALESCE(c.company_type_ai, '') NOT IN ('end_client')
+                            AND COALESCE(c.company_type_ai, '') NOT IN ('end_client', 'product_company')
                         ) THEN 15
                         ELSE 0
                       END
@@ -335,12 +335,12 @@ class CommercialRowService:
                 WHEN LOWER(COALESCE(c.company_type_ai, '')) IN ('competitor', 'staffing', 'staffing_agency', 'consulting')
                     OR COALESCE(s.score_penalty_competitor, 0) <= -20
                     THEN 0
-                WHEN COALESCE(c.company_type_ai, '') = 'end_client'
+                WHEN COALESCE(c.company_type_ai, '') IN ('end_client', 'product_company')
                      AND COALESCE(s.opportunity_score, 0) >= 55
                     THEN 3
                 WHEN COALESCE(s.opportunity_score, 0) >= 40
                      OR (
-                        COALESCE(c.company_type_ai, '') = 'end_client'
+                        COALESCE(c.company_type_ai, '') IN ('end_client', 'product_company')
                         AND COALESCE(s.opportunity_score, 0) >= 25
                      )
                     THEN 2
@@ -348,7 +348,7 @@ class CommercialRowService:
             END DESC,
             commercial_priority_score DESC,
             COALESCE(s.opportunity_score, 0) DESC,
-            CASE WHEN COALESCE(c.domain_validation_status, '') = 'accepted' THEN 1 ELSE 0 END DESC,
+            CASE WHEN COALESCE(c.domain_validation_status, '') IN ('accepted', 'accepted_ai_validated') THEN 1 ELSE 0 END DESC,
             CASE WHEN COALESCE(bl.best_contact_email, '') <> '' THEN 1 ELSE 0 END DESC,
             CASE WHEN COALESCE(bl.best_contact_linkedin_url, '') <> '' THEN 1 ELSE 0 END DESC,
             c.company_display ASC

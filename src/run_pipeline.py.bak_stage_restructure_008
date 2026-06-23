@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
-from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, write_manifest
+from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
 
 
 def _expand_env_vars(value: Any) -> Any:
@@ -80,21 +80,7 @@ def run(config: dict[str, Any], flags: dict[str, Any] | None = None) -> dict[str
     manifest_path = write_manifest(ctx, build_initial_manifest(ctx))
     ctx.paths["manifest_path"] = str(manifest_path)
     orchestrator = PipelineOrchestrator(ctx)
-    try:
-        result = orchestrator.run()
-    except Exception as exc:
-        finalize_manifest(
-            ctx,
-            "failed",
-            {
-                "error_type": exc.__class__.__name__,
-                "error_message": str(exc),
-            },
-        )
-        raise
-
-    finalize_manifest(ctx, result.get("status", "completed"))
-    return result
+    return orchestrator.run()
 
 
 def main() -> int:
