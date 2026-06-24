@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
+
+from oie.orchestration.stage_state import StageState
 
 from oie.orchestration.stage_base import Stage
+from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_errors import build_error_record
 from oie.orchestration.stage_status import failure_status_for_checkpoint
 from oie.orchestration.stage_timing import elapsed_seconds
 
 
-def build_initial_checkpoint(ctx: Any, stage: Stage, status: str = "running") -> Dict[str, Any]:
+def build_initial_checkpoint(ctx: Any, stage: Stage, status: str = "running") -> StageState:
     return {
         "run_id": ctx.run_id,
         "stage": stage.name,
@@ -26,7 +29,7 @@ def build_initial_checkpoint(ctx: Any, stage: Stage, status: str = "running") ->
     }
 
 
-def merge_previous_checkpoint(checkpoint: Dict[str, Any], previous_checkpoint: Dict[str, Any] | None) -> Dict[str, Any]:
+def merge_previous_checkpoint(checkpoint: StageState, previous_checkpoint: StageState | None) -> StageState:
     if previous_checkpoint:
         checkpoint.update(previous_checkpoint)
         checkpoint["status"] = "running"
@@ -34,20 +37,20 @@ def merge_previous_checkpoint(checkpoint: Dict[str, Any], previous_checkpoint: D
     return checkpoint
 
 
-def next_start_index(checkpoint: Dict[str, Any]) -> int:
+def next_start_index(checkpoint: StageState) -> int:
     if checkpoint.get("last_processed_index") is None:
         return 0
     return int(checkpoint["last_processed_index"]) + 1
 
 
-def record_processed_item(checkpoint: Dict[str, Any], index: int, output_item: Dict[str, Any]) -> None:
+def record_processed_item(checkpoint: StageState, index: int, output_item: StageItem) -> None:
     checkpoint["processed_count"] += 1
     checkpoint["output_count"] += 1
     checkpoint["last_processed_index"] = index
     checkpoint["last_processed_id"] = output_item.get("id")
 
 
-def record_stage_failure(checkpoint: Dict[str, Any], exc: Exception, start_time: float) -> str:
+def record_stage_failure(checkpoint: StageState, exc: Exception, start_time: float) -> str:
     failure_status = failure_status_for_checkpoint(checkpoint)
     checkpoint["status"] = failure_status
     checkpoint["errors"].append(build_error_record(exc))
@@ -55,6 +58,6 @@ def record_stage_failure(checkpoint: Dict[str, Any], exc: Exception, start_time:
     return failure_status
 
 
-def record_stage_completion(checkpoint: Dict[str, Any], start_time: float) -> None:
+def record_stage_completion(checkpoint: StageState, start_time: float) -> None:
     checkpoint["status"] = "completed"
     checkpoint["processing_time_seconds"] = elapsed_seconds(start_time)

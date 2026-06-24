@@ -190,6 +190,28 @@ def test_stage_runner_failure_preserves_partial_checkpoint_and_manifest(tmp_path
     assert manifest["stages"]["freshness_gate"] == "partial_success"
 
 
+def test_stage_runner_build_result_returns_stage_result(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    runner = StageRunner(ctx)
+    checkpoint = runner.run_stage(RunnerItemsStage)
+    stage = RunnerItemsStage(ctx)
+    metrics = runner.write_metrics(stage, checkpoint)
+
+    result = runner.build_result(checkpoint, metrics)
+
+    assert result == {
+        "run_id": ctx.run_id,
+        "stage": "company_gate",
+        "status": "completed",
+        "checkpoint": checkpoint,
+        "metrics": metrics,
+    }
+
+
 def test_stage_runner_read_output_returns_existing_output_jsonl(tmp_path):
     ctx = RunContext.create(
         config={"runs": {"path": str(tmp_path / "runs")}},

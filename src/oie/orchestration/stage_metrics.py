@@ -1,9 +1,27 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import TypedDict
+
+from oie.orchestration.stage_costs import CostEstimate
+from oie.orchestration.stage_provider_usage import ProviderUsage
+from oie.orchestration.stage_state import StageState
 
 
-def build_stage_metrics(checkpoint: Dict[str, Any]) -> Dict[str, Any]:
+class StageMetrics(TypedDict):
+    run_id: str
+    stage: str
+    status: str
+    input_count: int
+    processed_count: int
+    output_count: int
+    rejected_count: int
+    error_count: int
+    provider_usage: ProviderUsage
+    cost_estimate: CostEstimate
+    processing_time_seconds: float
+
+
+def build_stage_metrics(checkpoint: StageState) -> StageMetrics:
     return {
         "run_id": checkpoint["run_id"],
         "stage": checkpoint["stage"],

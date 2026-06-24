@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, TypedDict
 
 
-def stage_artifact_paths(ctx: Any, stage_name: str) -> Dict[str, Path]:
+class StageArtifactPaths(TypedDict):
+    stage_dir: Path
+    output: Path
+    checkpoint: Path
+    metrics: Path
+
+
+def stage_artifact_paths(ctx: Any, stage_name: str) -> StageArtifactPaths:
     stage_dirs = ctx.paths.get("stage_dirs") or {}
     stage_dir = stage_dirs.get(stage_name)
     if not stage_dir:

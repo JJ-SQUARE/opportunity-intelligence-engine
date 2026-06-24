@@ -1,46 +1,60 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Type
+from typing import Any, Type, cast
 
 from oie.orchestration.run_manifest import update_stage_status
 from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, record_processed_item, record_stage_completion, record_stage_failure
-from oie.orchestration.stage_metrics import build_stage_metrics
+from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
+from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_timing import start_timer
 from oie.orchestration.stage_io import append_jsonl_item, read_json_file, read_jsonl_file, write_json_file
 from oie.orchestration.stage_base import Stage
+from oie.orchestration.stage_item import StageItem
+from oie.orchestration.stage_state import StageState
 
 
 class StageRunner:
     def __init__(self, ctx: Any) -> None:
         self.ctx = ctx
 
-    def initial_checkpoint(self, stage: Stage, status: str = "running") -> Dict[str, Any]:
+    def initial_checkpoint(self, stage: Stage, status: str = "running") -> StageState:
         return build_initial_checkpoint(self.ctx, stage, status)
 
-    def write_checkpoint(self, stage: Stage, checkpoint: Dict[str, Any]) -> None:
+    def write_checkpoint(self, stage: Stage, checkpoint: StageState) -> None:
         paths = stage.artifact_paths()
         paths["stage_dir"].mkdir(parents=True, exist_ok=True)
         write_json_file(paths["checkpoint"], checkpoint)
 
-    def write_metrics(self, stage: Stage, checkpoint: Dict[str, Any]) -> None:
+    def write_metrics(self, stage: Stage, checkpoint: StageState) -> StageMetrics:
         paths = stage.artifact_paths()
         metrics = build_stage_metrics(checkpoint)
         write_json_file(paths["metrics"], metrics)
+        return metrics
 
-    def append_output(self, stage: Stage, item: Dict[str, Any]) -> None:
+    def append_output(self, stage: Stage, item: StageItem) -> None:
         paths = stage.artifact_paths()
         paths["stage_dir"].mkdir(parents=True, exist_ok=True)
         append_jsonl_item(paths["output"], item)
 
-    def read_output(self, stage: Stage) -> list[Dict[str, Any]]:
+    def build_result(self, checkpoint: StageState, metrics: StageMetrics) -> StageResult:
+        return {
+            "run_id": checkpoint["run_id"],
+            "stage": checkpoint["stage"],
+            "status": checkpoint["status"],
+            "checkpoint": checkpoint,
+            "metrics": metrics,
+        }
+
+    def read_output(self, stage: Stage) -> list[StageItem]:
         paths = stage.artifact_paths()
         return read_jsonl_file(paths["output"])
 
-    def read_checkpoint(self, stage: Stage) -> Dict[str, Any] | None:
+    def read_checkpoint(self, stage: Stage) -> StageState | None:
         paths = stage.artifact_paths()
-        return read_json_file(paths["checkpoint"])
+        checkpoint = read_json_file(paths["checkpoint"])
+        return cast(StageState, checkpoint) if checkpoint is not None else None
 
-    def run_stage(self, stage_cls: Type[Stage]) -> Dict[str, Any]:
+    def run_stage(self, stage_cls: Type[Stage]) -> StageState:
         stage = stage_cls(self.ctx)
         stage.ensure_stage_dir()
         update_stage_status(self.ctx, stage.name, "running")
