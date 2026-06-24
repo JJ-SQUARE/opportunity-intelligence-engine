@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Type, cast
+from typing import Type, cast
 
+from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import update_stage_status
 from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, record_processed_item, record_stage_completion, record_stage_failure
 from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
@@ -14,7 +15,7 @@ from oie.orchestration.stage_state import StageState
 
 
 class StageRunner:
-    def __init__(self, ctx: Any) -> None:
+    def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
 
     def initial_checkpoint(self, stage: Stage, status: str = "running") -> StageState:

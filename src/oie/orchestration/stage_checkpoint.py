@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-
+from oie.orchestration.run_context import RunContext
 from oie.orchestration.stage_state import StageState
 
 from oie.orchestration.stage_base import Stage
@@ -11,7 +10,7 @@ from oie.orchestration.stage_status import failure_status_for_checkpoint
 from oie.orchestration.stage_timing import elapsed_seconds
 
 
-def build_initial_checkpoint(ctx: Any, stage: Stage, status: str = "running") -> StageState:
+def build_initial_checkpoint(ctx: RunContext, stage: Stage, status: str = "running") -> StageState:
     return {
         "run_id": ctx.run_id,
         "stage": stage.name,
