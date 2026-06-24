@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypedDict
+
+from oie.orchestration.run_context import RunContext
 
 
 class StageArtifactPaths(TypedDict):
@@ -11,7 +13,7 @@ class StageArtifactPaths(TypedDict):
     metrics: Path
 
 
-def stage_artifact_paths(ctx: Any, stage_name: str) -> StageArtifactPaths:
+def stage_artifact_paths(ctx: RunContext, stage_name: str) -> StageArtifactPaths:
     stage_dirs = ctx.paths.get("stage_dirs") or {}
     stage_dir = stage_dirs.get(stage_name)
     if not stage_dir:
@@ -26,7 +28,7 @@ def stage_artifact_paths(ctx: Any, stage_name: str) -> StageArtifactPaths:
     }
 
 
-def ensure_stage_dir(ctx: Any, stage_name: str) -> Path:
+def ensure_stage_dir(ctx: RunContext, stage_name: str) -> Path:
     paths = stage_artifact_paths(ctx, stage_name)
     stage_dir = paths["stage_dir"]
     stage_dir.mkdir(parents=True, exist_ok=True)

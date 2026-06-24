@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Iterable
 
+from oie.orchestration.run_context import RunContext
 from oie.orchestration.stage_artifacts import StageArtifactPaths, ensure_stage_dir, stage_artifact_paths
 from oie.orchestration.stage_item import StageItem
 
@@ -11,7 +12,7 @@ class Stage:
     name: str = ""
     order: int = 0
 
-    def __init__(self, ctx: Any) -> None:
+    def __init__(self, ctx: RunContext) -> None:
         if not self.name:
             raise ValueError("Stage.name is required")
         self.ctx = ctx
