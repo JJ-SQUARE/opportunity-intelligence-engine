@@ -2,11 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Dict
+from typing import Any, TypedDict
 from uuid import uuid4
 
 from oie.models.provider_event import ProviderEventRecord
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
+
+
+class RunPaths(TypedDict):
+    db_path: str
+    runs_base_dir: str
+    run_dir: str
+    manifest_path: str
+    stage_dirs: dict[str, str]
 
 
 @dataclass
@@ -14,19 +22,19 @@ class RunContext:
     run_id: str
     run_date: str
     mode: str
-    config: Dict[str, Any] = field(default_factory=dict)
-    flags: Dict[str, Any] = field(default_factory=dict)
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    budgets: Dict[str, Any] = field(default_factory=dict)
-    provider_events: list[Dict[str, Any]] = field(default_factory=list)
-    provider_state: Dict[str, Any] = field(default_factory=dict)
-    paths: Dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
+    flags: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
+    budgets: dict[str, Any] = field(default_factory=dict)
+    provider_events: list[dict[str, Any]] = field(default_factory=list)
+    provider_state: dict[str, Any] = field(default_factory=dict)
+    paths: RunPaths = field(default_factory=dict)
 
     @classmethod
     def create(
         cls,
-        config: Dict[str, Any] | None = None,
-        flags: Dict[str, Any] | None = None,
+        config: dict[str, Any] | None = None,
+        flags: dict[str, Any] | None = None,
         mode: str | None = None,
     ) -> "RunContext":
         config = config or {}
@@ -73,7 +81,7 @@ class RunContext:
         provider: str,
         event_type: str,
         message: str,
-        metadata: Dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
         status_code: int | None = None,
     ) -> None:
         event_metadata = metadata or {}
@@ -87,11 +95,11 @@ class RunContext:
                 derived_status_code = None
 
         self.provider_events.append(
-            {
-                "provider": provider,
-                "event_type": event_type,
-                "status_code": derived_status_code,
-                "message": message,
-                "metadata": event_metadata,
-            }
+            ProviderEventRecord(
+                provider=provider,
+                event_type=event_type,
+                status_code=derived_status_code,
+                message=message,
+                metadata=event_metadata,
+            ).to_dict()
         )
