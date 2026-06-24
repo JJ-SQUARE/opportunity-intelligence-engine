@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
+from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.stage_item import StageItem
 
 
-def write_json_file(path: Path, payload: dict[str, Any]) -> None:
+def write_json_file(path: Path, payload: JSONPayload) -> None:
     path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 
 
-def read_json_file(path: Path) -> dict[str, Any] | None:
+def read_json_file(path: Path) -> JSONPayload | None:
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))

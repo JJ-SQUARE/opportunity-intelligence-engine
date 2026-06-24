@@ -1,5 +1,22 @@
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import build_initial_manifest, build_run_detail, build_run_errors, build_run_metrics_summary, build_run_status, build_run_summary, build_stage_status, build_stage_statuses, list_run_manifests, list_run_summaries, read_manifest, read_run_detail, read_run_errors, read_run_manifest, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status, write_manifest
+from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, build_run_detail, build_run_errors, build_run_metrics_summary, build_run_status, build_run_summary, build_stage_status, build_stage_statuses, list_run_manifests, list_run_summaries, read_manifest, read_run_detail, read_run_errors, read_run_manifest, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status, write_manifest
+
+
+def test_run_manifest_contract_exposes_required_fields():
+    required_keys = set(RunManifest.__annotations__)
+
+    assert required_keys == {
+        "run_id",
+        "run_date",
+        "status",
+        "current_stage",
+        "created_at",
+        "updated_at",
+        "mode",
+        "config_path",
+        "stages",
+        "errors",
+    }
 
 
 def test_read_manifest_returns_existing_manifest(tmp_path):
