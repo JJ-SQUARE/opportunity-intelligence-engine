@@ -5,8 +5,6 @@ from typing import TypeAlias
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import update_stage_status
 from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
-from oie.orchestration.stage_metrics import StageMetrics
-from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_timing import start_timer
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_state import StageState
@@ -18,15 +16,6 @@ StageClass: TypeAlias = type[Stage]
 class StageRunner:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-
-    def build_result(self, checkpoint: StageState, metrics: StageMetrics) -> StageResult:
-        return {
-            "run_id": checkpoint["run_id"],
-            "stage": checkpoint["stage"],
-            "status": checkpoint["status"],
-            "checkpoint": checkpoint,
-            "metrics": metrics,
-        }
 
     def run_stage(self, stage_cls: StageClass) -> StageState:
         stage = stage_cls(self.ctx)

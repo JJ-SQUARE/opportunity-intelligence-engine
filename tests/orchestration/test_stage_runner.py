@@ -14,6 +14,7 @@ from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_metrics import StageMetrics
 from oie.orchestration.stage_provider_usage import ProviderUsage
 from oie.orchestration.stage_result import StageResult
+from oie.orchestration.stage_result import build_stage_result
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.stage_state import StageState
 
@@ -363,7 +364,7 @@ def test_stage_runner_build_result_returns_stage_result(tmp_path):
     stage = RunnerItemsStage(ctx)
     metrics = StageCheckpointManager(stage).write_metrics(checkpoint)
 
-    result = runner.build_result(checkpoint, metrics)
+    result = build_stage_result(checkpoint, metrics)
 
     assert result == {
         "run_id": ctx.run_id,

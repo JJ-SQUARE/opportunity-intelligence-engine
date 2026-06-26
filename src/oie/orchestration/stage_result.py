@@ -12,3 +12,13 @@ class StageResult(TypedDict):
     status: str
     checkpoint: StageState
     metrics: StageMetrics
+
+
+def build_stage_result(checkpoint: StageState, metrics: StageMetrics) -> StageResult:
+    return {
+        "run_id": checkpoint["run_id"],
+        "stage": checkpoint["stage"],
+        "status": checkpoint["status"],
+        "checkpoint": checkpoint,
+        "metrics": metrics,
+    }
