@@ -1,7 +1,10 @@
 import json
 from typing import Any, get_type_hints
 
+from pathlib import Path
+
 from oie.orchestration.run_context import RunContext
+from oie.orchestration.stage_artifacts import StageArtifactPaths
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_checkpoint import load_checkpoint_payload
 from oie.orchestration.stage_item import StageItem
@@ -9,6 +12,15 @@ from oie.orchestration.stage_metrics import StageMetrics
 from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.stage_state import StageState
+
+
+def test_stage_artifact_paths_contract():
+    assert get_type_hints(StageArtifactPaths) == {
+        "stage_dir": Path,
+        "output": Path,
+        "checkpoint": Path,
+        "metrics": Path,
+    }
 
 
 def test_stage_item_contract():
