@@ -43,6 +43,8 @@ CHECKPOINT_FIELD_TYPES = {
     "processed_count": int,
     "output_count": int,
     "rejected_count": int,
+    "last_processed_index": (int, type(None)),
+    "last_processed_id": (str, type(None)),
     "errors": list,
     "provider_usage": dict,
     "cost_estimate": dict,

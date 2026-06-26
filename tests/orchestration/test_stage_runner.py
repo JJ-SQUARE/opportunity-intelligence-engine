@@ -130,6 +130,31 @@ def test_load_checkpoint_payload_rejects_invalid_field_type():
         raise AssertionError("Expected TypeError")
 
 
+def test_load_checkpoint_payload_rejects_invalid_nullable_field_type():
+    checkpoint = {
+        "run_id": "run_1",
+        "stage": "collect_jobs",
+        "status": "running",
+        "input_count": 0,
+        "processed_count": 0,
+        "output_count": 0,
+        "rejected_count": 0,
+        "last_processed_index": "0",
+        "last_processed_id": None,
+        "errors": [],
+        "provider_usage": {},
+        "cost_estimate": {},
+        "processing_time_seconds": 0.0,
+    }
+
+    try:
+        load_checkpoint_payload(checkpoint)
+    except TypeError as exc:
+        assert str(exc) == "Checkpoint field has invalid type: last_processed_index"
+    else:
+        raise AssertionError("Expected TypeError")
+
+
 def test_load_checkpoint_payload_rejects_missing_required_fields():
     try:
         load_checkpoint_payload({"run_id": "run_1"})
