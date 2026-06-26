@@ -6,11 +6,6 @@ from typing import get_type_hints, cast
 from oie.orchestration.stage_io import read_json_file
 from oie.orchestration.stage_state import StageState
 
-from oie.orchestration.stage_base import Stage
-from oie.orchestration.stage_item import StageItem
-from oie.orchestration.stage_errors import build_error_record
-from oie.orchestration.stage_status import failure_status_for_checkpoint
-from oie.orchestration.stage_timing import elapsed_seconds
 
 
 REQUIRED_CHECKPOINT_FIELDS = set(get_type_hints(StageState))
@@ -54,13 +49,5 @@ def read_checkpoint_file(path: Path) -> StageState | None:
     if checkpoint is None:
         return None
     return load_checkpoint_payload(checkpoint)
-
-
-def record_stage_failure(checkpoint: StageState, exc: Exception, start_time: float) -> str:
-    failure_status = failure_status_for_checkpoint(checkpoint)
-    checkpoint["status"] = failure_status
-    checkpoint["errors"].append(build_error_record(exc))
-    checkpoint["processing_time_seconds"] = elapsed_seconds(start_time)
-    return failure_status
 
 
