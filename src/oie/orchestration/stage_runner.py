@@ -4,7 +4,8 @@ from typing import TypeAlias
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import update_stage_status
-from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, read_checkpoint_file, record_processed_item, record_stage_completion, record_stage_failure
+from oie.orchestration.stage_checkpoint import merge_previous_checkpoint, next_start_index, read_checkpoint_file, record_processed_item, record_stage_completion, record_stage_failure
+from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
 from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
 from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_timing import start_timer
@@ -22,7 +23,7 @@ class StageRunner:
         self.ctx = ctx
 
     def initial_checkpoint(self, stage: Stage, status: str = "running") -> StageState:
-        return build_initial_checkpoint(self.ctx, stage, status)
+        return StageCheckpointManager(stage).initial_checkpoint(status)
 
     def write_checkpoint(self, stage: Stage, checkpoint: StageState) -> None:
         paths = stage.artifact_paths()
