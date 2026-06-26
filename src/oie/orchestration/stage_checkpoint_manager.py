@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from oie.orchestration.stage_base import Stage
-from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, read_checkpoint_file, record_processed_item, record_stage_completion, record_stage_failure
+from oie.orchestration.stage_checkpoint import merge_previous_checkpoint, next_start_index, read_checkpoint_file, record_processed_item, record_stage_completion, record_stage_failure
 from oie.orchestration.stage_io import append_jsonl_item, write_json_file
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
@@ -13,7 +13,21 @@ class StageCheckpointManager:
         self.stage = stage
 
     def initial_checkpoint(self, status: str = "running") -> StageState:
-        return build_initial_checkpoint(self.stage.ctx, self.stage, status)
+        return {
+            "run_id": self.stage.ctx.run_id,
+            "stage": self.stage.name,
+            "status": status,
+            "input_count": 0,
+            "processed_count": 0,
+            "output_count": 0,
+            "rejected_count": 0,
+            "last_processed_index": None,
+            "last_processed_id": None,
+            "errors": [],
+            "provider_usage": {},
+            "cost_estimate": {},
+            "processing_time_seconds": 0.0,
+        }
 
     def read_checkpoint(self) -> StageState | None:
         paths = self.stage.artifact_paths()

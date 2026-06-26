@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import get_type_hints, cast
 
-from oie.orchestration.run_context import RunContext
 from oie.orchestration.stage_io import read_json_file
 from oie.orchestration.stage_state import StageState
 
@@ -12,24 +11,6 @@ from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_errors import build_error_record
 from oie.orchestration.stage_status import failure_status_for_checkpoint
 from oie.orchestration.stage_timing import elapsed_seconds
-
-
-def build_initial_checkpoint(ctx: RunContext, stage: Stage, status: str = "running") -> StageState:
-    return {
-        "run_id": ctx.run_id,
-        "stage": stage.name,
-        "status": status,
-        "input_count": 0,
-        "processed_count": 0,
-        "output_count": 0,
-        "rejected_count": 0,
-        "last_processed_index": None,
-        "last_processed_id": None,
-        "errors": [],
-        "provider_usage": {},
-        "cost_estimate": {},
-        "processing_time_seconds": 0.0,
-    }
 
 
 REQUIRED_CHECKPOINT_FIELDS = set(get_type_hints(StageState))
