@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import Type, cast
+from typing import Type
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import update_stage_status
-from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, record_processed_item, record_stage_completion, record_stage_failure
+from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, read_checkpoint_file, record_processed_item, record_stage_completion, record_stage_failure
 from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
 from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_timing import start_timer
-from oie.orchestration.stage_io import append_jsonl_item, read_json_file, read_jsonl_file, write_json_file
+from oie.orchestration.stage_io import append_jsonl_item, read_jsonl_file, write_json_file
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_state import StageState
@@ -52,8 +52,7 @@ class StageRunner:
 
     def read_checkpoint(self, stage: Stage) -> StageState | None:
         paths = stage.artifact_paths()
-        checkpoint = read_json_file(paths["checkpoint"])
-        return cast(StageState, checkpoint) if checkpoint is not None else None
+        return read_checkpoint_file(paths["checkpoint"])
 
     def run_stage(self, stage_cls: Type[Stage]) -> StageState:
         stage = stage_cls(self.ctx)

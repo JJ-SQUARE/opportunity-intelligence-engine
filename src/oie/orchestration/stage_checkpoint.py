@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import cast
+
 from oie.orchestration.run_context import RunContext
+from oie.orchestration.stage_io import read_json_file
 from oie.orchestration.stage_state import StageState
 
 from oie.orchestration.stage_base import Stage
@@ -26,6 +30,11 @@ def build_initial_checkpoint(ctx: RunContext, stage: Stage, status: str = "runni
         "cost_estimate": {},
         "processing_time_seconds": 0.0,
     }
+
+
+def read_checkpoint_file(path: Path) -> StageState | None:
+    checkpoint = read_json_file(path)
+    return cast(StageState, checkpoint) if checkpoint is not None else None
 
 
 def merge_previous_checkpoint(checkpoint: StageState, previous_checkpoint: StageState | None) -> StageState:
