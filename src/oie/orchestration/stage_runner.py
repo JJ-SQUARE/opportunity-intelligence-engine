@@ -8,7 +8,6 @@ from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
 from oie.orchestration.stage_metrics import StageMetrics
 from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_timing import start_timer
-from oie.orchestration.stage_io import read_jsonl_file
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_state import StageState
@@ -29,10 +28,6 @@ class StageRunner:
             "checkpoint": checkpoint,
             "metrics": metrics,
         }
-
-    def read_output(self, stage: Stage) -> list[StageItem]:
-        paths = stage.artifact_paths()
-        return read_jsonl_file(paths["output"])
 
     def run_stage(self, stage_cls: StageClass) -> StageState:
         stage = stage_cls(self.ctx)

@@ -384,7 +384,7 @@ def test_stage_runner_read_output_returns_existing_output_jsonl(tmp_path):
     stage = RunnerItemsStage(ctx)
     runner.run_stage(RunnerItemsStage)
 
-    assert runner.read_output(stage) == [
+    assert StageCheckpointManager(stage).read_output() == [
         {"id": "item_1", "value": 10},
         {"id": "item_2", "value": 20},
     ]
@@ -399,7 +399,7 @@ def test_stage_runner_read_output_returns_empty_when_missing(tmp_path):
     runner = StageRunner(ctx)
     stage = RunnerItemsStage(ctx)
 
-    assert runner.read_output(stage) == []
+    assert StageCheckpointManager(stage).read_output() == []
 
 
 def test_stage_runner_read_checkpoint_returns_existing_checkpoint(tmp_path):
