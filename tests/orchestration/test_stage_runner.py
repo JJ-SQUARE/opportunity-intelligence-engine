@@ -19,6 +19,17 @@ def test_stage_item_contract():
     }
 
 
+def test_stage_item_jsonl_round_trip(tmp_path):
+    from oie.orchestration.stage_io import append_jsonl_item, read_jsonl_file
+
+    path = tmp_path / "items.jsonl"
+    item: StageItem = {"id": "item_1", "value": 10, "metadata": {"source": "test"}}
+
+    append_jsonl_item(path, item)
+
+    assert read_jsonl_file(path) == [item]
+
+
 def test_stage_result_contract():
     assert get_type_hints(StageResult) == {
         "run_id": str,
