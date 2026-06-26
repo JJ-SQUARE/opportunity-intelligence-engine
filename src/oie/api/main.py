@@ -71,6 +71,26 @@ def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
     return load_checkpoint_payload(checkpoint)
 
 
+@app.get("/runs/{run_id}/stages/{stage_name}/metrics")
+def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
+    ctx = RunContext.create()
+    detail = read_run_detail(ctx, run_id)
+    if detail is None or stage_name not in PIPELINE_STAGES:
+        raise HTTPException(status_code=404, detail="Stage metrics not found")
+
+    ctx.paths["run_dir"] = f'{ctx.paths["runs_base_dir"]}/{run_id}'
+    ctx.paths["manifest_path"] = f'{ctx.paths["run_dir"]}/manifest.json'
+    ctx.paths["stage_dirs"] = {
+        stage: f'{ctx.paths["run_dir"]}/{index:02d}_{stage}'
+        for index, stage in enumerate(PIPELINE_STAGES, start=1)
+    }
+
+    metrics = read_json_file(stage_artifact_paths(ctx, stage_name)["metrics"])
+    if metrics is None:
+        raise HTTPException(status_code=404, detail="Stage metrics not found")
+    return metrics
+
+
 @app.get("/runs/{run_id}/errors")
 def get_run_errors(run_id: str) -> list[JSONPayload]:
     ctx = RunContext.create()
