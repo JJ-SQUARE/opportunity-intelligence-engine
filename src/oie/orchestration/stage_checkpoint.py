@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import get_type_hints, cast
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.stage_io import read_json_file
@@ -32,21 +32,7 @@ def build_initial_checkpoint(ctx: RunContext, stage: Stage, status: str = "runni
     }
 
 
-REQUIRED_CHECKPOINT_FIELDS = {
-    "run_id",
-    "stage",
-    "status",
-    "input_count",
-    "processed_count",
-    "output_count",
-    "rejected_count",
-    "last_processed_index",
-    "last_processed_id",
-    "errors",
-    "provider_usage",
-    "cost_estimate",
-    "processing_time_seconds",
-}
+REQUIRED_CHECKPOINT_FIELDS = set(get_type_hints(StageState))
 
 
 def load_checkpoint_payload(checkpoint: object) -> StageState:
