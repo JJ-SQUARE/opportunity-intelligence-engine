@@ -8,8 +8,10 @@ from oie.orchestration.stage_artifacts import StageArtifactPaths
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_checkpoint import load_checkpoint_payload
 from oie.orchestration.stage_errors import ErrorRecord, build_error_record
+from oie.orchestration.stage_costs import CostEstimate
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_metrics import StageMetrics
+from oie.orchestration.stage_provider_usage import ProviderUsage
 from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.stage_state import StageState
@@ -57,6 +59,11 @@ def test_stage_item_jsonl_round_trip(tmp_path):
     append_jsonl_item(path, item)
 
     assert read_jsonl_file(path) == [item]
+
+
+def test_provider_usage_and_cost_estimate_contracts():
+    assert ProviderUsage == dict[str, Any]
+    assert CostEstimate == dict[str, Any]
 
 
 def test_stage_metrics_contract():
