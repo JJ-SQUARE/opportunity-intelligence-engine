@@ -42,6 +42,22 @@ def test_stage_item_jsonl_round_trip(tmp_path):
     assert read_jsonl_file(path) == [item]
 
 
+def test_stage_metrics_contract():
+    assert get_type_hints(StageMetrics) == {
+        "run_id": str,
+        "stage": str,
+        "status": str,
+        "input_count": int,
+        "processed_count": int,
+        "output_count": int,
+        "rejected_count": int,
+        "error_count": int,
+        "provider_usage": dict[str, Any],
+        "cost_estimate": dict[str, Any],
+        "processing_time_seconds": float,
+    }
+
+
 def test_stage_result_contract():
     assert get_type_hints(StageResult) == {
         "run_id": str,
