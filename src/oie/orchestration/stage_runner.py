@@ -53,13 +53,8 @@ class StageRunner:
         stage = stage_cls(self.ctx)
         stage.ensure_stage_dir()
         update_stage_status(self.ctx, stage.name, "running")
-        checkpoint = self.initial_checkpoint(stage)
-        previous_checkpoint = self.read_checkpoint(stage)
-        checkpoint = StageCheckpointManager(stage).merge_previous_checkpoint(checkpoint, previous_checkpoint)
         inputs = list(stage.load_input())
-        checkpoint["input_count"] = len(inputs)
-        start_index = StageCheckpointManager(stage).next_start_index(checkpoint)
-        self.write_checkpoint(stage, checkpoint)
+        checkpoint, start_index = StageCheckpointManager(stage).prepare_checkpoint(len(inputs))
         start_time = start_timer()
 
         try:

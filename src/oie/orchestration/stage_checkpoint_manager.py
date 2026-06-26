@@ -29,6 +29,15 @@ class StageCheckpointManager:
     def next_start_index(self, checkpoint: StageState) -> int:
         return next_start_index(checkpoint)
 
+    def prepare_checkpoint(self, input_count: int) -> tuple[StageState, int]:
+        checkpoint = self.initial_checkpoint()
+        previous_checkpoint = self.read_checkpoint()
+        checkpoint = self.merge_previous_checkpoint(checkpoint, previous_checkpoint)
+        checkpoint["input_count"] = input_count
+        start_index = self.next_start_index(checkpoint)
+        self.write_checkpoint(checkpoint)
+        return checkpoint, start_index
+
     def write_checkpoint(self, checkpoint: StageState) -> None:
         paths = self.stage.artifact_paths()
         paths["stage_dir"].mkdir(parents=True, exist_ok=True)
