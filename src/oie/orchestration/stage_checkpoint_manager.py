@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from oie.orchestration.stage_base import Stage
-from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, read_checkpoint_file
+from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, read_checkpoint_file, record_processed_item
 from oie.orchestration.stage_io import append_jsonl_item, write_json_file
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
@@ -44,3 +44,6 @@ class StageCheckpointManager:
         paths = self.stage.artifact_paths()
         paths["stage_dir"].mkdir(parents=True, exist_ok=True)
         append_jsonl_item(paths["output"], item)
+
+    def record_processed_item(self, checkpoint: StageState, index: int, output_item: StageItem) -> None:
+        record_processed_item(checkpoint, index, output_item)
