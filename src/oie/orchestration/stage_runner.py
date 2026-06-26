@@ -33,9 +33,6 @@ class StageRunner:
         paths = stage.artifact_paths()
         return read_jsonl_file(paths["output"])
 
-    def read_checkpoint(self, stage: Stage) -> StageState | None:
-        return StageCheckpointManager(stage).read_checkpoint()
-
     def run_stage(self, stage_cls: StageClass) -> StageState:
         stage = stage_cls(self.ctx)
         checkpoint_manager = StageCheckpointManager(stage)
