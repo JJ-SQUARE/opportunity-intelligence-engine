@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, TypedDict
+from typing import TypedDict
 from uuid import uuid4
 
 from oie.models.provider_event import ProviderEventRecord
