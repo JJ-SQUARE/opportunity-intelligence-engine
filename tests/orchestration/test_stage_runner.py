@@ -2,7 +2,17 @@ import json
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.stage_base import Stage
+from oie.orchestration.stage_checkpoint import load_checkpoint_payload
 from oie.orchestration.stage_runner import StageRunner
+
+
+def test_load_checkpoint_payload_rejects_non_object_payload():
+    try:
+        load_checkpoint_payload(["not", "a", "dict"])
+    except TypeError as exc:
+        assert str(exc) == "Checkpoint payload must be a JSON object."
+    else:
+        raise AssertionError("Expected TypeError")
 
 
 class RunnerDummyStage(Stage):
