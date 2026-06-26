@@ -13,6 +13,16 @@ from oie.orchestration.run_manifest import list_run_summaries, read_run_detail, 
 app = FastAPI(title="Opportunity Intelligence Engine API")
 
 
+def _configure_ctx_for_run(ctx: RunContext, run_id: str) -> None:
+    run_dir = f'{ctx.paths["runs_base_dir"]}/{run_id}'
+    ctx.paths["run_dir"] = run_dir
+    ctx.paths["manifest_path"] = f"{run_dir}/manifest.json"
+    ctx.paths["stage_dirs"] = {
+        stage: f"{run_dir}/{index:02d}_{stage}"
+        for index, stage in enumerate(PIPELINE_STAGES, start=1)
+    }
+
+
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
@@ -58,12 +68,7 @@ def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
     if detail is None or stage_name not in PIPELINE_STAGES:
         raise HTTPException(status_code=404, detail="Checkpoint not found")
 
-    ctx.paths["run_dir"] = f'{ctx.paths["runs_base_dir"]}/{run_id}'
-    ctx.paths["manifest_path"] = f'{ctx.paths["run_dir"]}/manifest.json'
-    ctx.paths["stage_dirs"] = {
-        stage: f'{ctx.paths["run_dir"]}/{index:02d}_{stage}'
-        for index, stage in enumerate(PIPELINE_STAGES, start=1)
-    }
+    _configure_ctx_for_run(ctx, run_id)
 
     checkpoint = read_json_file(stage_artifact_paths(ctx, stage_name)["checkpoint"])
     if checkpoint is None:
@@ -78,12 +83,7 @@ def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
     if detail is None or stage_name not in PIPELINE_STAGES:
         raise HTTPException(status_code=404, detail="Stage metrics not found")
 
-    ctx.paths["run_dir"] = f'{ctx.paths["runs_base_dir"]}/{run_id}'
-    ctx.paths["manifest_path"] = f'{ctx.paths["run_dir"]}/manifest.json'
-    ctx.paths["stage_dirs"] = {
-        stage: f'{ctx.paths["run_dir"]}/{index:02d}_{stage}'
-        for index, stage in enumerate(PIPELINE_STAGES, start=1)
-    }
+    _configure_ctx_for_run(ctx, run_id)
 
     metrics = read_json_file(stage_artifact_paths(ctx, stage_name)["metrics"])
     if metrics is None:
@@ -98,12 +98,7 @@ def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
     if detail is None or stage_name not in PIPELINE_STAGES:
         raise HTTPException(status_code=404, detail="Stage output not found")
 
-    ctx.paths["run_dir"] = f'{ctx.paths["runs_base_dir"]}/{run_id}'
-    ctx.paths["manifest_path"] = f'{ctx.paths["run_dir"]}/manifest.json'
-    ctx.paths["stage_dirs"] = {
-        stage: f'{ctx.paths["run_dir"]}/{index:02d}_{stage}'
-        for index, stage in enumerate(PIPELINE_STAGES, start=1)
-    }
+    _configure_ctx_for_run(ctx, run_id)
 
     output_path = stage_artifact_paths(ctx, stage_name)["output"]
     if not output_path.exists():
