@@ -30,11 +30,14 @@ class RunFlags(TypedDict, total=False):
 
 
 class RunMetrics(TypedDict, total=False):
-    pass
+    total_processing_time_seconds: float
+    total_input_count: int
+    total_output_count: int
+    total_rejected_count: int
 
 
 class RunBudgets(TypedDict, total=False):
-    pass
+    total_cost_usd: float
 
 
 class ProviderState(TypedDict, total=False):
