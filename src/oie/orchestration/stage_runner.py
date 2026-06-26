@@ -61,18 +61,18 @@ class StageRunner:
         try:
             for index, item in enumerate(inputs[start_index:], start=start_index):
                 output_item = stage.process_item(item)
-                self.append_output(stage, output_item)
+                checkpoint_manager.append_output(output_item)
                 checkpoint_manager.record_processed_item(checkpoint, index, output_item)
-                self.write_checkpoint(stage, checkpoint)
+                checkpoint_manager.write_checkpoint(checkpoint)
         except Exception as exc:
             failure_status = checkpoint_manager.record_stage_failure(checkpoint, exc, start_time)
-            self.write_checkpoint(stage, checkpoint)
-            self.write_metrics(stage, checkpoint)
+            checkpoint_manager.write_checkpoint(checkpoint)
+            checkpoint_manager.write_metrics(checkpoint)
             update_stage_status(self.ctx, stage.name, failure_status)
             raise
 
         checkpoint_manager.record_stage_completion(checkpoint, start_time)
-        self.write_checkpoint(stage, checkpoint)
-        self.write_metrics(stage, checkpoint)
+        checkpoint_manager.write_checkpoint(checkpoint)
+        checkpoint_manager.write_metrics(checkpoint)
         update_stage_status(self.ctx, stage.name, "completed")
         return checkpoint
