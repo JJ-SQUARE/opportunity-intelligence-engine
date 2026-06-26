@@ -13,8 +13,7 @@ from oie.orchestration.stage_costs import CostEstimate
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_metrics import StageMetrics
 from oie.orchestration.stage_provider_usage import ProviderUsage
-from oie.orchestration.stage_result import StageResult
-from oie.orchestration.stage_result import build_stage_result
+from oie.orchestration.stage_result import StageResult, build_stage_result
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.stage_state import StageState
 
