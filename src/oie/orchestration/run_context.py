@@ -10,9 +10,17 @@ from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 
 
+class DatabaseConfig(TypedDict, total=False):
+    path: str
+
+
+class RunsConfig(TypedDict, total=False):
+    path: str
+
+
 class RunConfig(TypedDict, total=False):
-    database: JSONPayload
-    runs: JSONPayload
+    database: DatabaseConfig
+    runs: RunsConfig
 
 
 class RunFlags(TypedDict, total=False):
