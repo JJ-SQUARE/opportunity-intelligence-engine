@@ -6,7 +6,7 @@ from pathlib import Path
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.stage_artifacts import StageArtifactPaths
 from oie.orchestration.stage_base import Stage
-from oie.orchestration.stage_checkpoint import load_checkpoint_payload
+from oie.orchestration.stage_checkpoint import REQUIRED_CHECKPOINT_FIELDS, load_checkpoint_payload
 from oie.orchestration.stage_errors import ErrorRecord, build_error_record
 from oie.orchestration.stage_costs import CostEstimate
 from oie.orchestration.stage_item import StageItem
@@ -90,6 +90,10 @@ def test_stage_result_contract():
         "checkpoint": StageState,
         "metrics": StageMetrics,
     }
+
+
+def test_required_checkpoint_fields_follow_stage_state_contract():
+    assert REQUIRED_CHECKPOINT_FIELDS == set(get_type_hints(StageState))
 
 
 def test_load_checkpoint_payload_rejects_non_object_payload():
