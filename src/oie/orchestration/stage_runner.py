@@ -5,6 +5,7 @@ from typing import TypeAlias
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import update_stage_status
 from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+from oie.orchestration.stage_metrics import StageMetrics
 from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_timing import start_timer
 from oie.orchestration.stage_io import read_jsonl_file
