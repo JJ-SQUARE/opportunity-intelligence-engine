@@ -3,6 +3,7 @@ from typing import get_type_hints
 
 from oie.orchestration.run_context import (
     DatabaseConfig,
+    ProviderState,
     RunBudgets,
     RunConfig,
     RunContext,
@@ -10,6 +11,15 @@ from oie.orchestration.run_context import (
     RunsConfig,
 )
 from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
+
+
+def test_provider_state_contract():
+    assert get_type_hints(ProviderState) == {
+        "last_provider": str,
+        "total_requests": int,
+        "total_tokens": int,
+        "total_cost_usd": float,
+    }
 
 
 def test_run_metrics_and_budgets_contracts():
