@@ -1,5 +1,6 @@
-from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from typing import get_type_hints
+
+from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 
 from oie.orchestration.run_context import (
     DatabaseConfig,
