@@ -41,7 +41,10 @@ class RunBudgets(TypedDict, total=False):
 
 
 class ProviderState(TypedDict, total=False):
-    pass
+    last_provider: str
+    total_requests: int
+    total_tokens: int
+    total_cost_usd: float
 
 
 class ProviderEventPayload(TypedDict):
