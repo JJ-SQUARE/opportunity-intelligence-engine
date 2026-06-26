@@ -56,12 +56,6 @@ def read_checkpoint_file(path: Path) -> StageState | None:
     return load_checkpoint_payload(checkpoint)
 
 
-def next_start_index(checkpoint: StageState) -> int:
-    if checkpoint.get("last_processed_index") is None:
-        return 0
-    return int(checkpoint["last_processed_index"]) + 1
-
-
 def record_processed_item(checkpoint: StageState, index: int, output_item: StageItem) -> None:
     checkpoint["processed_count"] += 1
     checkpoint["output_count"] += 1

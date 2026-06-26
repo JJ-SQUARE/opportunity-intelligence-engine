@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from oie.orchestration.stage_base import Stage
-from oie.orchestration.stage_checkpoint import next_start_index, read_checkpoint_file, record_processed_item, record_stage_completion, record_stage_failure
+from oie.orchestration.stage_checkpoint import read_checkpoint_file, record_processed_item, record_stage_completion, record_stage_failure
 from oie.orchestration.stage_io import append_jsonl_item, write_json_file
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
@@ -45,7 +45,9 @@ class StageCheckpointManager:
         return checkpoint
 
     def next_start_index(self, checkpoint: StageState) -> int:
-        return next_start_index(checkpoint)
+        if checkpoint.get("last_processed_index") is None:
+            return 0
+        return int(checkpoint["last_processed_index"]) + 1
 
     def prepare_checkpoint(self, input_count: int) -> tuple[StageState, int]:
         checkpoint = self.initial_checkpoint()
