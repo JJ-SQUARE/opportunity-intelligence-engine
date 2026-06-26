@@ -56,13 +56,6 @@ def read_checkpoint_file(path: Path) -> StageState | None:
     return load_checkpoint_payload(checkpoint)
 
 
-def record_processed_item(checkpoint: StageState, index: int, output_item: StageItem) -> None:
-    checkpoint["processed_count"] += 1
-    checkpoint["output_count"] += 1
-    checkpoint["last_processed_index"] = index
-    checkpoint["last_processed_id"] = output_item.get("id")
-
-
 def record_stage_failure(checkpoint: StageState, exc: Exception, start_time: float) -> str:
     failure_status = failure_status_for_checkpoint(checkpoint)
     checkpoint["status"] = failure_status
