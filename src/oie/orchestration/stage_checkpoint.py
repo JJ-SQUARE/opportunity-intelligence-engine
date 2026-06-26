@@ -56,14 +56,6 @@ def read_checkpoint_file(path: Path) -> StageState | None:
     return load_checkpoint_payload(checkpoint)
 
 
-def merge_previous_checkpoint(checkpoint: StageState, previous_checkpoint: StageState | None) -> StageState:
-    if previous_checkpoint:
-        checkpoint.update(previous_checkpoint)
-        checkpoint["status"] = "running"
-        checkpoint["errors"] = []
-    return checkpoint
-
-
 def next_start_index(checkpoint: StageState) -> int:
     if checkpoint.get("last_processed_index") is None:
         return 0
