@@ -412,7 +412,7 @@ def test_stage_runner_read_checkpoint_returns_existing_checkpoint(tmp_path):
     stage = RunnerItemsStage(ctx)
     checkpoint = runner.run_stage(RunnerItemsStage)
 
-    assert runner.read_checkpoint(stage) == checkpoint
+    assert StageCheckpointManager(stage).read_checkpoint() == checkpoint
 
 
 def test_stage_runner_read_checkpoint_returns_none_when_missing(tmp_path):
@@ -424,7 +424,7 @@ def test_stage_runner_read_checkpoint_returns_none_when_missing(tmp_path):
     runner = StageRunner(ctx)
     stage = RunnerItemsStage(ctx)
 
-    assert runner.read_checkpoint(stage) is None
+    assert StageCheckpointManager(stage).read_checkpoint() is None
 
 
 def test_stage_runner_resumes_after_last_processed_index(tmp_path):
