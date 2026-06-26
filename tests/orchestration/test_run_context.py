@@ -1,6 +1,17 @@
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
-from oie.orchestration.run_context import RunContext
+from typing import get_type_hints
+
+from oie.orchestration.run_context import DatabaseConfig, RunConfig, RunContext, RunsConfig
 from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
+
+
+def test_run_config_contract_exposes_typed_sections():
+    assert set(DatabaseConfig.__annotations__) == {"path"}
+    assert set(RunsConfig.__annotations__) == {"path"}
+    assert get_type_hints(RunConfig) == {
+        "database": DatabaseConfig,
+        "runs": RunsConfig,
+    }
 
 
 def test_run_context_add_provider_event_derives_status_code_from_metadata():
