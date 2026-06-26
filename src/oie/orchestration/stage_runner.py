@@ -4,7 +4,7 @@ from typing import TypeAlias
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import update_stage_status
-from oie.orchestration.stage_checkpoint import merge_previous_checkpoint, next_start_index, read_checkpoint_file, record_processed_item, record_stage_completion, record_stage_failure
+from oie.orchestration.stage_checkpoint import merge_previous_checkpoint, next_start_index, record_processed_item, record_stage_completion, record_stage_failure
 from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
 from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
 from oie.orchestration.stage_result import StageResult
@@ -55,8 +55,7 @@ class StageRunner:
         return read_jsonl_file(paths["output"])
 
     def read_checkpoint(self, stage: Stage) -> StageState | None:
-        paths = stage.artifact_paths()
-        return read_checkpoint_file(paths["checkpoint"])
+        return StageCheckpointManager(stage).read_checkpoint()
 
     def run_stage(self, stage_cls: StageClass) -> StageState:
         stage = stage_cls(self.ctx)
