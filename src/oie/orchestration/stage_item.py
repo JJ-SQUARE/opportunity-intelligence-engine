@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, TypeAlias
+from typing import NotRequired, TypedDict
+
+from oie.orchestration.json_payload import JSONPayload
 
 
-StageItem: TypeAlias = dict[str, Any]
+class StageItem(TypedDict, total=False):
+    id: NotRequired[str]
+    value: NotRequired[object]
+    metadata: NotRequired[JSONPayload]
