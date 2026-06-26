@@ -7,12 +7,21 @@ from oie.orchestration.run_context import RunContext
 from oie.orchestration.stage_artifacts import StageArtifactPaths
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_checkpoint import load_checkpoint_payload
-from oie.orchestration.stage_errors import ErrorRecord
+from oie.orchestration.stage_errors import ErrorRecord, build_error_record
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_metrics import StageMetrics
 from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.stage_state import StageState
+
+
+def test_build_error_record_returns_exception_type_and_message():
+    error = build_error_record(RuntimeError("controlled failure"))
+
+    assert error == {
+        "error_type": "RuntimeError",
+        "error_message": "controlled failure",
+    }
 
 
 def test_error_record_contract():
