@@ -9,7 +9,6 @@ from oie.orchestration.stage_metrics import StageMetrics
 from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_timing import start_timer
 from oie.orchestration.stage_base import Stage
-from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_state import StageState
 
 
