@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from oie.orchestration.stage_base import Stage
-from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, read_checkpoint_file, record_processed_item, record_stage_completion
+from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, next_start_index, read_checkpoint_file, record_processed_item, record_stage_completion, record_stage_failure
 from oie.orchestration.stage_io import append_jsonl_item, write_json_file
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
@@ -50,3 +50,6 @@ class StageCheckpointManager:
 
     def record_stage_completion(self, checkpoint: StageState, start_time: float) -> None:
         record_stage_completion(checkpoint, start_time)
+
+    def record_stage_failure(self, checkpoint: StageState, exc: Exception, start_time: float) -> str:
+        return record_stage_failure(checkpoint, exc, start_time)

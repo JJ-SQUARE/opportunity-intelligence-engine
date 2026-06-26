@@ -4,7 +4,6 @@ from typing import TypeAlias
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import update_stage_status
-from oie.orchestration.stage_checkpoint import record_stage_failure
 from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
 from oie.orchestration.stage_metrics import StageMetrics
 from oie.orchestration.stage_result import StageResult
@@ -70,7 +69,7 @@ class StageRunner:
                 StageCheckpointManager(stage).record_processed_item(checkpoint, index, output_item)
                 self.write_checkpoint(stage, checkpoint)
         except Exception as exc:
-            failure_status = record_stage_failure(checkpoint, exc, start_time)
+            failure_status = StageCheckpointManager(stage).record_stage_failure(checkpoint, exc, start_time)
             self.write_checkpoint(stage, checkpoint)
             self.write_metrics(stage, checkpoint)
             update_stage_status(self.ctx, stage.name, failure_status)
