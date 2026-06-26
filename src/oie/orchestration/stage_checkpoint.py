@@ -33,6 +33,8 @@ def build_initial_checkpoint(ctx: RunContext, stage: Stage, status: str = "runni
 
 
 def load_checkpoint_payload(checkpoint: object) -> StageState:
+    if not isinstance(checkpoint, dict):
+        raise TypeError("Checkpoint payload must be a JSON object.")
     return cast(StageState, checkpoint)
 
 
