@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from oie.orchestration.stage_base import Stage
-from oie.orchestration.stage_checkpoint import read_checkpoint_file, record_stage_completion, record_stage_failure
+from oie.orchestration.stage_checkpoint import read_checkpoint_file, record_stage_failure
 from oie.orchestration.stage_io import append_jsonl_item, write_json_file
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
 from oie.orchestration.stage_state import StageState
+from oie.orchestration.stage_timing import elapsed_seconds
 
 
 class StageCheckpointManager:
@@ -81,7 +82,8 @@ class StageCheckpointManager:
         checkpoint["last_processed_id"] = output_item.get("id")
 
     def record_stage_completion(self, checkpoint: StageState, start_time: float) -> None:
-        record_stage_completion(checkpoint, start_time)
+        checkpoint["status"] = "completed"
+        checkpoint["processing_time_seconds"] = elapsed_seconds(start_time)
 
     def record_stage_failure(self, checkpoint: StageState, exc: Exception, start_time: float) -> str:
         return record_stage_failure(checkpoint, exc, start_time)

@@ -64,6 +64,3 @@ def record_stage_failure(checkpoint: StageState, exc: Exception, start_time: flo
     return failure_status
 
 
-def record_stage_completion(checkpoint: StageState, start_time: float) -> None:
-    checkpoint["status"] = "completed"
-    checkpoint["processing_time_seconds"] = elapsed_seconds(start_time)
