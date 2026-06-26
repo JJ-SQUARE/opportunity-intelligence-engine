@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import get_type_hints, cast
 
-from oie.orchestration.stage_io import read_json_file
 from oie.orchestration.stage_state import StageState
 
 
@@ -41,12 +39,5 @@ def load_checkpoint_payload(checkpoint: object) -> StageState:
             raise TypeError(f"Checkpoint field has invalid type: {field_name}")
 
     return cast(StageState, checkpoint)
-
-
-def read_checkpoint_file(path: Path) -> StageState | None:
-    checkpoint = read_json_file(path)
-    if checkpoint is None:
-        return None
-    return load_checkpoint_payload(checkpoint)
 
 
