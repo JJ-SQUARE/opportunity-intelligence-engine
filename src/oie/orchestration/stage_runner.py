@@ -4,7 +4,7 @@ from typing import TypeAlias
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import update_stage_status
-from oie.orchestration.stage_checkpoint import merge_previous_checkpoint, next_start_index, record_processed_item, record_stage_completion, record_stage_failure
+from oie.orchestration.stage_checkpoint import next_start_index, record_processed_item, record_stage_completion, record_stage_failure
 from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
 from oie.orchestration.stage_metrics import StageMetrics
 from oie.orchestration.stage_result import StageResult
@@ -56,7 +56,7 @@ class StageRunner:
         update_stage_status(self.ctx, stage.name, "running")
         checkpoint = self.initial_checkpoint(stage)
         previous_checkpoint = self.read_checkpoint(stage)
-        checkpoint = merge_previous_checkpoint(checkpoint, previous_checkpoint)
+        checkpoint = StageCheckpointManager(stage).merge_previous_checkpoint(checkpoint, previous_checkpoint)
         inputs = list(stage.load_input())
         checkpoint["input_count"] = len(inputs)
         start_index = next_start_index(checkpoint)

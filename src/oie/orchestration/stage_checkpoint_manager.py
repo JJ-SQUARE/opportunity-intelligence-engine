@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from oie.orchestration.stage_base import Stage
-from oie.orchestration.stage_checkpoint import build_initial_checkpoint, read_checkpoint_file
+from oie.orchestration.stage_checkpoint import build_initial_checkpoint, merge_previous_checkpoint, read_checkpoint_file
 from oie.orchestration.stage_io import append_jsonl_item, write_json_file
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
@@ -18,6 +18,13 @@ class StageCheckpointManager:
     def read_checkpoint(self) -> StageState | None:
         paths = self.stage.artifact_paths()
         return read_checkpoint_file(paths["checkpoint"])
+
+    def merge_previous_checkpoint(
+        self,
+        checkpoint: StageState,
+        previous_checkpoint: StageState | None,
+    ) -> StageState:
+        return merge_previous_checkpoint(checkpoint, previous_checkpoint)
 
     def write_checkpoint(self, checkpoint: StageState) -> None:
         paths = self.stage.artifact_paths()
