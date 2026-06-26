@@ -276,3 +276,72 @@ def test_get_run_metrics_returns_404_for_missing_run(tmp_path, monkeypatch):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run not found"}
+
+
+
+def test_get_run_stage_returns_existing_stage_status(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs")
+
+    assert response.status_code == 200
+    assert response.json() == {"stage": "collect_jobs", "status": "pending"}
+
+
+def test_get_run_stage_returns_404_for_unknown_stage(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/stages/unknown_stage")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Stage not found"}
+
+
+def test_get_run_stage_returns_404_for_missing_run(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get("/runs/missing_run/stages/collect_jobs")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Stage not found"}

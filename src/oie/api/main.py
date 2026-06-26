@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import list_run_summaries, read_run_detail, read_run_errors, read_run_metrics_summary, read_run_stage_statuses, read_run_status
+from oie.orchestration.run_manifest import list_run_summaries, read_run_detail, read_run_errors, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status
 
 app = FastAPI(title="Opportunity Intelligence Engine API")
 
@@ -36,6 +36,15 @@ def get_run_stages(run_id: str) -> list[JSONPayload]:
     if stages is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return stages
+
+
+@app.get("/runs/{run_id}/stages/{stage_name}")
+def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
+    ctx = RunContext.create()
+    stage = read_run_stage_status(ctx, run_id, stage_name)
+    if stage is None:
+        raise HTTPException(status_code=404, detail="Stage not found")
+    return stage
 
 
 @app.get("/runs/{run_id}/errors")
