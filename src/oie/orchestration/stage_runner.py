@@ -6,10 +6,10 @@ from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import update_stage_status
 from oie.orchestration.stage_checkpoint import merge_previous_checkpoint, next_start_index, record_processed_item, record_stage_completion, record_stage_failure
 from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
-from oie.orchestration.stage_metrics import StageMetrics, build_stage_metrics
+from oie.orchestration.stage_metrics import StageMetrics
 from oie.orchestration.stage_result import StageResult
 from oie.orchestration.stage_timing import start_timer
-from oie.orchestration.stage_io import append_jsonl_item, read_jsonl_file, write_json_file
+from oie.orchestration.stage_io import read_jsonl_file
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_state import StageState
@@ -26,20 +26,13 @@ class StageRunner:
         return StageCheckpointManager(stage).initial_checkpoint(status)
 
     def write_checkpoint(self, stage: Stage, checkpoint: StageState) -> None:
-        paths = stage.artifact_paths()
-        paths["stage_dir"].mkdir(parents=True, exist_ok=True)
-        write_json_file(paths["checkpoint"], checkpoint)
+        StageCheckpointManager(stage).write_checkpoint(checkpoint)
 
     def write_metrics(self, stage: Stage, checkpoint: StageState) -> StageMetrics:
-        paths = stage.artifact_paths()
-        metrics = build_stage_metrics(checkpoint)
-        write_json_file(paths["metrics"], metrics)
-        return metrics
+        return StageCheckpointManager(stage).write_metrics(checkpoint)
 
     def append_output(self, stage: Stage, item: StageItem) -> None:
-        paths = stage.artifact_paths()
-        paths["stage_dir"].mkdir(parents=True, exist_ok=True)
-        append_jsonl_item(paths["output"], item)
+        StageCheckpointManager(stage).append_output(item)
 
     def build_result(self, checkpoint: StageState, metrics: StageMetrics) -> StageResult:
         return {
