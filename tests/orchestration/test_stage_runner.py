@@ -15,6 +15,17 @@ def test_load_checkpoint_payload_rejects_non_object_payload():
         raise AssertionError("Expected TypeError")
 
 
+def test_load_checkpoint_payload_rejects_missing_required_fields():
+    try:
+        load_checkpoint_payload({"run_id": "run_1"})
+    except ValueError as exc:
+        assert "Checkpoint payload missing required fields:" in str(exc)
+        assert "stage" in str(exc)
+        assert "status" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError")
+
+
 class RunnerDummyStage(Stage):
     name = "collect_jobs"
     order = 1

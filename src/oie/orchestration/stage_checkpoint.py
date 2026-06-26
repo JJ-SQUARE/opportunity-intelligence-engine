@@ -32,9 +32,32 @@ def build_initial_checkpoint(ctx: RunContext, stage: Stage, status: str = "runni
     }
 
 
+REQUIRED_CHECKPOINT_FIELDS = {
+    "run_id",
+    "stage",
+    "status",
+    "input_count",
+    "processed_count",
+    "output_count",
+    "rejected_count",
+    "last_processed_index",
+    "last_processed_id",
+    "errors",
+    "provider_usage",
+    "cost_estimate",
+    "processing_time_seconds",
+}
+
+
 def load_checkpoint_payload(checkpoint: object) -> StageState:
     if not isinstance(checkpoint, dict):
         raise TypeError("Checkpoint payload must be a JSON object.")
+
+    missing_fields = REQUIRED_CHECKPOINT_FIELDS - set(checkpoint)
+    if missing_fields:
+        missing = ", ".join(sorted(missing_fields))
+        raise ValueError(f"Checkpoint payload missing required fields: {missing}")
+
     return cast(StageState, checkpoint)
 
 
