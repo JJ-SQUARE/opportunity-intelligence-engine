@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+
+from oie.orchestration.json_payload import JSONPayload
 
 
 @dataclass
@@ -10,7 +11,7 @@ class ProviderEventRecord:
     event_type: str
     status_code: int | None = None
     message: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: JSONPayload = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JSONPayload:
         return asdict(self)

@@ -6,7 +6,39 @@ from typing import Any, TypedDict
 from uuid import uuid4
 
 from oie.models.provider_event import ProviderEventRecord
+from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
+
+
+class RunConfig(TypedDict, total=False):
+    database: JSONPayload
+    runs: JSONPayload
+
+
+class RunFlags(TypedDict, total=False):
+    cache_only: bool
+    dry_run: bool
+    config_path: str
+
+
+class RunMetrics(TypedDict, total=False):
+    pass
+
+
+class RunBudgets(TypedDict, total=False):
+    pass
+
+
+class ProviderState(TypedDict, total=False):
+    pass
+
+
+class ProviderEventPayload(TypedDict):
+    provider: str
+    event_type: str
+    status_code: int | None
+    message: str | None
+    metadata: JSONPayload
 
 
 class RunPaths(TypedDict):
@@ -22,19 +54,19 @@ class RunContext:
     run_id: str
     run_date: str
     mode: str
-    config: dict[str, Any] = field(default_factory=dict)
-    flags: dict[str, Any] = field(default_factory=dict)
-    metrics: dict[str, Any] = field(default_factory=dict)
-    budgets: dict[str, Any] = field(default_factory=dict)
-    provider_events: list[dict[str, Any]] = field(default_factory=list)
-    provider_state: dict[str, Any] = field(default_factory=dict)
+    config: RunConfig = field(default_factory=dict)
+    flags: RunFlags = field(default_factory=dict)
+    metrics: RunMetrics = field(default_factory=dict)
+    budgets: RunBudgets = field(default_factory=dict)
+    provider_events: list[ProviderEventPayload] = field(default_factory=list)
+    provider_state: ProviderState = field(default_factory=dict)
     paths: RunPaths = field(default_factory=dict)
 
     @classmethod
     def create(
         cls,
-        config: dict[str, Any] | None = None,
-        flags: dict[str, Any] | None = None,
+        config: RunConfig | None = None,
+        flags: RunFlags | None = None,
         mode: str | None = None,
     ) -> "RunContext":
         config = config or {}
@@ -81,7 +113,7 @@ class RunContext:
         provider: str,
         event_type: str,
         message: str,
-        metadata: dict[str, Any] | None = None,
+        metadata: JSONPayload | None = None,
         status_code: int | None = None,
     ) -> None:
         event_metadata = metadata or {}
