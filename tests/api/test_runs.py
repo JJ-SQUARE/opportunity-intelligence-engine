@@ -573,3 +573,110 @@ def test_get_run_stage_metrics_returns_404_for_missing_run(tmp_path, monkeypatch
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Stage metrics not found"}
+
+
+
+def test_get_run_stage_output_returns_existing_output(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+    output_path = ctx.paths["stage_dirs"]["collect_jobs"] + "/output.jsonl"
+
+    from pathlib import Path
+    import json
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).write_text(
+        json.dumps({"id": "item_1", "value": 10}) + "\n"
+        + json.dumps({"id": "item_2", "value": 20}) + "\n",
+        encoding="utf-8",
+    )
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/output")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"id": "item_1", "value": 10},
+        {"id": "item_2", "value": 20},
+    ]
+
+
+def test_get_run_stage_output_returns_404_for_missing_output(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/output")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Stage output not found"}
+
+
+def test_get_run_stage_output_returns_404_for_unknown_stage(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/stages/unknown_stage/output")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Stage output not found"}
+
+
+def test_get_run_stage_output_returns_404_for_missing_run(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get("/runs/missing_run/stages/collect_jobs/output")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Stage output not found"}

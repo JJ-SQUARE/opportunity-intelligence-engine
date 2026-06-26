@@ -7,7 +7,7 @@ from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.stage_artifacts import stage_artifact_paths
 from oie.orchestration.stage_checkpoint import load_checkpoint_payload
-from oie.orchestration.stage_io import read_json_file
+from oie.orchestration.stage_io import read_json_file, read_jsonl_file
 from oie.orchestration.run_manifest import list_run_summaries, read_run_detail, read_run_errors, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status
 
 app = FastAPI(title="Opportunity Intelligence Engine API")
@@ -89,6 +89,26 @@ def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
     if metrics is None:
         raise HTTPException(status_code=404, detail="Stage metrics not found")
     return metrics
+
+
+@app.get("/runs/{run_id}/stages/{stage_name}/output")
+def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
+    ctx = RunContext.create()
+    detail = read_run_detail(ctx, run_id)
+    if detail is None or stage_name not in PIPELINE_STAGES:
+        raise HTTPException(status_code=404, detail="Stage output not found")
+
+    ctx.paths["run_dir"] = f'{ctx.paths["runs_base_dir"]}/{run_id}'
+    ctx.paths["manifest_path"] = f'{ctx.paths["run_dir"]}/manifest.json'
+    ctx.paths["stage_dirs"] = {
+        stage: f'{ctx.paths["run_dir"]}/{index:02d}_{stage}'
+        for index, stage in enumerate(PIPELINE_STAGES, start=1)
+    }
+
+    output_path = stage_artifact_paths(ctx, stage_name)["output"]
+    if not output_path.exists():
+        raise HTTPException(status_code=404, detail="Stage output not found")
+    return read_jsonl_file(output_path)
 
 
 @app.get("/runs/{run_id}/errors")
