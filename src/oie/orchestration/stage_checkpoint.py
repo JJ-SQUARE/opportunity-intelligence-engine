@@ -7,7 +7,6 @@ from oie.orchestration.stage_io import read_json_file
 from oie.orchestration.stage_state import StageState
 
 
-
 REQUIRED_CHECKPOINT_FIELDS = set(get_type_hints(StageState))
 
 
