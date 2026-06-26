@@ -1,8 +1,28 @@
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from typing import get_type_hints
 
-from oie.orchestration.run_context import DatabaseConfig, RunConfig, RunContext, RunsConfig
+from oie.orchestration.run_context import (
+    DatabaseConfig,
+    RunBudgets,
+    RunConfig,
+    RunContext,
+    RunMetrics,
+    RunsConfig,
+)
 from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
+
+
+def test_run_metrics_and_budgets_contracts():
+    assert get_type_hints(RunMetrics) == {
+        "total_processing_time_seconds": float,
+        "total_input_count": int,
+        "total_output_count": int,
+        "total_rejected_count": int,
+    }
+
+    assert get_type_hints(RunBudgets) == {
+        "total_cost_usd": float,
+    }
 
 
 def test_run_config_contract_exposes_typed_sections():
