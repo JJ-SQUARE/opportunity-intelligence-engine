@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Type
+from typing import TypeAlias
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import update_stage_status
@@ -12,6 +12,9 @@ from oie.orchestration.stage_io import append_jsonl_item, read_jsonl_file, write
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_item import StageItem
 from oie.orchestration.stage_state import StageState
+
+
+StageClass: TypeAlias = type[Stage]
 
 
 class StageRunner:
@@ -54,7 +57,7 @@ class StageRunner:
         paths = stage.artifact_paths()
         return read_checkpoint_file(paths["checkpoint"])
 
-    def run_stage(self, stage_cls: Type[Stage]) -> StageState:
+    def run_stage(self, stage_cls: StageClass) -> StageState:
         stage = stage_cls(self.ctx)
         stage.ensure_stage_dir()
         update_stage_status(self.ctx, stage.name, "running")
