@@ -32,9 +32,15 @@ def build_initial_checkpoint(ctx: RunContext, stage: Stage, status: str = "runni
     }
 
 
+def load_checkpoint_payload(checkpoint: object) -> StageState:
+    return cast(StageState, checkpoint)
+
+
 def read_checkpoint_file(path: Path) -> StageState | None:
     checkpoint = read_json_file(path)
-    return cast(StageState, checkpoint) if checkpoint is not None else None
+    if checkpoint is None:
+        return None
+    return load_checkpoint_payload(checkpoint)
 
 
 def merge_previous_checkpoint(checkpoint: StageState, previous_checkpoint: StageState | None) -> StageState:
