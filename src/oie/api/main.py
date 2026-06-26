@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import list_run_summaries
+from oie.orchestration.run_manifest import list_run_summaries, read_run_detail
 
 app = FastAPI(title="Opportunity Intelligence Engine API")
 
@@ -18,3 +18,12 @@ def healthcheck() -> dict[str, str]:
 def list_runs() -> list[JSONPayload]:
     ctx = RunContext.create()
     return list_run_summaries(ctx)
+
+
+@app.get("/runs/{run_id}")
+def get_run_detail(run_id: str) -> JSONPayload:
+    ctx = RunContext.create()
+    detail = read_run_detail(ctx, run_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return detail
