@@ -21,6 +21,9 @@ class StageRunner:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
 
+    def write_metrics(self, stage: Stage, checkpoint: StageState) -> StageMetrics:
+        return StageCheckpointManager(stage).write_metrics(checkpoint)
+
     def build_result(self, checkpoint: StageState, metrics: StageMetrics) -> StageResult:
         return {
             "run_id": checkpoint["run_id"],
