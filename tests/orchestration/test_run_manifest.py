@@ -1,5 +1,5 @@
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, build_run_detail, build_run_errors, build_run_metrics_summary, build_run_status, build_run_summary, build_stage_status, build_stage_statuses, list_run_manifests, read_manifest, read_run_errors, read_run_manifest, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status, write_manifest
+from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, build_run_detail, build_run_errors, build_run_metrics_summary, build_run_status, build_run_summary, build_stage_status, build_stage_statuses, list_run_manifests, read_manifest, read_run_manifest, write_manifest
 
 
 def test_run_manifest_contract_exposes_required_fields():
@@ -135,28 +135,6 @@ def test_build_run_status_returns_current_status_fields(tmp_path):
     }
 
 
-def test_read_run_status_returns_existing_status_by_run_id(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-    manifest = build_initial_manifest(ctx)
-    write_manifest(ctx, manifest)
-
-    status = read_run_status(ctx, ctx.run_id)
-
-    assert status == build_run_status(manifest)
-
-
-def test_read_run_status_returns_none_for_missing_run_id(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-
-    assert read_run_status(ctx, "missing_run") is None
-
-
 def test_build_stage_statuses_returns_stage_status_list(tmp_path):
     ctx = RunContext.create(
         config={"runs": {"path": str(tmp_path / "runs")}},
@@ -168,28 +146,6 @@ def test_build_stage_statuses_returns_stage_status_list(tmp_path):
 
     assert statuses[0] == {"stage": "collect_jobs", "status": "pending"}
     assert statuses[-1] == {"stage": "delivery", "status": "pending"}
-
-
-def test_read_run_stage_statuses_returns_existing_stage_statuses(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-    manifest = build_initial_manifest(ctx)
-    write_manifest(ctx, manifest)
-
-    statuses = read_run_stage_statuses(ctx, ctx.run_id)
-
-    assert statuses == build_stage_statuses(manifest)
-
-
-def test_read_run_stage_statuses_returns_none_for_missing_run_id(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-
-    assert read_run_stage_statuses(ctx, "missing_run") is None
 
 
 def test_build_stage_status_returns_single_stage_status(tmp_path):
@@ -212,39 +168,6 @@ def test_build_stage_status_returns_none_for_unknown_stage(tmp_path):
     manifest = build_initial_manifest(ctx)
 
     assert build_stage_status(manifest, "unknown_stage") is None
-
-
-def test_read_run_stage_status_returns_existing_stage_status(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-    manifest = build_initial_manifest(ctx)
-    write_manifest(ctx, manifest)
-
-    status = read_run_stage_status(ctx, ctx.run_id, "delivery")
-
-    assert status == {"stage": "delivery", "status": "pending"}
-
-
-def test_read_run_stage_status_returns_none_for_missing_run_id(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-
-    assert read_run_stage_status(ctx, "missing_run", "collect_jobs") is None
-
-
-def test_read_run_stage_status_returns_none_for_unknown_stage(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-    manifest = build_initial_manifest(ctx)
-    write_manifest(ctx, manifest)
-
-    assert read_run_stage_status(ctx, ctx.run_id, "unknown_stage") is None
 
 
 def test_build_run_errors_returns_manifest_errors_copy(tmp_path):
@@ -272,29 +195,6 @@ def test_build_run_errors_returns_empty_when_missing_errors(tmp_path):
     assert build_run_errors(manifest) == []
 
 
-def test_read_run_errors_returns_existing_errors_by_run_id(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-    manifest = build_initial_manifest(ctx)
-    manifest["errors"].append({"error_type": "RuntimeError", "error_message": "boom"})
-    write_manifest(ctx, manifest)
-
-    errors = read_run_errors(ctx, ctx.run_id)
-
-    assert errors == build_run_errors(manifest)
-
-
-def test_read_run_errors_returns_none_for_missing_run_id(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-
-    assert read_run_errors(ctx, "missing_run") is None
-
-
 def test_build_run_metrics_summary_returns_status_counts(tmp_path):
     ctx = RunContext.create(
         config={"runs": {"path": str(tmp_path / "runs")}},
@@ -314,25 +214,4 @@ def test_build_run_metrics_summary_returns_status_counts(tmp_path):
     assert summary["status_counts"]["running"] == 1
     assert summary["status_counts"]["pending"] == len(manifest["stages"]) - 2
 
-
-def test_read_run_metrics_summary_returns_existing_summary_by_run_id(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-    manifest = build_initial_manifest(ctx)
-    write_manifest(ctx, manifest)
-
-    summary = read_run_metrics_summary(ctx, ctx.run_id)
-
-    assert summary == build_run_metrics_summary(manifest)
-
-
-def test_read_run_metrics_summary_returns_none_for_missing_run_id(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-
-    assert read_run_metrics_summary(ctx, "missing_run") is None
 

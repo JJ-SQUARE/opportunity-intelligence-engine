@@ -99,25 +99,11 @@ def build_run_status(manifest: RunManifest) -> JSONPayload:
     }
 
 
-def read_run_status(ctx: RunContext, run_id: str) -> JSONPayload | None:
-    manifest = read_run_manifest(ctx, run_id)
-    if manifest is None:
-        return None
-    return build_run_status(manifest)
-
-
 def build_stage_statuses(manifest: RunManifest) -> list[JSONPayload]:
     return [
         {"stage": stage_name, "status": status}
         for stage_name, status in manifest.get("stages", {}).items()
     ]
-
-
-def read_run_stage_statuses(ctx: RunContext, run_id: str) -> list[JSONPayload] | None:
-    manifest = read_run_manifest(ctx, run_id)
-    if manifest is None:
-        return None
-    return build_stage_statuses(manifest)
 
 
 def build_stage_status(manifest: RunManifest, stage_name: str) -> JSONPayload | None:
@@ -127,22 +113,8 @@ def build_stage_status(manifest: RunManifest, stage_name: str) -> JSONPayload | 
     return {"stage": stage_name, "status": stages[stage_name]}
 
 
-def read_run_stage_status(ctx: RunContext, run_id: str, stage_name: str) -> JSONPayload | None:
-    manifest = read_run_manifest(ctx, run_id)
-    if manifest is None:
-        return None
-    return build_stage_status(manifest, stage_name)
-
-
 def build_run_errors(manifest: RunManifest) -> list[JSONPayload]:
     return list(manifest.get("errors", []))
-
-
-def read_run_errors(ctx: RunContext, run_id: str) -> list[JSONPayload] | None:
-    manifest = read_run_manifest(ctx, run_id)
-    if manifest is None:
-        return None
-    return build_run_errors(manifest)
 
 
 def build_run_metrics_summary(manifest: RunManifest) -> JSONPayload:
@@ -156,13 +128,6 @@ def build_run_metrics_summary(manifest: RunManifest) -> JSONPayload:
             for status in sorted(set(stages.values()))
         },
     }
-
-
-def read_run_metrics_summary(ctx: RunContext, run_id: str) -> JSONPayload | None:
-    manifest = read_run_manifest(ctx, run_id)
-    if manifest is None:
-        return None
-    return build_run_metrics_summary(manifest)
 
 
 def finalize_manifest(ctx: RunContext, status: str, error: JSONPayload | None = None) -> Path:
