@@ -17,16 +17,15 @@ def _run_repository() -> RunRepository:
 
 
 def _stage_artifact_repository(
-    ctx: RunContext,
     run_id: str,
     stage_name: str,
     not_found_detail: str,
 ) -> StageArtifactRepository:
-    repository = RunRepository(ctx)
+    repository = _run_repository()
     detail = repository.read_detail(run_id)
     if detail is None or stage_name not in PIPELINE_STAGES:
         raise HTTPException(status_code=404, detail=not_found_detail)
-    return StageArtifactRepository(ctx, run_id)
+    return StageArtifactRepository(repository.ctx, run_id)
 
 
 @app.get("/health")
@@ -69,8 +68,7 @@ def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
 
 @app.get("/runs/{run_id}/stages/{stage_name}/checkpoint")
 def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
-    ctx = RunContext.create()
-    repository = _stage_artifact_repository(ctx, run_id, stage_name, "Checkpoint not found")
+    repository = _stage_artifact_repository(run_id, stage_name, "Checkpoint not found")
     checkpoint = repository.read_checkpoint(stage_name)
     if checkpoint is None:
         raise HTTPException(status_code=404, detail="Checkpoint not found")
@@ -79,8 +77,7 @@ def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
 
 @app.get("/runs/{run_id}/stages/{stage_name}/metrics")
 def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
-    ctx = RunContext.create()
-    repository = _stage_artifact_repository(ctx, run_id, stage_name, "Stage metrics not found")
+    repository = _stage_artifact_repository(run_id, stage_name, "Stage metrics not found")
     metrics = repository.read_metrics(stage_name)
     if metrics is None:
         raise HTTPException(status_code=404, detail="Stage metrics not found")
@@ -89,8 +86,7 @@ def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
 
 @app.get("/runs/{run_id}/stages/{stage_name}/output")
 def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
-    ctx = RunContext.create()
-    repository = _stage_artifact_repository(ctx, run_id, stage_name, "Stage output not found")
+    repository = _stage_artifact_repository(run_id, stage_name, "Stage output not found")
     output = repository.read_output(stage_name)
     if output is None:
         raise HTTPException(status_code=404, detail="Stage output not found")
@@ -99,8 +95,7 @@ def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
 
 @app.get("/runs/{run_id}/stages/{stage_name}/errors")
 def get_run_stage_errors(run_id: str, stage_name: str) -> list[JSONPayload]:
-    ctx = RunContext.create()
-    repository = _stage_artifact_repository(ctx, run_id, stage_name, "Stage errors not found")
+    repository = _stage_artifact_repository(run_id, stage_name, "Stage errors not found")
     errors = repository.read_errors(stage_name)
     if errors is None:
         raise HTTPException(status_code=404, detail="Stage errors not found")
