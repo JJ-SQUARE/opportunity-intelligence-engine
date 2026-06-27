@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 
 from oie.orchestration.json_payload import JSONPayload
-from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
@@ -21,8 +20,8 @@ def _stage_artifact_repository(
     not_found_detail: str,
 ) -> StageArtifactRepository:
     repository = _run_repository()
-    detail = repository.read_detail(run_id)
-    if detail is None or stage_name not in PIPELINE_STAGES:
+    stage = repository.read_stage(run_id, stage_name)
+    if stage is None:
         raise HTTPException(status_code=404, detail=not_found_detail)
     return StageArtifactRepository(repository.ctx, run_id)
 
