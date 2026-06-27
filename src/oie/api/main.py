@@ -109,8 +109,7 @@ def get_run_stage_errors(run_id: str, stage_name: str) -> list[JSONPayload]:
 
 @app.get("/runs/{run_id}/errors")
 def get_run_errors(run_id: str) -> list[JSONPayload]:
-    ctx = RunContext.create()
-    repository = RunRepository(ctx)
+    repository = _run_repository()
     errors = repository.read_errors(run_id)
     if errors is None:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -119,8 +118,7 @@ def get_run_errors(run_id: str) -> list[JSONPayload]:
 
 @app.get("/runs/{run_id}/metrics")
 def get_run_metrics(run_id: str) -> JSONPayload:
-    ctx = RunContext.create()
-    repository = RunRepository(ctx)
+    repository = _run_repository()
     metrics = repository.read_metrics_summary(run_id)
     if metrics is None:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -129,8 +127,7 @@ def get_run_metrics(run_id: str) -> JSONPayload:
 
 @app.get("/runs/{run_id}")
 def get_run_detail(run_id: str) -> JSONPayload:
-    ctx = RunContext.create()
-    repository = RunRepository(ctx)
+    repository = _run_repository()
     detail = repository.read_detail(run_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Run not found")
