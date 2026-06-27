@@ -9,6 +9,10 @@ class RunRepository:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
 
+    @classmethod
+    def create(cls) -> "RunRepository":
+        return cls(RunContext.create())
+
     def list_summaries(self) -> list[JSONPayload]:
         return list_run_summaries(self.ctx)
 

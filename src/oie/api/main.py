@@ -12,8 +12,7 @@ app = FastAPI(title="Opportunity Intelligence Engine API")
 
 
 def _run_repository() -> RunRepository:
-    ctx = RunContext.create()
-    return RunRepository(ctx)
+    return RunRepository.create()
 
 
 def _stage_artifact_repository(
