@@ -1,5 +1,5 @@
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, build_run_detail, build_run_errors, build_run_metrics_summary, build_run_status, build_run_summary, build_stage_status, build_stage_statuses, list_run_manifests, read_manifest, read_run_detail, read_run_errors, read_run_manifest, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status, write_manifest
+from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, build_run_detail, build_run_errors, build_run_metrics_summary, build_run_status, build_run_summary, build_stage_status, build_stage_statuses, list_run_manifests, read_manifest, read_run_errors, read_run_manifest, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status, write_manifest
 
 
 def test_run_manifest_contract_exposes_required_fields():
@@ -117,28 +117,6 @@ def test_build_run_detail_returns_full_manifest_copy(tmp_path):
 
     assert detail == manifest
     assert detail is not manifest
-
-
-def test_read_run_detail_returns_existing_detail_by_run_id(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-    manifest = build_initial_manifest(ctx)
-    write_manifest(ctx, manifest)
-
-    detail = read_run_detail(ctx, ctx.run_id)
-
-    assert detail == manifest
-
-
-def test_read_run_detail_returns_none_for_missing_run_id(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-
-    assert read_run_detail(ctx, "missing_run") is None
 
 
 def test_build_run_status_returns_current_status_fields(tmp_path):

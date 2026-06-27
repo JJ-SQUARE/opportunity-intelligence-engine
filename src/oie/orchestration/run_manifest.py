@@ -91,13 +91,6 @@ def build_run_detail(manifest: RunManifest) -> JSONPayload:
     return dict(manifest)
 
 
-def read_run_detail(ctx: RunContext, run_id: str) -> JSONPayload | None:
-    manifest = read_run_manifest(ctx, run_id)
-    if manifest is None:
-        return None
-    return build_run_detail(manifest)
-
-
 def build_run_status(manifest: RunManifest) -> JSONPayload:
     return {
         "run_id": manifest["run_id"],
