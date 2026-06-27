@@ -9,6 +9,9 @@ class RunRepository:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
 
+    def _read_manifest(self, run_id: str):
+        return read_run_manifest(self.ctx, run_id)
+
     @classmethod
     def create(cls) -> "RunRepository":
         return cls(RunContext.create())
@@ -26,7 +29,7 @@ class RunRepository:
         ]
 
     def read_status(self, run_id: str) -> JSONPayload | None:
-        manifest = read_run_manifest(self.ctx, run_id)
+        manifest = self._read_manifest(run_id)
         if manifest is None:
             return None
         return {
@@ -36,7 +39,7 @@ class RunRepository:
         }
 
     def read_stages(self, run_id: str) -> list[JSONPayload] | None:
-        manifest = read_run_manifest(self.ctx, run_id)
+        manifest = self._read_manifest(run_id)
         if manifest is None:
             return None
         return [
@@ -45,7 +48,7 @@ class RunRepository:
         ]
 
     def read_stage(self, run_id: str, stage_name: str) -> JSONPayload | None:
-        manifest = read_run_manifest(self.ctx, run_id)
+        manifest = self._read_manifest(run_id)
         if manifest is None:
             return None
         stages = manifest.get("stages", {})
@@ -54,13 +57,13 @@ class RunRepository:
         return {"stage": stage_name, "status": stages[stage_name]}
 
     def read_errors(self, run_id: str) -> list[JSONPayload] | None:
-        manifest = read_run_manifest(self.ctx, run_id)
+        manifest = self._read_manifest(run_id)
         if manifest is None:
             return None
         return list(manifest.get("errors", []))
 
     def read_metrics_summary(self, run_id: str) -> JSONPayload | None:
-        manifest = read_run_manifest(self.ctx, run_id)
+        manifest = self._read_manifest(run_id)
         if manifest is None:
             return None
         stages = manifest.get("stages", {})
@@ -75,7 +78,7 @@ class RunRepository:
         }
 
     def read_detail(self, run_id: str) -> JSONPayload | None:
-        manifest = read_run_manifest(self.ctx, run_id)
+        manifest = self._read_manifest(run_id)
         if manifest is None:
             return None
         return dict(manifest)
