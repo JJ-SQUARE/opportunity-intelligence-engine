@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import list_run_manifests, read_run_detail, read_run_errors, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status, build_run_summary
+from oie.orchestration.run_manifest import list_run_manifests, read_run_manifest, read_run_errors, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status, build_run_detail, build_run_summary
 
 
 class RunRepository:
@@ -32,4 +32,7 @@ class RunRepository:
         return read_run_metrics_summary(self.ctx, run_id)
 
     def read_detail(self, run_id: str) -> JSONPayload | None:
-        return read_run_detail(self.ctx, run_id)
+        manifest = read_run_manifest(self.ctx, run_id)
+        if manifest is None:
+            return None
+        return build_run_detail(manifest)
