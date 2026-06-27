@@ -11,6 +11,11 @@ from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 app = FastAPI(title="Opportunity Intelligence Engine API")
 
 
+def _run_repository() -> RunRepository:
+    ctx = RunContext.create()
+    return RunRepository(ctx)
+
+
 def _stage_artifact_repository(
     ctx: RunContext,
     run_id: str,
@@ -31,15 +36,13 @@ def healthcheck() -> dict[str, str]:
 
 @app.get("/runs")
 def list_runs() -> list[JSONPayload]:
-    ctx = RunContext.create()
-    repository = RunRepository(ctx)
+    repository = _run_repository()
     return repository.list_summaries()
 
 
 @app.get("/runs/{run_id}/status")
 def get_run_status(run_id: str) -> JSONPayload:
-    ctx = RunContext.create()
-    repository = RunRepository(ctx)
+    repository = _run_repository()
     status = repository.read_status(run_id)
     if status is None:
         raise HTTPException(status_code=404, detail="Run not found")
