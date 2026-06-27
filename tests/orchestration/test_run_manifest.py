@@ -1,5 +1,7 @@
+import pytest
+
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, list_run_manifests, read_manifest, read_run_manifest, write_manifest
+from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, finalize_manifest, list_run_manifests, read_manifest, read_run_manifest, update_stage_status, write_manifest
 
 
 def test_run_manifest_contract_exposes_required_fields():
@@ -87,4 +89,31 @@ def test_list_run_manifests_returns_empty_when_runs_dir_missing(tmp_path):
 
     assert list_run_manifests(ctx) == []
 
+def test_finalize_manifest_rejects_unknown_status(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
 
+    with pytest.raises(ValueError, match="Unknown run status"):
+        finalize_manifest(ctx, "unknown_status")
+
+
+def test_update_stage_status_rejects_unknown_stage(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    with pytest.raises(ValueError, match="Unknown pipeline stage"):
+        update_stage_status(ctx, "unknown_stage", "running")
+
+
+def test_update_stage_status_rejects_unknown_status(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    with pytest.raises(ValueError, match="Unknown run status"):
+        update_stage_status(ctx, "collect_jobs", "unknown_status")

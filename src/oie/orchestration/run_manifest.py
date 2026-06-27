@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from oie.orchestration.json_payload import JSONPayload
-from oie.orchestration.pipeline_stages import PIPELINE_STAGES
+from oie.orchestration.pipeline_stages import PIPELINE_STAGES, validate_pipeline_stage, validate_run_status
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.stage_io import read_json_file, write_json_file
 
@@ -78,6 +78,7 @@ def list_run_manifests(ctx: RunContext) -> list[RunManifest]:
 
 
 def finalize_manifest(ctx: RunContext, status: str, error: JSONPayload | None = None) -> Path:
+    validate_run_status(status)
     manifest_path = Path(ctx.paths["manifest_path"])
     manifest = read_json_file(manifest_path)
     if manifest is None:
@@ -92,6 +93,8 @@ def finalize_manifest(ctx: RunContext, status: str, error: JSONPayload | None = 
 
 
 def update_stage_status(ctx: RunContext, stage_name: str, status: str) -> Path:
+    validate_pipeline_stage(stage_name)
+    validate_run_status(status)
     manifest_path = Path(ctx.paths["manifest_path"])
     manifest = read_json_file(manifest_path)
     if manifest is None:

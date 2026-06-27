@@ -20,3 +20,16 @@ RUN_STATUSES = [
     "skipped",
     "waiting_for_user",
 ]
+
+PIPELINE_STAGE_SET = set(PIPELINE_STAGES)
+RUN_STATUS_SET = set(RUN_STATUSES)
+
+
+def validate_pipeline_stage(stage_name: str) -> None:
+    if stage_name not in PIPELINE_STAGE_SET:
+        raise ValueError(f"Unknown pipeline stage: {stage_name}")
+
+
+def validate_run_status(status: str) -> None:
+    if status not in RUN_STATUS_SET:
+        raise ValueError(f"Unknown run status: {status}")
