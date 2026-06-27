@@ -51,8 +51,7 @@ def get_run_status(run_id: str) -> JSONPayload:
 
 @app.get("/runs/{run_id}/stages")
 def get_run_stages(run_id: str) -> list[JSONPayload]:
-    ctx = RunContext.create()
-    repository = RunRepository(ctx)
+    repository = _run_repository()
     stages = repository.read_stages(run_id)
     if stages is None:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -61,8 +60,7 @@ def get_run_stages(run_id: str) -> list[JSONPayload]:
 
 @app.get("/runs/{run_id}/stages/{stage_name}")
 def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
-    ctx = RunContext.create()
-    repository = RunRepository(ctx)
+    repository = _run_repository()
     stage = repository.read_stage(run_id, stage_name)
     if stage is None:
         raise HTTPException(status_code=404, detail="Stage not found")
