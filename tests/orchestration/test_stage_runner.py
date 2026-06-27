@@ -566,3 +566,40 @@ def test_stage_checkpoint_manager_rejects_invalid_checkpoint_before_write(tmp_pa
 
     assert not stage.artifact_paths()["checkpoint"].exists()
 
+def test_write_json_file_creates_parent_directories(tmp_path):
+    from oie.orchestration.stage_io import read_json_file, write_json_file
+
+    path = tmp_path / "nested" / "checkpoint.json"
+    payload = {"run_id": "run_1", "status": "completed"}
+
+    write_json_file(path, payload)
+
+    assert path.exists()
+    assert read_json_file(path) == payload
+    assert not (path.parent / ".checkpoint.json.tmp").exists()
+
+
+def test_append_jsonl_item_creates_parent_directories(tmp_path):
+    from oie.orchestration.stage_io import append_jsonl_item, read_jsonl_file
+
+    path = tmp_path / "nested" / "output.jsonl"
+    item = {"id": "item_1", "value": 10, "metadata": {}}
+
+    append_jsonl_item(path, item)
+
+    assert path.exists()
+    assert read_jsonl_file(path) == [item]
+
+
+def test_read_jsonl_file_reports_invalid_line_number(tmp_path):
+    from oie.orchestration.stage_io import read_jsonl_file
+
+    path = tmp_path / "output.jsonl"
+    path.write_text('{"id": "item_1"}\nnot-json\n', encoding="utf-8")
+
+    try:
+        read_jsonl_file(path)
+    except ValueError as exc:
+        assert str(exc) == f"Invalid JSONL at {path}:2"
+    else:
+        raise AssertionError("Expected ValueError")

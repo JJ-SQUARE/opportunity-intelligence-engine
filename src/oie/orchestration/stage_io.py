@@ -8,10 +8,13 @@ from oie.orchestration.stage_item import StageItem
 
 
 def write_json_file(path: Path, payload: JSONPayload) -> None:
-    path.write_text(
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_name(f".{path.name}.tmp")
+    temporary_path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    temporary_path.replace(path)
 
 
 def read_json_file(path: Path) -> JSONPayload | None:
@@ -21,6 +24,7 @@ def read_json_file(path: Path) -> JSONPayload | None:
 
 
 def append_jsonl_item(path: Path, item: StageItem) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as output_file:
         output_file.write(json.dumps(item, ensure_ascii=False) + "\n")
 
@@ -28,8 +32,13 @@ def append_jsonl_item(path: Path, item: StageItem) -> None:
 def read_jsonl_file(path: Path) -> list[StageItem]:
     if not path.exists():
         return []
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+
+    items = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            items.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSONL at {path}:{line_number}") from exc
+    return items
