@@ -77,59 +77,6 @@ def list_run_manifests(ctx: RunContext) -> list[RunManifest]:
     return manifests
 
 
-def build_run_summary(manifest: RunManifest) -> JSONPayload:
-    return {
-        "run_id": manifest["run_id"],
-        "status": manifest["status"],
-        "current_stage": manifest["current_stage"],
-        "created_at": manifest["created_at"],
-        "updated_at": manifest["updated_at"],
-    }
-
-
-def build_run_detail(manifest: RunManifest) -> JSONPayload:
-    return dict(manifest)
-
-
-def build_run_status(manifest: RunManifest) -> JSONPayload:
-    return {
-        "run_id": manifest["run_id"],
-        "status": manifest["status"],
-        "current_stage": manifest["current_stage"],
-    }
-
-
-def build_stage_statuses(manifest: RunManifest) -> list[JSONPayload]:
-    return [
-        {"stage": stage_name, "status": status}
-        for stage_name, status in manifest.get("stages", {}).items()
-    ]
-
-
-def build_stage_status(manifest: RunManifest, stage_name: str) -> JSONPayload | None:
-    stages = manifest.get("stages", {})
-    if stage_name not in stages:
-        return None
-    return {"stage": stage_name, "status": stages[stage_name]}
-
-
-def build_run_errors(manifest: RunManifest) -> list[JSONPayload]:
-    return list(manifest.get("errors", []))
-
-
-def build_run_metrics_summary(manifest: RunManifest) -> JSONPayload:
-    stages = manifest.get("stages", {})
-    return {
-        "run_id": manifest["run_id"],
-        "stage_count": len(stages),
-        "error_count": len(manifest.get("errors", [])),
-        "status_counts": {
-            status: list(stages.values()).count(status)
-            for status in sorted(set(stages.values()))
-        },
-    }
-
-
 def finalize_manifest(ctx: RunContext, status: str, error: JSONPayload | None = None) -> Path:
     manifest_path = Path(ctx.paths["manifest_path"])
     manifest = read_json_file(manifest_path)
