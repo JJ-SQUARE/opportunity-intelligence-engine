@@ -4,9 +4,10 @@ from fastapi import FastAPI, HTTPException
 
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
-from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import list_run_summaries, read_run_detail, read_run_errors, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status
+from oie.orchestration.run_manifest import read_run_detail, read_run_errors, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses
+from oie.orchestration.run_repository import RunRepository
+from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 
 app = FastAPI(title="Opportunity Intelligence Engine API")
 
@@ -31,13 +32,15 @@ def healthcheck() -> dict[str, str]:
 @app.get("/runs")
 def list_runs() -> list[JSONPayload]:
     ctx = RunContext.create()
-    return list_run_summaries(ctx)
+    repository = RunRepository(ctx)
+    return repository.list_summaries()
 
 
 @app.get("/runs/{run_id}/status")
 def get_run_status(run_id: str) -> JSONPayload:
     ctx = RunContext.create()
-    status = read_run_status(ctx, run_id)
+    repository = RunRepository(ctx)
+    status = repository.read_status(run_id)
     if status is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return status
