@@ -87,10 +87,6 @@ def build_run_summary(manifest: RunManifest) -> JSONPayload:
     }
 
 
-def list_run_summaries(ctx: RunContext) -> list[JSONPayload]:
-    return [build_run_summary(manifest) for manifest in list_run_manifests(ctx)]
-
-
 def build_run_detail(manifest: RunManifest) -> JSONPayload:
     return dict(manifest)
 

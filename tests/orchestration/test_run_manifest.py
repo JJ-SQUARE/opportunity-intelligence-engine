@@ -1,5 +1,5 @@
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, build_run_detail, build_run_errors, build_run_metrics_summary, build_run_status, build_run_summary, build_stage_status, build_stage_statuses, list_run_manifests, list_run_summaries, read_manifest, read_run_detail, read_run_errors, read_run_manifest, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status, write_manifest
+from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, build_run_detail, build_run_errors, build_run_metrics_summary, build_run_status, build_run_summary, build_stage_status, build_stage_statuses, list_run_manifests, read_manifest, read_run_detail, read_run_errors, read_run_manifest, read_run_metrics_summary, read_run_stage_status, read_run_stage_statuses, read_run_status, write_manifest
 
 
 def test_run_manifest_contract_exposes_required_fields():
@@ -104,18 +104,6 @@ def test_build_run_summary_returns_compact_manifest_fields(tmp_path):
         "created_at": manifest["created_at"],
         "updated_at": manifest["updated_at"],
     }
-
-
-def test_list_run_summaries_returns_compact_run_list(tmp_path):
-    ctx = RunContext.create(
-        config={"runs": {"path": str(tmp_path / "runs")}},
-        flags={},
-    )
-    write_manifest(ctx, build_initial_manifest(ctx))
-
-    summaries = list_run_summaries(ctx)
-
-    assert summaries == [build_run_summary(read_run_manifest(ctx, ctx.run_id))]
 
 
 def test_build_run_detail_returns_full_manifest_copy(tmp_path):
