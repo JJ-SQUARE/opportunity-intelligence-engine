@@ -20,7 +20,7 @@ def test_list_runs_returns_existing_run_summaries(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs")
@@ -53,7 +53,7 @@ def test_get_run_detail_returns_existing_manifest(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}")
@@ -73,7 +73,7 @@ def test_get_run_detail_returns_404_for_missing_run(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs/missing_run")
@@ -98,7 +98,7 @@ def test_get_run_status_returns_existing_status(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/status")
@@ -122,7 +122,7 @@ def test_get_run_status_returns_404_for_missing_run(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs/missing_run/status")
@@ -147,7 +147,7 @@ def test_get_run_stages_returns_existing_stage_statuses(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages")
@@ -168,7 +168,7 @@ def test_get_run_stages_returns_404_for_missing_run(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs/missing_run/stages")
@@ -194,7 +194,7 @@ def test_get_run_errors_returns_existing_errors(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/errors")
@@ -214,7 +214,7 @@ def test_get_run_errors_returns_404_for_missing_run(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs/missing_run/errors")
@@ -241,7 +241,7 @@ def test_get_run_metrics_returns_existing_metrics_summary(tmp_path, monkeypatch)
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/metrics")
@@ -269,7 +269,7 @@ def test_get_run_metrics_returns_404_for_missing_run(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs/missing_run/metrics")
@@ -294,7 +294,7 @@ def test_get_run_stage_returns_existing_stage_status(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs")
@@ -318,7 +318,7 @@ def test_get_run_stage_returns_404_for_unknown_stage(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/unknown_stage")
@@ -338,7 +338,7 @@ def test_get_run_stage_returns_404_for_missing_run(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs/missing_run/stages/collect_jobs")
@@ -385,7 +385,7 @@ def test_get_run_stage_checkpoint_returns_existing_checkpoint(tmp_path, monkeypa
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/checkpoint")
@@ -409,7 +409,7 @@ def test_get_run_stage_checkpoint_returns_404_for_missing_checkpoint(tmp_path, m
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/checkpoint")
@@ -433,7 +433,7 @@ def test_get_run_stage_checkpoint_returns_404_for_unknown_stage(tmp_path, monkey
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/unknown_stage/checkpoint")
@@ -453,7 +453,7 @@ def test_get_run_stage_checkpoint_returns_404_for_missing_run(tmp_path, monkeypa
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs/missing_run/stages/collect_jobs/checkpoint")
@@ -498,7 +498,7 @@ def test_get_run_stage_metrics_returns_existing_metrics(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/metrics")
@@ -522,7 +522,7 @@ def test_get_run_stage_metrics_returns_404_for_missing_metrics(tmp_path, monkeyp
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/metrics")
@@ -546,7 +546,7 @@ def test_get_run_stage_metrics_returns_404_for_unknown_stage(tmp_path, monkeypat
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/unknown_stage/metrics")
@@ -566,7 +566,7 @@ def test_get_run_stage_metrics_returns_404_for_missing_run(tmp_path, monkeypatch
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs/missing_run/stages/collect_jobs/metrics")
@@ -602,7 +602,7 @@ def test_get_run_stage_output_returns_existing_output(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/output")
@@ -629,7 +629,7 @@ def test_get_run_stage_output_returns_404_for_missing_output(tmp_path, monkeypat
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/output")
@@ -653,7 +653,7 @@ def test_get_run_stage_output_returns_404_for_unknown_stage(tmp_path, monkeypatc
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/unknown_stage/output")
@@ -673,7 +673,7 @@ def test_get_run_stage_output_returns_404_for_missing_run(tmp_path, monkeypatch)
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs/missing_run/stages/collect_jobs/output")
@@ -719,7 +719,7 @@ def test_get_run_stage_errors_returns_existing_errors(tmp_path, monkeypatch):
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/errors")
@@ -765,7 +765,7 @@ def test_get_run_stage_errors_returns_empty_list_when_no_errors(tmp_path, monkey
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/errors")
@@ -789,7 +789,7 @@ def test_get_run_stage_errors_returns_404_for_missing_checkpoint(tmp_path, monke
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/errors")
@@ -813,7 +813,7 @@ def test_get_run_stage_errors_returns_404_for_unknown_stage(tmp_path, monkeypatc
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get(f"/runs/{ctx.run_id}/stages/unknown_stage/errors")
@@ -833,7 +833,7 @@ def test_get_run_stage_errors_returns_404_for_missing_run(tmp_path, monkeypatch)
             mode=mode,
         )
 
-    monkeypatch.setattr("oie.api.main.RunContext.create", fake_create)
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
 
     client = TestClient(app)
     response = client.get("/runs/missing_run/stages/collect_jobs/errors")

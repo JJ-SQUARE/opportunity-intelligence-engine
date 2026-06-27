@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 
 from oie.orchestration.json_payload import JSONPayload
-from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 
