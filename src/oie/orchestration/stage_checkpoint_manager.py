@@ -65,6 +65,7 @@ class StageCheckpointManager:
         return checkpoint, start_index
 
     def write_checkpoint(self, checkpoint: StageState) -> None:
+        load_checkpoint_payload(checkpoint)
         paths = self.stage.artifact_paths()
         paths["stage_dir"].mkdir(parents=True, exist_ok=True)
         write_json_file(paths["checkpoint"], checkpoint)

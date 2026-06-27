@@ -497,3 +497,72 @@ def test_stage_runner_zero_processed_failure_stays_failed(tmp_path):
     assert metrics["processing_time_seconds"] == checkpoint["processing_time_seconds"]
     assert manifest["stages"]["domain_gate"] == "failed"
 
+def test_load_checkpoint_payload_rejects_unknown_stage():
+    checkpoint = {
+        "run_id": "run_1",
+        "stage": "unknown_stage",
+        "status": "running",
+        "input_count": 0,
+        "processed_count": 0,
+        "output_count": 0,
+        "rejected_count": 0,
+        "last_processed_index": None,
+        "last_processed_id": None,
+        "errors": [],
+        "provider_usage": {},
+        "cost_estimate": {},
+        "processing_time_seconds": 0.0,
+    }
+
+    try:
+        load_checkpoint_payload(checkpoint)
+    except ValueError as exc:
+        assert str(exc) == "Unknown pipeline stage: unknown_stage"
+    else:
+        raise AssertionError("Expected ValueError")
+
+
+def test_load_checkpoint_payload_rejects_unknown_status():
+    checkpoint = {
+        "run_id": "run_1",
+        "stage": "collect_jobs",
+        "status": "unknown_status",
+        "input_count": 0,
+        "processed_count": 0,
+        "output_count": 0,
+        "rejected_count": 0,
+        "last_processed_index": None,
+        "last_processed_id": None,
+        "errors": [],
+        "provider_usage": {},
+        "cost_estimate": {},
+        "processing_time_seconds": 0.0,
+    }
+
+    try:
+        load_checkpoint_payload(checkpoint)
+    except ValueError as exc:
+        assert str(exc) == "Unknown run status: unknown_status"
+    else:
+        raise AssertionError("Expected ValueError")
+
+
+def test_stage_checkpoint_manager_rejects_invalid_checkpoint_before_write(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    stage = RunnerDummyStage(ctx)
+    manager = StageCheckpointManager(stage)
+    checkpoint = manager.initial_checkpoint()
+    checkpoint["stage"] = "unknown_stage"
+
+    try:
+        manager.write_checkpoint(checkpoint)
+    except ValueError as exc:
+        assert str(exc) == "Unknown pipeline stage: unknown_stage"
+    else:
+        raise AssertionError("Expected ValueError")
+
+    assert not stage.artifact_paths()["checkpoint"].exists()
+

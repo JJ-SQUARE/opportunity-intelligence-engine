@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import get_type_hints, cast
 
+from oie.orchestration.pipeline_stages import validate_pipeline_stage, validate_run_status
 from oie.orchestration.stage_state import StageState
 
 
@@ -37,6 +38,9 @@ def load_checkpoint_payload(checkpoint: object) -> StageState:
     for field_name, expected_type in CHECKPOINT_FIELD_TYPES.items():
         if not isinstance(checkpoint[field_name], expected_type):
             raise TypeError(f"Checkpoint field has invalid type: {field_name}")
+
+    validate_pipeline_stage(checkpoint["stage"])
+    validate_run_status(checkpoint["status"])
 
     return cast(StageState, checkpoint)
 
