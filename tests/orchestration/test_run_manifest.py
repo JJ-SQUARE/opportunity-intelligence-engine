@@ -117,3 +117,38 @@ def test_update_stage_status_rejects_unknown_status(tmp_path):
 
     with pytest.raises(ValueError, match="Unknown run status"):
         update_stage_status(ctx, "collect_jobs", "unknown_status")
+
+def test_next_pending_stage_returns_first_non_completed_stage(tmp_path):
+    ctx = RunContext.create(config={"runs": {"path": str(tmp_path / "runs")}})
+    manifest = build_initial_manifest(ctx)
+    manifest["stages"]["collect_jobs"] = "completed"
+    manifest["stages"]["company_gate"] = "completed"
+
+    from oie.orchestration.run_manifest import next_pending_stage
+
+    assert next_pending_stage(manifest) == "freshness_gate"
+
+
+def test_next_pending_stage_returns_none_when_all_stages_completed(tmp_path):
+    ctx = RunContext.create(config={"runs": {"path": str(tmp_path / "runs")}})
+    manifest = build_initial_manifest(ctx)
+    manifest["stages"] = {stage: "completed" for stage in manifest["stages"]}
+
+    from oie.orchestration.run_manifest import next_pending_stage
+
+    assert next_pending_stage(manifest) is None
+
+
+def test_next_pending_stage_rejects_unknown_stage_status(tmp_path):
+    ctx = RunContext.create(config={"runs": {"path": str(tmp_path / "runs")}})
+    manifest = build_initial_manifest(ctx)
+    manifest["stages"]["collect_jobs"] = "unknown_status"
+
+    from oie.orchestration.run_manifest import next_pending_stage
+
+    try:
+        next_pending_stage(manifest)
+    except ValueError as exc:
+        assert str(exc) == "Unknown run status: unknown_status"
+    else:
+        raise AssertionError("Expected ValueError")

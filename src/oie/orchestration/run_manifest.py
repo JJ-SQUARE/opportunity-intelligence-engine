@@ -77,6 +77,15 @@ def list_run_manifests(ctx: RunContext) -> list[RunManifest]:
     return manifests
 
 
+def next_pending_stage(manifest: RunManifest) -> str | None:
+    for stage_name in PIPELINE_STAGES:
+        status = manifest.get("stages", {}).get(stage_name, "pending")
+        validate_run_status(status)
+        if status != "completed":
+            return stage_name
+    return None
+
+
 def finalize_manifest(ctx: RunContext, status: str, error: JSONPayload | None = None) -> Path:
     validate_run_status(status)
     manifest_path = Path(ctx.paths["manifest_path"])
