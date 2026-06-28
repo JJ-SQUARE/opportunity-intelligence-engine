@@ -2348,3 +2348,161 @@ def test_lead_ranking_stage_rejects_non_list_leads(tmp_path):
         assert str(exc) == "LeadRankingStage payload leads must be a list."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_lead_dedup_stage_loads_lead_ranking_output(tmp_path):
+    from oie.orchestration.lead_dedup_stage import LeadDedupStage
+    from oie.orchestration.lead_ranking_stage import LeadRankingStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": {"company": "Acme"},
+            "ranked_leads": [],
+            "selected_leads": [],
+            "lead_generation_skipped": False,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(LeadRankingStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert LeadDedupStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_lead_dedup_stage(monkeypatch, tmp_path):
+    from oie.orchestration.lead_dedup_stage import LeadDedupStage
+    from oie.orchestration.lead_ranking_stage import LeadRankingStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.master_dedup_service import MasterDedupService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": {"company": "Acme"},
+            "ranked_leads": [
+                {"company_key": "cmp_acme", "contact_name": "Jane Doe"},
+            ],
+            "selected_leads": [
+                {"company_key": "cmp_acme", "contact_name": "Jane Doe"},
+            ],
+            "lead_generation_skipped": False,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(LeadRankingStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        MasterDedupService,
+        "dedupe_leads_against_master",
+        lambda self, leads: (leads, []),
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(LeadDedupStage)
+    paths = LeadDedupStage(ctx).artifact_paths()
+    output = json.loads(paths["output"].read_text(encoding="utf-8").splitlines()[0])
+
+    assert checkpoint["stage"] == "lead_dedup"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+    assert output["id"] == "Acme"
+    assert output["value"]["deduped_leads"] == [
+        {"company_key": "cmp_acme", "contact_name": "Jane Doe"},
+    ]
+    assert output["value"]["duplicate_leads"] == []
+    assert output["value"]["lead_dedup_skipped"] is False
+
+
+def test_lead_dedup_stage_skips_generation_skipped_payload(tmp_path):
+    from oie.orchestration.lead_dedup_stage import LeadDedupStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Excluded Co",
+        "value": {
+            "company": {"company": "Excluded Co"},
+            "ranked_leads": [],
+            "selected_leads": [],
+            "lead_generation_skipped": True,
+        },
+        "metadata": {"company": "Excluded Co"},
+    }
+
+    output = LeadDedupStage(ctx).process_item(item)
+
+    assert output["value"]["deduped_leads"] == []
+    assert output["value"]["duplicate_leads"] == []
+    assert output["value"]["lead_dedup_skipped"] is True
+
+
+def test_lead_dedup_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.lead_dedup_stage import LeadDedupStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        LeadDedupStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "LeadDedupStage item value must be a payload object."
+    else:
+        raise AssertionError("Expected TypeError")
+
+
+def test_lead_dedup_stage_rejects_non_list_selected_leads(tmp_path):
+    from oie.orchestration.lead_dedup_stage import LeadDedupStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        LeadDedupStage(ctx).process_item(
+            {
+                "id": "bad",
+                "value": {
+                    "company": {"company": "Bad"},
+                    "ranked_leads": [],
+                    "selected_leads": "not-a-list",
+                    "lead_generation_skipped": False,
+                },
+            }
+        )
+    except TypeError as exc:
+        assert str(exc) == "LeadDedupStage payload selected_leads must be a list."
+    else:
+        raise AssertionError("Expected TypeError")

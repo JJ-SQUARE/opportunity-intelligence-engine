@@ -14,6 +14,7 @@ PIPELINE_STAGES = [
     "company_limit",
     "lead_contact_generation",
     "lead_ranking",
+    "lead_dedup",
 ]
 
 RUN_STATUSES = [
