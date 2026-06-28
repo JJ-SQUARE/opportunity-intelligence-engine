@@ -2039,3 +2039,149 @@ def test_company_limit_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "CompanyLimitStage item value must be a company object."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_lead_generation_stage_loads_company_limit_output(tmp_path):
+    from oie.orchestration.company_limit_stage import CompanyLimitStage
+    from oie.orchestration.lead_generation_stage import LeadGenerationStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "resolved_domain": "acme.com",
+            "opportunity_score": 87,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(CompanyLimitStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert LeadGenerationStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_lead_generation_stage(monkeypatch, tmp_path):
+    from oie.orchestration.company_limit_stage import CompanyLimitStage
+    from oie.orchestration.lead_generation_stage import LeadGenerationStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.lead_generation_service import LeadGenerationService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "resolved_domain": "acme.com",
+            "domain_validation_status": "accepted",
+            "opportunity_score": 87,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(CompanyLimitStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        LeadGenerationService,
+        "generate_leads",
+        lambda self, companies: [
+            {
+                "company": companies[0]["company"],
+                "company_key": "cmp_acme",
+                "contact_name": "Jane Doe",
+                "contact_title": "CTO",
+                "email": "jane@acme.com",
+            }
+        ],
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(LeadGenerationStage)
+    paths = LeadGenerationStage(ctx).artifact_paths()
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+
+    assert checkpoint["stage"] == "lead_contact_generation"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+
+    output = json.loads(output_lines[0])
+    assert output["id"] == "Acme"
+    assert output["value"]["company"]["company"] == "Acme"
+    assert output["value"]["lead_generation_skipped"] is False
+    assert output["value"]["leads"] == [
+        {
+            "company": "Acme",
+            "company_key": "cmp_acme",
+            "contact_name": "Jane Doe",
+            "contact_title": "CTO",
+            "email": "jane@acme.com",
+        }
+    ]
+
+
+def test_lead_generation_stage_skips_excluded_company(tmp_path):
+    from oie.orchestration.lead_generation_stage import LeadGenerationStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Excluded Co",
+        "value": {
+            "company": "Excluded Co",
+            "company_limit_excluded": True,
+        },
+        "metadata": {"company": "Excluded Co"},
+    }
+
+    output = LeadGenerationStage(ctx).process_item(item)
+
+    assert output["value"]["company"]["company"] == "Excluded Co"
+    assert output["value"]["leads"] == []
+    assert output["value"]["lead_generation_skipped"] is True
+
+
+def test_lead_generation_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.lead_generation_stage import LeadGenerationStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        LeadGenerationStage(ctx).process_item(
+            {
+                "id": "bad",
+                "value": "not-a-dict",
+            }
+        )
+    except TypeError as exc:
+        assert str(exc) == "LeadGenerationStage item value must be a company object."
+    else:
+        raise AssertionError("Expected TypeError")
