@@ -1272,3 +1272,127 @@ def test_ai_company_gate_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "AICompanyGateStage item value must be a company object."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_company_identity_ai_stage_loads_ai_company_gate_output(tmp_path):
+    from oie.orchestration.ai_company_gate_stage import AICompanyGateStage
+    from oie.orchestration.company_identity_ai_stage import CompanyIdentityAIStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "ai_company_gate_status": "advanced",
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(AICompanyGateStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert CompanyIdentityAIStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_company_identity_ai_stage(monkeypatch, tmp_path):
+    from oie.orchestration.ai_company_gate_stage import AICompanyGateStage
+    from oie.orchestration.company_identity_ai_stage import CompanyIdentityAIStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.company_identity_ai_service import CompanyIdentityAIService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "ai_company_gate_status": "advanced",
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(AICompanyGateStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        CompanyIdentityAIService,
+        "enrich_companies",
+        lambda self, companies: [
+            {
+                **companies[0],
+                "company_identity_ai_valid": True,
+                "ai_company_identity_confidence": 0.92,
+            }
+        ],
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(CompanyIdentityAIStage)
+    paths = CompanyIdentityAIStage(ctx).artifact_paths()
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+
+    assert checkpoint["stage"] == "icp_match"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+
+    output = json.loads(output_lines[0])
+    assert output["id"] == "Acme"
+    assert output["value"]["company_identity_ai_valid"] is True
+    assert output["value"]["ai_company_identity_confidence"] == 0.92
+
+
+def test_company_identity_ai_stage_skips_rejected_ai_gate_company(tmp_path):
+    from oie.orchestration.company_identity_ai_stage import CompanyIdentityAIStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Job Board Co",
+        "value": {
+            "company": "Job Board Co",
+            "ai_company_gate_status": "rejected",
+            "company_identity_ai_discarded": True,
+        },
+        "metadata": {"company": "Job Board Co"},
+    }
+
+    output = CompanyIdentityAIStage(ctx).process_item(item)
+
+    assert output == item
+
+
+def test_company_identity_ai_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.company_identity_ai_stage import CompanyIdentityAIStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        CompanyIdentityAIStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "CompanyIdentityAIStage item value must be a company object."
+    else:
+        raise AssertionError("Expected TypeError")
