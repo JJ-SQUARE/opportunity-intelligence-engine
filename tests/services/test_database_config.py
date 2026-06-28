@@ -131,3 +131,64 @@ def test_connection_factory_blocks_postgres_until_repositories_are_migrated():
         assert "PostgreSQL persistence" in str(exc)
     else:
         raise AssertionError("Expected UnsupportedDatabaseBackendError")
+
+def test_persistence_context_from_sqlite_path_opens_connection(tmp_path):
+    from oie.persistence.context import PersistenceContext
+
+    db_path = tmp_path / "context.db"
+    context = PersistenceContext.from_sqlite_path(str(db_path))
+
+    assert context.backend == "sqlite"
+    assert context.path == str(db_path)
+    assert context.url.startswith("sqlite:///")
+
+    conn = context.connection()
+    try:
+        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, name TEXT)")
+        conn.execute("INSERT INTO sample (name) VALUES (?)", ("Acme",))
+        row = conn.execute("SELECT name FROM sample").fetchone()
+        assert row["name"] == "Acme"
+    finally:
+        conn.close()
+
+
+def test_persistence_context_from_run_context_uses_database_settings(tmp_path):
+    from oie.orchestration.run_context import RunContext
+    from oie.persistence.context import PersistenceContext
+
+    db_path = tmp_path / "run_context.db"
+    ctx = RunContext.create(
+        config={
+            "database": {"backend": "sqlite", "path": str(db_path)},
+            "runs": {"path": str(tmp_path / "runs")},
+        },
+        flags={},
+    )
+
+    context = PersistenceContext.from_run_context(ctx)
+
+    assert context.backend == "sqlite"
+    assert context.path == str(db_path)
+    assert context.url.startswith("sqlite:///")
+
+
+def test_persistence_context_from_run_context_supports_postgres_settings(tmp_path):
+    from oie.orchestration.run_context import RunContext
+    from oie.persistence.context import PersistenceContext
+
+    ctx = RunContext.create(
+        config={
+            "database": {
+                "backend": "postgresql",
+                "url": "postgresql+psycopg://user:pass@localhost:5432/oie",
+            },
+            "runs": {"path": str(tmp_path / "runs")},
+        },
+        flags={},
+    )
+
+    context = PersistenceContext.from_run_context(ctx)
+
+    assert context.backend == "postgresql"
+    assert context.path is None
+    assert context.url == "postgresql+psycopg://user:pass@localhost:5432/oie"
