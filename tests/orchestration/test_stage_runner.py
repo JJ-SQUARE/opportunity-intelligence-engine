@@ -2185,3 +2185,166 @@ def test_lead_generation_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "LeadGenerationStage item value must be a company object."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_lead_ranking_stage_loads_lead_generation_output(tmp_path):
+    from oie.orchestration.lead_generation_stage import LeadGenerationStage
+    from oie.orchestration.lead_ranking_stage import LeadRankingStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": {"company": "Acme"},
+            "leads": [{"contact_name": "Jane Doe", "contact_title": "CTO"}],
+            "lead_generation_skipped": False,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(LeadGenerationStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert LeadRankingStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_lead_ranking_stage(monkeypatch, tmp_path):
+    from oie.orchestration.lead_generation_stage import LeadGenerationStage
+    from oie.orchestration.lead_ranking_stage import LeadRankingStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.lead_ranking_service import LeadRankingService
+
+    ctx = RunContext.create(
+        config={
+            "runs": {"path": str(tmp_path / "runs")},
+            "lead_generation": {"max_selected_leads_per_company": 1},
+        },
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": {"company": "Acme"},
+            "leads": [
+                {"company_key": "cmp_acme", "contact_name": "Jane Doe", "contact_title": "CTO", "email": "jane@acme.com"},
+                {"company_key": "cmp_acme", "contact_name": "John Doe", "contact_title": "IT Manager", "email": "john@acme.com"},
+            ],
+            "lead_generation_skipped": False,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(LeadGenerationStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        LeadRankingService,
+        "rank_leads",
+        lambda self, leads: [
+            {**leads[0], "lead_relevance_score": 95},
+            {**leads[1], "lead_relevance_score": 55},
+        ],
+    )
+    monkeypatch.setattr(
+        LeadRankingService,
+        "select_top_leads_per_company",
+        lambda self, leads, max_leads_per_company=3: leads[:max_leads_per_company],
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(LeadRankingStage)
+    paths = LeadRankingStage(ctx).artifact_paths()
+    output = json.loads(paths["output"].read_text(encoding="utf-8").splitlines()[0])
+
+    assert checkpoint["stage"] == "lead_ranking"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+    assert output["id"] == "Acme"
+    assert output["value"]["ranked_leads"][0]["lead_relevance_score"] == 95
+    assert output["value"]["selected_leads"] == [output["value"]["ranked_leads"][0]]
+    assert output["value"]["lead_ranking_skipped"] is False
+    assert ctx.metrics["pipeline_selected_leads_per_company"] == 1
+
+
+def test_lead_ranking_stage_skips_generation_skipped_payload(tmp_path):
+    from oie.orchestration.lead_ranking_stage import LeadRankingStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Skipped Co",
+        "value": {
+            "company": {"company": "Skipped Co"},
+            "leads": [],
+            "lead_generation_skipped": True,
+        },
+        "metadata": {"company": "Skipped Co"},
+    }
+
+    output = LeadRankingStage(ctx).process_item(item)
+
+    assert output["value"]["ranked_leads"] == []
+    assert output["value"]["selected_leads"] == []
+    assert output["value"]["lead_ranking_skipped"] is True
+
+
+def test_lead_ranking_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.lead_ranking_stage import LeadRankingStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        LeadRankingStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "LeadRankingStage item value must be a lead generation payload object."
+    else:
+        raise AssertionError("Expected TypeError")
+
+
+def test_lead_ranking_stage_rejects_non_list_leads(tmp_path):
+    from oie.orchestration.lead_ranking_stage import LeadRankingStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        LeadRankingStage(ctx).process_item(
+            {
+                "id": "bad",
+                "value": {
+                    "company": {"company": "Bad"},
+                    "leads": "not-a-list",
+                    "lead_generation_skipped": False,
+                },
+            }
+        )
+    except TypeError as exc:
+        assert str(exc) == "LeadRankingStage payload leads must be a list."
+    else:
+        raise AssertionError("Expected TypeError")
