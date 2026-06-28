@@ -1101,3 +1101,107 @@ def test_job_intelligence_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "JobIntelligenceStage item value must be a job object."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_company_gate_stage_loads_job_intelligence_output(monkeypatch, tmp_path):
+    from oie.orchestration.collect_jobs_stage import CollectJobsStage
+    from oie.orchestration.normalize_jobs_stage import NormalizeJobsStage
+    from oie.orchestration.job_intelligence_stage import JobIntelligenceStage
+    from oie.orchestration.company_gate_stage import CompanyGateStage
+    from oie.services.collection_service import CollectionService
+    from oie.services.job_intelligence_service import JobIntelligenceService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    monkeypatch.setattr(
+        CollectionService,
+        "collect",
+        lambda self: [
+            {
+                "title": "Backend Engineer",
+                "company": "Acme",
+                "location": "Remote",
+                "source": "google_jobs",
+                "job_url": "https://acme.test/jobs/1",
+            },
+        ],
+    )
+    monkeypatch.setattr(JobIntelligenceService, "enrich_jobs", lambda self, jobs: jobs)
+
+    StageRunner(ctx).run_stage(CollectJobsStage)
+    StageRunner(ctx).run_stage(NormalizeJobsStage)
+    StageRunner(ctx).run_stage(JobIntelligenceStage)
+
+    items = CompanyGateStage(ctx).load_input()
+
+    assert len(items) == 1
+    assert items[0]["id"] == "https://acme.test/jobs/1"
+    assert items[0]["value"]["company"] == "Acme"
+
+
+def test_stage_runner_runs_company_gate_stage(monkeypatch, tmp_path):
+    from oie.orchestration.collect_jobs_stage import CollectJobsStage
+    from oie.orchestration.normalize_jobs_stage import NormalizeJobsStage
+    from oie.orchestration.job_intelligence_stage import JobIntelligenceStage
+    from oie.orchestration.company_gate_stage import CompanyGateStage
+    from oie.services.collection_service import CollectionService
+    from oie.services.job_intelligence_service import JobIntelligenceService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    monkeypatch.setattr(
+        CollectionService,
+        "collect",
+        lambda self: [
+            {
+                "title": "Backend Engineer",
+                "company": "Acme",
+                "location": "Remote",
+                "description": "Fully remote contract backend role",
+                "source": "google_jobs",
+                "job_url": "https://acme.test/jobs/1",
+            },
+        ],
+    )
+    monkeypatch.setattr(JobIntelligenceService, "enrich_jobs", lambda self, jobs: jobs)
+
+    StageRunner(ctx).run_stage(CollectJobsStage)
+    StageRunner(ctx).run_stage(NormalizeJobsStage)
+    StageRunner(ctx).run_stage(JobIntelligenceStage)
+    checkpoint = StageRunner(ctx).run_stage(CompanyGateStage)
+    paths = CompanyGateStage(ctx).artifact_paths()
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+
+    assert checkpoint["stage"] == "domain_gate"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+
+    output = json.loads(output_lines[0])
+    assert output["id"] == "Acme"
+    assert output["value"]["company"] == "Acme"
+    assert output["value"]["total_openings"] == 1
+    assert output["value"]["remote_jobs"] == 1
+    assert output["value"]["contractor_jobs"] == 1
+    assert output["metadata"]["company"] == "Acme"
+
+
+def test_company_gate_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.company_gate_stage import CompanyGateStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        CompanyGateStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "CompanyGateStage item value must be a job object."
+    else:
+        raise AssertionError("Expected TypeError")
