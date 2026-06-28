@@ -709,3 +709,42 @@ def test_stage_runner_rejects_resume_when_input_shrinks_below_processed_count(tm
         )
     else:
         raise AssertionError("Expected ValueError")
+
+def test_stage_registry_registers_and_resolves_stage_class():
+    from oie.orchestration.stage_registry import StageRegistry
+
+    registry = StageRegistry()
+    registry.register(RunnerItemsStage)
+
+    assert registry.get("company_gate") is RunnerItemsStage
+    assert registry.names() == ["company_gate"]
+
+
+def test_stage_registry_rejects_unknown_pipeline_stage():
+    from oie.orchestration.stage_registry import StageRegistry
+
+    class UnknownStage(Stage):
+        name = "unknown_stage"
+        order = 99
+
+    registry = StageRegistry()
+
+    try:
+        registry.register(UnknownStage)
+    except ValueError as exc:
+        assert str(exc) == "Unknown pipeline stage: unknown_stage"
+    else:
+        raise AssertionError("Expected ValueError")
+
+
+def test_stage_registry_rejects_unregistered_known_stage_lookup():
+    from oie.orchestration.stage_registry import StageRegistry
+
+    registry = StageRegistry()
+
+    try:
+        registry.get("collect_jobs")
+    except KeyError as exc:
+        assert str(exc) == "'Stage is not registered: collect_jobs'"
+    else:
+        raise AssertionError("Expected KeyError")
