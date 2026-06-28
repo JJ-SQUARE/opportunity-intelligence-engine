@@ -6,7 +6,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 
 from oie.persistence.context import PersistenceContext
-from oie.persistence.models import Run, RunMetric, ProviderEvent, ProviderOperationMetric
+from oie.persistence.models import Run, RunMetric, ProviderEvent, ProviderOperationMetric, Company
 from oie.persistence.session import create_session_factory
 
 
@@ -481,51 +481,104 @@ class CompanyRepository(RepositoryBase):
             conn.close()
 
     def find_by_normalized_and_domain(self, company_normalized: str, resolved_domain: str | None) -> Optional[Dict[str, Any]]:
-        conn = self.connection()
-        try:
-            row = conn.execute(
-                """
-                SELECT company_key, company_display, company_normalized, company_root, resolved_domain
-                FROM companies
-                WHERE company_normalized = ?
-                  AND COALESCE(resolved_domain, '') = COALESCE(?, '')
-                LIMIT 1
-                """,
-                (company_normalized, resolved_domain),
-            ).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                row = conn.execute(
+                    """
+                    SELECT company_key, company_display, company_normalized, company_root, resolved_domain
+                    FROM companies
+                    WHERE company_normalized = ?
+                      AND COALESCE(resolved_domain, '') = COALESCE(?, '')
+                    LIMIT 1
+                    """,
+                    (company_normalized, resolved_domain),
+                ).fetchone()
+                return dict(row) if row else None
+            finally:
+                conn.close()
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            query = session.query(Company).filter(Company.company_normalized == company_normalized)
+            if resolved_domain:
+                query = query.filter(Company.resolved_domain == resolved_domain)
+            else:
+                query = query.filter((Company.resolved_domain == None) | (Company.resolved_domain == ""))
+            company = query.first()
+            if company is None:
+                return None
+            return {
+                "company_key": company.company_key,
+                "company_display": company.company_display,
+                "company_normalized": company.company_normalized,
+                "company_root": company.company_root,
+                "resolved_domain": company.resolved_domain,
+            }
 
     def find_by_domain(self, resolved_domain: str) -> Optional[Dict[str, Any]]:
-        conn = self.connection()
-        try:
-            row = conn.execute(
-                """
-                SELECT company_key, company_display, company_normalized, company_root, resolved_domain
-                FROM companies
-                WHERE resolved_domain = ?
-                LIMIT 1
-                """,
-                (resolved_domain,),
-            ).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                row = conn.execute(
+                    """
+                    SELECT company_key, company_display, company_normalized, company_root, resolved_domain
+                    FROM companies
+                    WHERE resolved_domain = ?
+                    LIMIT 1
+                    """,
+                    (resolved_domain,),
+                ).fetchone()
+                return dict(row) if row else None
+            finally:
+                conn.close()
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            company = (
+                session.query(Company)
+                .filter(Company.resolved_domain == resolved_domain)
+                .first()
+            )
+            if company is None:
+                return None
+            return {
+                "company_key": company.company_key,
+                "company_display": company.company_display,
+                "company_normalized": company.company_normalized,
+                "company_root": company.company_root,
+                "resolved_domain": company.resolved_domain,
+            }
 
     def list_companies(self) -> List[Dict[str, Any]]:
-        conn = self.connection()
-        try:
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM companies
-                ORDER BY company_display ASC, company_key ASC
-                """
-            ).fetchall()
-            return [dict(row) for row in rows]
-        finally:
-            conn.close()
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM companies
+                    ORDER BY company_display ASC, company_key ASC
+                    """
+                ).fetchall()
+                return [dict(row) for row in rows]
+            finally:
+                conn.close()
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            rows = (
+                session.query(Company)
+                .order_by(Company.company_display.asc(), Company.company_key.asc())
+                .all()
+            )
+            return [
+                {
+                    column.name: getattr(company, column.name)
+                    for column in Company.__table__.columns
+                }
+                for company in rows
+            ]
 
 
 class CompanyAliasRepository(RepositoryBase):

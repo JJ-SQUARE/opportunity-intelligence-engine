@@ -674,3 +674,76 @@ def test_provider_operation_metrics_repository_uses_orm_for_non_sqlite_backend(t
     assert replaced[0].provider == "hunter"
     assert replaced[0].operation == "domain_search"
     assert replaced[0].used_calls == 3
+
+def test_company_repository_read_methods_use_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.database import DatabaseSettings
+    from oie.persistence.models import Base, Company
+    from oie.persistence.repositories import CompanyRepository
+    from oie.persistence.session import create_session_factory
+
+    sqlite_db = tmp_path / "orm_company_backend_simulation.db"
+    sqlite_settings = DatabaseSettings(
+        backend="sqlite",
+        path=str(sqlite_db),
+        url=f"sqlite:///{sqlite_db}",
+    )
+    postgres_like_settings = DatabaseSettings(
+        backend="postgresql",
+        path=None,
+        url="postgresql+psycopg://user:pass@localhost:5432/oie",
+    )
+
+    def fake_create_session_factory(settings):
+        assert settings.backend == "postgresql"
+        return create_session_factory(sqlite_settings)
+
+    monkeypatch.setattr(
+        "oie.persistence.repositories.create_session_factory",
+        fake_create_session_factory,
+    )
+
+    SessionFactory = create_session_factory(sqlite_settings)
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    with SessionFactory() as session:
+        session.add_all(
+            [
+                Company(
+                    company_key="cmp_beta",
+                    company_display="Beta",
+                    company_normalized="beta",
+                    company_root="beta",
+                    resolved_domain="beta.com",
+                    industry="Technology",
+                ),
+                Company(
+                    company_key="cmp_acme",
+                    company_display="Acme",
+                    company_normalized="acme",
+                    company_root="acme",
+                    resolved_domain="acme.com",
+                    industry="Finance",
+                ),
+            ]
+        )
+        session.commit()
+
+    repository = CompanyRepository(
+        persistence=PersistenceContext(settings=postgres_like_settings)
+    )
+
+    by_domain = repository.find_by_domain("acme.com")
+    by_normalized = repository.find_by_normalized_and_domain("acme", "acme.com")
+    companies = repository.list_companies()
+
+    assert by_domain == {
+        "company_key": "cmp_acme",
+        "company_display": "Acme",
+        "company_normalized": "acme",
+        "company_root": "acme",
+        "resolved_domain": "acme.com",
+    }
+    assert by_normalized == by_domain
+    assert [company["company_display"] for company in companies] == ["Acme", "Beta"]
+    assert companies[0]["industry"] == "Finance"
