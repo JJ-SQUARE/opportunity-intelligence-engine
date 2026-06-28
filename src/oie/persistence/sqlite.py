@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
+
+from oie.persistence.connection_factory import ConnectionFactory
+from oie.persistence.database import resolve_database_settings
 
 
 DEFAULT_DB_PATH = "data/oie.db"
 
 
 def get_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
-    db_file = Path(db_path)
-    db_file.parent.mkdir(parents=True, exist_ok=True)
-
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
+    settings = resolve_database_settings({"database": {"backend": "sqlite", "path": db_path}})
+    return ConnectionFactory(settings).connect()
 
 
 def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:

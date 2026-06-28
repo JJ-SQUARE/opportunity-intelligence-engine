@@ -88,3 +88,46 @@ def test_run_context_exposes_database_settings_for_postgres(tmp_path):
     assert ctx.paths["database"].path is None
     assert ctx.paths["database"].url == "postgresql+psycopg://user:pass@localhost:5432/oie"
     assert ctx.paths["db_path"] == "data/oie.db"
+
+def test_connection_factory_opens_sqlite_connection(tmp_path):
+    from oie.persistence.connection_factory import ConnectionFactory
+    from oie.persistence.database import resolve_database_settings
+
+    db_path = tmp_path / "factory.db"
+    settings = resolve_database_settings(
+        {"database": {"backend": "sqlite", "path": str(db_path)}}
+    )
+
+    conn = ConnectionFactory(settings).connect()
+    try:
+        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, name TEXT)")
+        conn.execute("INSERT INTO sample (name) VALUES (?)", ("Acme",))
+        row = conn.execute("SELECT name FROM sample").fetchone()
+        assert row["name"] == "Acme"
+    finally:
+        conn.close()
+
+
+def test_connection_factory_blocks_postgres_until_repositories_are_migrated():
+    from oie.persistence.connection_factory import (
+        ConnectionFactory,
+        UnsupportedDatabaseBackendError,
+    )
+    from oie.persistence.database import resolve_database_settings
+
+    settings = resolve_database_settings(
+        {
+            "database": {
+                "backend": "postgresql",
+                "url": "postgresql+psycopg://user:pass@localhost:5432/oie",
+            }
+        }
+    )
+
+    try:
+        ConnectionFactory(settings).connect()
+    except UnsupportedDatabaseBackendError as exc:
+        assert "SQLite-only" in str(exc)
+        assert "PostgreSQL persistence" in str(exc)
+    else:
+        raise AssertionError("Expected UnsupportedDatabaseBackendError")
