@@ -1520,3 +1520,126 @@ def test_domain_resolution_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "DomainResolutionStage item value must be a company object."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_company_enrichment_stage_loads_domain_resolution_output(tmp_path):
+    from oie.orchestration.company_enrichment_stage import CompanyEnrichmentStage
+    from oie.orchestration.domain_resolution_stage import DomainResolutionStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "resolved_domain": "acme.com",
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(DomainResolutionStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert CompanyEnrichmentStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_company_enrichment_stage(monkeypatch, tmp_path):
+    from oie.orchestration.company_enrichment_stage import CompanyEnrichmentStage
+    from oie.orchestration.domain_resolution_stage import DomainResolutionStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.company_enrichment_service import CompanyEnrichmentService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "resolved_domain": "acme.com",
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(DomainResolutionStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        CompanyEnrichmentService,
+        "enrich_companies",
+        lambda self, companies: [
+            {
+                **companies[0],
+                "industry": "Software",
+                "company_size": "51-200",
+            }
+        ],
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(CompanyEnrichmentStage)
+    paths = CompanyEnrichmentStage(ctx).artifact_paths()
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+
+    assert checkpoint["stage"] == "delivery"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+
+    output = json.loads(output_lines[0])
+    assert output["id"] == "Acme"
+    assert output["value"]["industry"] == "Software"
+    assert output["value"]["company_size"] == "51-200"
+
+
+def test_company_enrichment_stage_skips_discarded_company(tmp_path):
+    from oie.orchestration.company_enrichment_stage import CompanyEnrichmentStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Bad Co",
+        "value": {
+            "company": "Bad Co",
+            "company_identity_ai_discarded": True,
+        },
+        "metadata": {"company": "Bad Co"},
+    }
+
+    output = CompanyEnrichmentStage(ctx).process_item(item)
+
+    assert output == item
+
+
+def test_company_enrichment_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.company_enrichment_stage import CompanyEnrichmentStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        CompanyEnrichmentStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "CompanyEnrichmentStage item value must be a company object."
+    else:
+        raise AssertionError("Expected TypeError")
