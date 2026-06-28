@@ -310,3 +310,34 @@ def test_create_session_factory_from_config_for_sqlite(tmp_path):
         row = session.execute(text("SELECT name FROM sample")).fetchone()
 
     assert row[0] == "Acme"
+
+def test_run_orm_model_can_create_and_query_sqlite(tmp_path):
+    from oie.persistence.database import resolve_database_settings
+    from oie.persistence.models import Base, Run
+    from oie.persistence.session import create_session_factory
+
+    db_path = tmp_path / "orm_run.db"
+    settings = resolve_database_settings(
+        {"database": {"backend": "sqlite", "path": str(db_path)}}
+    )
+    SessionFactory = create_session_factory(settings)
+
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    with SessionFactory() as session:
+        session.add(
+            Run(
+                run_id="run_orm_1",
+                run_date="2026-01-01T00:00:00+00:00",
+                status="completed",
+                mode="default",
+            )
+        )
+        session.commit()
+
+    with SessionFactory() as session:
+        run = session.get(Run, "run_orm_1")
+
+    assert run is not None
+    assert run.status == "completed"
+    assert run.mode == "default"
