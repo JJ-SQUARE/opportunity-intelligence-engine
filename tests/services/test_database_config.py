@@ -566,3 +566,111 @@ def test_provider_event_repository_uses_orm_for_non_sqlite_backend(tmp_path, mon
     assert len(replaced) == 1
     assert replaced[0]["provider"] == "hunter"
     assert replaced[0]["event_type"] == "blocked"
+
+def test_provider_operation_metrics_repository_uses_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
+    from sqlalchemy import select
+
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.database import DatabaseSettings
+    from oie.persistence.models import Base, ProviderOperationMetric, Run
+    from oie.persistence.repositories import ProviderOperationMetricsRepository
+    from oie.persistence.session import create_session_factory
+
+    sqlite_db = tmp_path / "orm_provider_operation_metrics_backend_simulation.db"
+    sqlite_settings = DatabaseSettings(
+        backend="sqlite",
+        path=str(sqlite_db),
+        url=f"sqlite:///{sqlite_db}",
+    )
+    postgres_like_settings = DatabaseSettings(
+        backend="postgresql",
+        path=None,
+        url="postgresql+psycopg://user:pass@localhost:5432/oie",
+    )
+
+    def fake_create_session_factory(settings):
+        assert settings.backend == "postgresql"
+        return create_session_factory(sqlite_settings)
+
+    monkeypatch.setattr(
+        "oie.persistence.repositories.create_session_factory",
+        fake_create_session_factory,
+    )
+
+    SessionFactory = create_session_factory(sqlite_settings)
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    with SessionFactory() as session:
+        session.add(
+            Run(
+                run_id="run_provider_ops_orm",
+                run_date="2026-01-01T00:00:00+00:00",
+                status="completed",
+                mode="default",
+            )
+        )
+        session.commit()
+
+    repository = ProviderOperationMetricsRepository(
+        persistence=PersistenceContext(settings=postgres_like_settings)
+    )
+
+    repository.replace_rows(
+        "run_provider_ops_orm",
+        [
+            {
+                "provider": "openai",
+                "operation": "score_lead",
+                "max_calls": 10,
+                "used_calls": 2,
+                "remaining_calls": 8,
+                "started": 2,
+                "success": 1,
+                "retry_count": 1,
+                "blocked_budget": 0,
+                "blocked_provider": 0,
+                "errors_timeout": 1,
+                "errors_rate_limit": 0,
+                "errors_http_5xx": 0,
+                "errors_execution_error": 0,
+                "errors_auth": 0,
+                "errors_permission": 0,
+            }
+        ],
+    )
+
+    with SessionFactory() as session:
+        rows = session.execute(
+            select(ProviderOperationMetric).where(
+                ProviderOperationMetric.run_id == "run_provider_ops_orm"
+            )
+        ).scalars().all()
+
+    assert len(rows) == 1
+    assert rows[0].provider == "openai"
+    assert rows[0].operation == "score_lead"
+    assert rows[0].used_calls == 2
+    assert rows[0].errors_timeout == 1
+
+    repository.replace_rows(
+        "run_provider_ops_orm",
+        [
+            {
+                "provider": "hunter",
+                "operation": "domain_search",
+                "used_calls": 3,
+            }
+        ],
+    )
+
+    with SessionFactory() as session:
+        replaced = session.execute(
+            select(ProviderOperationMetric).where(
+                ProviderOperationMetric.run_id == "run_provider_ops_orm"
+            )
+        ).scalars().all()
+
+    assert len(replaced) == 1
+    assert replaced[0].provider == "hunter"
+    assert replaced[0].operation == "domain_search"
+    assert replaced[0].used_calls == 3
