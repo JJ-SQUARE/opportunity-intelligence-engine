@@ -1768,3 +1768,133 @@ def test_company_classification_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "CompanyClassificationStage item value must be a company object."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_opportunity_scoring_stage_loads_company_classification_output(tmp_path):
+    from oie.orchestration.company_classification_stage import CompanyClassificationStage
+    from oie.orchestration.opportunity_scoring_stage import OpportunityScoringStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "company_type_ai": "end_client",
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(CompanyClassificationStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert OpportunityScoringStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_opportunity_scoring_stage(monkeypatch, tmp_path):
+    from oie.orchestration.company_classification_stage import CompanyClassificationStage
+    from oie.orchestration.opportunity_scoring_stage import OpportunityScoringStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.opportunity_scoring_service import OpportunityScoringService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "company_type_ai": "end_client",
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(CompanyClassificationStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        OpportunityScoringService,
+        "score_companies",
+        lambda self, companies: [
+            {
+                **companies[0],
+                "opportunity_score": 87,
+                "opportunity_label": "high",
+            }
+        ],
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(OpportunityScoringStage)
+    paths = OpportunityScoringStage(ctx).artifact_paths()
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+
+    assert checkpoint["stage"] == "opportunity_scoring"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+
+    output = json.loads(output_lines[0])
+    assert output["id"] == "Acme"
+    assert output["value"]["opportunity_score"] == 87
+    assert output["value"]["opportunity_label"] == "high"
+
+
+def test_opportunity_scoring_stage_skips_discarded_company(tmp_path):
+    from oie.orchestration.opportunity_scoring_stage import OpportunityScoringStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Rejected Co",
+        "value": {
+            "company": "Rejected Co",
+            "company_identity_ai_discarded": True,
+        },
+        "metadata": {"company": "Rejected Co"},
+    }
+
+    output = OpportunityScoringStage(ctx).process_item(item)
+
+    assert output == item
+
+
+def test_opportunity_scoring_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.opportunity_scoring_stage import OpportunityScoringStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        OpportunityScoringStage(ctx).process_item(
+            {
+                "id": "bad",
+                "value": "not-a-dict",
+            }
+        )
+    except TypeError as exc:
+        assert str(exc) == "OpportunityScoringStage item value must be a company object."
+    else:
+        raise AssertionError("Expected TypeError")

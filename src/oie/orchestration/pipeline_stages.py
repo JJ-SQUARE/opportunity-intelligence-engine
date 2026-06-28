@@ -10,6 +10,7 @@ PIPELINE_STAGES = [
     "lead_generation",
     "delivery",
     "company_classification",
+    "opportunity_scoring",
 ]
 
 RUN_STATUSES = [
