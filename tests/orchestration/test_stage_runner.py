@@ -2747,11 +2747,9 @@ def test_stage_runner_runs_opportunity_dataset_stage(monkeypatch, tmp_path):
     assert checkpoint["input_count"] == 1
     assert checkpoint["processed_count"] == 1
     assert output["id"] == "Acme"
-    assert output["value"]["opportunity_dataset_exported"] is True
-    assert output["value"]["opportunity_dataset_rows"] == 1
-    assert output["value"]["top_opportunity_dataset_rows"] == 1
-    assert output["value"]["opportunity_dataset_path"] == "/tmp/opportunities_export.csv"
-    assert output["value"]["top_opportunity_dataset_path"] == "/tmp/top_opportunities_export.csv"
+    assert output["value"]["dataset_built"] is True
+    assert output["value"]["dataset_rows"] == 1
+    assert output["value"]["top_dataset_rows"] == 1
 
 
 def test_opportunity_dataset_stage_rejects_non_object_stage_value(tmp_path):
@@ -2766,5 +2764,128 @@ def test_opportunity_dataset_stage_rejects_non_object_stage_value(tmp_path):
         OpportunityDatasetStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
     except TypeError as exc:
         assert str(exc) == "OpportunityDatasetStage item value must be a payload object."
+    else:
+        raise AssertionError("Expected TypeError")
+
+def test_opportunity_dataset_export_stage_loads_opportunity_dataset_output(tmp_path):
+    from oie.orchestration.opportunity_dataset_export_stage import OpportunityDatasetExportStage
+    from oie.orchestration.opportunity_dataset_stage import OpportunityDatasetStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "dataset",
+        "value": {
+            "dataset": [{"company_key": "cmp_acme"}],
+            "top_dataset": [{"company_key": "cmp_acme"}],
+            "dataset_built": True,
+        },
+        "metadata": {},
+    }
+
+    manager = StageCheckpointManager(OpportunityDatasetStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "dataset"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert OpportunityDatasetExportStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_opportunity_dataset_export_stage(monkeypatch, tmp_path):
+    from oie.orchestration.opportunity_dataset_export_stage import OpportunityDatasetExportStage
+    from oie.orchestration.opportunity_dataset_stage import OpportunityDatasetStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.opportunity_dataset_export_service import OpportunityDatasetExportService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "dataset",
+        "value": {
+            "dataset": [{"company_key": "cmp_acme"}],
+            "top_dataset": [{"company_key": "cmp_acme"}],
+            "dataset_built": True,
+        },
+        "metadata": {},
+    }
+
+    manager = StageCheckpointManager(OpportunityDatasetStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "dataset"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        OpportunityDatasetExportService,
+        "export_dataset",
+        lambda self, dataset: "/tmp/opportunities_export.csv",
+    )
+    monkeypatch.setattr(
+        OpportunityDatasetExportService,
+        "export_top_dataset",
+        lambda self, dataset: "/tmp/top_opportunities_export.csv",
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(OpportunityDatasetExportStage)
+    paths = OpportunityDatasetExportStage(ctx).artifact_paths()
+    output = json.loads(paths["output"].read_text(encoding="utf-8").splitlines()[0])
+
+    assert checkpoint["stage"] == "opportunity_dataset_export"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+    assert output["value"]["dataset_exported"] is True
+    assert output["value"]["dataset_path"] == "/tmp/opportunities_export.csv"
+    assert output["value"]["top_dataset_path"] == "/tmp/top_opportunities_export.csv"
+    assert output["value"]["dataset_rows"] == 1
+    assert output["value"]["top_dataset_rows"] == 1
+
+
+def test_opportunity_dataset_export_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.opportunity_dataset_export_stage import OpportunityDatasetExportStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        OpportunityDatasetExportStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "OpportunityDatasetExportStage item value must be a payload object."
+    else:
+        raise AssertionError("Expected TypeError")
+
+
+def test_opportunity_dataset_export_stage_rejects_non_list_dataset(tmp_path):
+    from oie.orchestration.opportunity_dataset_export_stage import OpportunityDatasetExportStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        OpportunityDatasetExportStage(ctx).process_item(
+            {"id": "bad", "value": {"dataset": "not-a-list", "top_dataset": []}}
+        )
+    except TypeError as exc:
+        assert str(exc) == "OpportunityDatasetExportStage payload dataset must be a list."
     else:
         raise AssertionError("Expected TypeError")
