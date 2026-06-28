@@ -8,6 +8,7 @@ from uuid import uuid4
 from oie.models.provider_event import ProviderEventRecord
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
+from oie.persistence.database import DatabaseSettings, resolve_database_settings
 
 
 class DatabaseConfig(TypedDict, total=False):
@@ -56,6 +57,7 @@ class ProviderEventPayload(TypedDict):
 
 
 class RunPaths(TypedDict):
+    database: DatabaseSettings
     db_path: str
     runs_base_dir: str
     run_dir: str
@@ -100,7 +102,8 @@ class RunContext:
         run_id = now.strftime("%Y%m%d_%H%M%S") + "_" + uuid4().hex[:8]
         run_date = now.isoformat()
 
-        db_path = config.get("database", {}).get("path", "data/oie.db")
+        database_settings = resolve_database_settings(config)
+        db_path = database_settings.path or "data/oie.db"
         runs_base_dir = config.get("runs", {}).get("path", "data/runs")
         run_dir = f"{runs_base_dir}/{run_id}"
 
@@ -111,6 +114,7 @@ class RunContext:
             config=config,
             flags=flags,
             paths={
+                "database": database_settings,
                 "db_path": db_path,
                 "runs_base_dir": runs_base_dir,
                 "run_dir": run_dir,
