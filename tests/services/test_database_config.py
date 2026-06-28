@@ -471,3 +471,98 @@ def test_run_metrics_repository_uses_orm_for_non_sqlite_backend(tmp_path, monkey
     assert repository.get_metrics("run_metrics_orm") == {
         "output_count": "7",
     }
+
+def test_provider_event_repository_uses_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.database import DatabaseSettings
+    from oie.persistence.models import Base, Run
+    from oie.persistence.repositories import ProviderEventRepository
+    from oie.persistence.session import create_session_factory
+
+    sqlite_db = tmp_path / "orm_provider_events_backend_simulation.db"
+    sqlite_settings = DatabaseSettings(
+        backend="sqlite",
+        path=str(sqlite_db),
+        url=f"sqlite:///{sqlite_db}",
+    )
+    postgres_like_settings = DatabaseSettings(
+        backend="postgresql",
+        path=None,
+        url="postgresql+psycopg://user:pass@localhost:5432/oie",
+    )
+
+    def fake_create_session_factory(settings):
+        assert settings.backend == "postgresql"
+        return create_session_factory(sqlite_settings)
+
+    monkeypatch.setattr(
+        "oie.persistence.repositories.create_session_factory",
+        fake_create_session_factory,
+    )
+
+    SessionFactory = create_session_factory(sqlite_settings)
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    with SessionFactory() as session:
+        session.add(
+            Run(
+                run_id="run_events_orm",
+                run_date="2026-01-01T00:00:00+00:00",
+                status="completed",
+                mode="default",
+            )
+        )
+        session.commit()
+
+    repository = ProviderEventRepository(
+        persistence=PersistenceContext(settings=postgres_like_settings)
+    )
+
+    repository.replace_events(
+        "run_events_orm",
+        [
+            {
+                "provider": "openai",
+                "event_type": "request_started",
+                "status_code": None,
+                "message": "Started",
+                "metadata": {"operation": "score"},
+            },
+            {
+                "provider": "openai",
+                "event_type": "request_succeeded",
+                "status_code": 200,
+                "message": "Done",
+                "metadata": {"tokens": 123},
+            },
+        ],
+    )
+
+    events = repository.list_by_run("run_events_orm")
+
+    assert [event["event_type"] for event in events] == [
+        "request_started",
+        "request_succeeded",
+    ]
+    assert events[0]["metadata"] == {"operation": "score"}
+    assert events[1]["status_code"] == 200
+    assert events[1]["metadata"] == {"tokens": 123}
+
+    repository.replace_events(
+        "run_events_orm",
+        [
+            {
+                "provider": "hunter",
+                "event_type": "blocked",
+                "status_code": 403,
+                "message": "Blocked",
+                "metadata": {},
+            }
+        ],
+    )
+
+    replaced = repository.list_by_run("run_events_orm")
+
+    assert len(replaced) == 1
+    assert replaced[0]["provider"] == "hunter"
+    assert replaced[0]["event_type"] == "blocked"
