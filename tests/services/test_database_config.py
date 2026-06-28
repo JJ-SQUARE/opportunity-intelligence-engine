@@ -192,3 +192,41 @@ def test_persistence_context_from_run_context_supports_postgres_settings(tmp_pat
     assert context.backend == "postgresql"
     assert context.path is None
     assert context.url == "postgresql+psycopg://user:pass@localhost:5432/oie"
+
+def test_repository_base_uses_persistence_context_connection(tmp_path):
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.repositories import RunRepository
+    from oie.persistence.sqlite import initialize_database
+
+    db_path = tmp_path / "repo_base.db"
+    initialize_database(str(db_path))
+
+    persistence = PersistenceContext.from_sqlite_path(str(db_path))
+    repository = RunRepository(persistence=persistence)
+
+    repository.upsert_run(
+        run_id="run_1",
+        run_date="2026-01-01T00:00:00+00:00",
+        status="completed",
+        mode="default",
+    )
+
+    assert repository.get_run("run_1")["status"] == "completed"
+
+
+def test_repository_base_preserves_db_path_compatibility(tmp_path):
+    from oie.persistence.repositories import RunRepository
+    from oie.persistence.sqlite import initialize_database
+
+    db_path = tmp_path / "repo_compat.db"
+    initialize_database(str(db_path))
+
+    repository = RunRepository(db_path=str(db_path))
+    repository.upsert_run(
+        run_id="run_compat",
+        run_date="2026-01-01T00:00:00+00:00",
+        status="completed",
+        mode="default",
+    )
+
+    assert repository.get_run("run_compat")["mode"] == "default"

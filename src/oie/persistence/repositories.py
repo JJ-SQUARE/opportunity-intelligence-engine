@@ -2,17 +2,27 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 from typing import Any, Dict, List, Optional
 
-from oie.persistence.sqlite import get_connection
+from oie.persistence.context import PersistenceContext
 
 
-class RunRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
+class RepositoryBase:
+    def __init__(
+        self,
+        db_path: str = "data/oie.db",
+        persistence: PersistenceContext | None = None,
+    ) -> None:
         self.db_path = db_path
+        self.persistence = persistence or PersistenceContext.from_sqlite_path(db_path)
 
+    def connection(self) -> sqlite3.Connection:
+        return self.persistence.connection()
+
+class RunRepository(RepositoryBase):
     def upsert_run(self, run_id: str, run_date: str, status: str, mode: str) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             conn.execute(
                 """
@@ -30,7 +40,7 @@ class RunRepository:
             conn.close()
 
     def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             row = conn.execute(
                 """
@@ -46,12 +56,9 @@ class RunRepository:
             conn.close()
 
 
-class RunMetricsRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
-        self.db_path = db_path
-
+class RunMetricsRepository(RepositoryBase):
     def replace_metrics(self, run_id: str, metrics: Dict[str, Any]) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             conn.execute("DELETE FROM run_metrics WHERE run_id = ?", (run_id,))
             conn.executemany(
@@ -66,7 +73,7 @@ class RunMetricsRepository:
             conn.close()
 
     def get_metrics(self, run_id: str) -> Dict[str, Any]:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             rows = conn.execute(
                 """
@@ -82,12 +89,9 @@ class RunMetricsRepository:
             conn.close()
 
 
-class ProviderEventRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
-        self.db_path = db_path
-
+class ProviderEventRepository(RepositoryBase):
     def replace_events(self, run_id: str, provider_events: List[Dict[str, Any]]) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             conn.execute("DELETE FROM provider_events WHERE run_id = ?", (run_id,))
             conn.executemany(
@@ -112,7 +116,7 @@ class ProviderEventRepository:
             conn.close()
 
     def list_by_run(self, run_id: str) -> List[Dict[str, Any]]:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             rows = conn.execute(
                 """
@@ -139,12 +143,9 @@ class ProviderEventRepository:
 
 
 
-class ProviderOperationMetricsRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
-        self.db_path = db_path
-
+class ProviderOperationMetricsRepository(RepositoryBase):
     def replace_rows(self, run_id: str, rows: List[Dict[str, Any]]) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             conn.execute("DELETE FROM provider_operation_metrics WHERE run_id = ?", (run_id,))
             if rows:
@@ -199,12 +200,9 @@ class ProviderOperationMetricsRepository:
             conn.close()
 
 
-class CompanyRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
-        self.db_path = db_path
-
+class CompanyRepository(RepositoryBase):
     def upsert_companies(self, companies: List[Dict[str, Any]]) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             conn.executemany(
                 """
@@ -336,7 +334,7 @@ class CompanyRepository:
             conn.close()
 
     def find_by_normalized_and_domain(self, company_normalized: str, resolved_domain: str | None) -> Optional[Dict[str, Any]]:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             row = conn.execute(
                 """
@@ -353,7 +351,7 @@ class CompanyRepository:
             conn.close()
 
     def find_by_domain(self, resolved_domain: str) -> Optional[Dict[str, Any]]:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             row = conn.execute(
                 """
@@ -369,7 +367,7 @@ class CompanyRepository:
             conn.close()
 
     def list_companies(self) -> List[Dict[str, Any]]:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             rows = conn.execute(
                 """
@@ -383,12 +381,9 @@ class CompanyRepository:
             conn.close()
 
 
-class CompanyAliasRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
-        self.db_path = db_path
-
+class CompanyAliasRepository(RepositoryBase):
     def replace_aliases(self, companies: List[Dict[str, Any]]) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             company_keys = [c.get("company_key") for c in companies if c.get("company_key")]
             if company_keys:
@@ -431,7 +426,7 @@ class CompanyAliasRepository:
             conn.close()
 
     def find_company_by_alias_normalized(self, alias_normalized: str) -> Optional[Dict[str, Any]]:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             row = conn.execute(
                 """
@@ -448,12 +443,9 @@ class CompanyAliasRepository:
             conn.close()
 
 
-class DomainRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
-        self.db_path = db_path
-
+class DomainRepository(RepositoryBase):
     def replace_domains(self, companies: List[Dict[str, Any]]) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             company_keys = [c.get("company_key") for c in companies if c.get("company_key")]
             if company_keys:
@@ -495,12 +487,9 @@ class DomainRepository:
             conn.close()
 
 
-class CompanyMergeCandidateRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
-        self.db_path = db_path
-
+class CompanyMergeCandidateRepository(RepositoryBase):
     def replace_merge_candidates(self, run_id: str, candidates: List[Dict[str, Any]]) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             conn.execute("DELETE FROM company_merge_candidates WHERE run_id = ?", (run_id,))
             if candidates:
@@ -531,10 +520,7 @@ class CompanyMergeCandidateRepository:
             conn.close()
 
 
-class JobRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
-        self.db_path = db_path
-
+class JobRepository(RepositoryBase):
     def _build_job_fingerprint(self, job: Dict[str, Any]) -> str:
         job_url = (job.get("job_url") or "").strip().lower()
         apply_url = (job.get("apply_url") or "").strip().lower()
@@ -565,7 +551,7 @@ class JobRepository:
         return f"job_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
 
     def replace_jobs(self, run_id: str, run_date: str, jobs: List[Dict[str, Any]]) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             conn.execute("DELETE FROM jobs WHERE run_id = ?", (run_id,))
             rows = [
@@ -633,7 +619,7 @@ class JobRepository:
             conn.close()
 
     def list_jobs_by_run(self, run_id: str) -> List[Dict[str, Any]]:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             rows = conn.execute(
                 """
@@ -649,10 +635,7 @@ class JobRepository:
             conn.close()
 
 
-class LeadRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
-        self.db_path = db_path
-
+class LeadRepository(RepositoryBase):
     def _build_lead_fingerprint(self, lead: Dict[str, Any]) -> str:
         company_key = (lead.get("company_key") or "").strip().lower()
         email = (lead.get("email") or "").strip().lower()
@@ -693,7 +676,7 @@ class LeadRepository:
         return f"lead_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
 
     def replace_leads(self, run_id: str, run_date: str, leads: List[Dict[str, Any]]) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             conn.execute("DELETE FROM leads WHERE run_id = ?", (run_id,))
             def _clean(value):
@@ -805,7 +788,7 @@ class LeadRepository:
             conn.close()
 
     def list_leads_by_run(self, run_id: str) -> List[Dict[str, Any]]:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             rows = conn.execute(
                 """
@@ -821,12 +804,9 @@ class LeadRepository:
             conn.close()
 
 
-class CompanyScoreRepository:
-    def __init__(self, db_path: str = "data/oie.db") -> None:
-        self.db_path = db_path
-
+class CompanyScoreRepository(RepositoryBase):
     def replace_company_scores(self, run_id: str, companies: List[Dict[str, Any]]) -> None:
-        conn = get_connection(self.db_path)
+        conn = self.connection()
         try:
             conn.execute("DELETE FROM company_scores WHERE run_id = ?", (run_id,))
             rows = [
