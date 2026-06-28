@@ -341,3 +341,63 @@ def test_run_orm_model_can_create_and_query_sqlite(tmp_path):
     assert run is not None
     assert run.status == "completed"
     assert run.mode == "default"
+
+def test_run_repository_uses_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.database import DatabaseSettings
+    from oie.persistence.models import Base
+    from oie.persistence.repositories import RunRepository
+    from oie.persistence.session import create_session_factory
+
+    sqlite_db = tmp_path / "orm_backend_simulation.db"
+    sqlite_settings = DatabaseSettings(
+        backend="sqlite",
+        path=str(sqlite_db),
+        url=f"sqlite:///{sqlite_db}",
+    )
+    postgres_like_settings = DatabaseSettings(
+        backend="postgresql",
+        path=None,
+        url="postgresql+psycopg://user:pass@localhost:5432/oie",
+    )
+
+    def fake_create_session_factory(settings):
+        assert settings.backend == "postgresql"
+        return create_session_factory(sqlite_settings)
+
+    monkeypatch.setattr(
+        "oie.persistence.repositories.create_session_factory",
+        fake_create_session_factory,
+    )
+
+    SessionFactory = create_session_factory(sqlite_settings)
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    repository = RunRepository(
+        persistence=PersistenceContext(settings=postgres_like_settings)
+    )
+
+    repository.upsert_run(
+        run_id="run_orm_repo",
+        run_date="2026-01-01T00:00:00+00:00",
+        status="completed",
+        mode="default",
+    )
+
+    saved = repository.get_run("run_orm_repo")
+
+    assert saved is not None
+    assert saved["run_id"] == "run_orm_repo"
+    assert saved["status"] == "completed"
+
+    repository.upsert_run(
+        run_id="run_orm_repo",
+        run_date="2026-01-02T00:00:00+00:00",
+        status="partial_success",
+        mode="dry-run",
+    )
+
+    updated = repository.get_run("run_orm_repo")
+
+    assert updated["status"] == "partial_success"
+    assert updated["mode"] == "dry-run"
