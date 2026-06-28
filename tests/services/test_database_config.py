@@ -266,3 +266,47 @@ def test_database_settings_supports_postgres_url_without_driver_connection():
 
     assert settings.backend == "postgresql"
     assert settings.url == "postgresql+psycopg://user:pass@localhost:5432/oie"
+
+def test_create_session_factory_for_sqlite(tmp_path):
+    from sqlalchemy import text
+
+    from oie.persistence.database import resolve_database_settings
+    from oie.persistence.session import create_session_factory
+
+    db_path = tmp_path / "session.db"
+    settings = resolve_database_settings(
+        {"database": {"backend": "sqlite", "path": str(db_path)}}
+    )
+
+    SessionFactory = create_session_factory(settings)
+
+    with SessionFactory() as session:
+        session.execute(text("CREATE TABLE sample (id INTEGER PRIMARY KEY, name TEXT)"))
+        session.execute(text("INSERT INTO sample (name) VALUES (:name)"), {"name": "Acme"})
+        session.commit()
+
+    with SessionFactory() as session:
+        row = session.execute(text("SELECT name FROM sample")).fetchone()
+
+    assert row[0] == "Acme"
+
+
+def test_create_session_factory_from_config_for_sqlite(tmp_path):
+    from sqlalchemy import text
+
+    from oie.persistence.session import create_session_factory_from_config
+
+    db_path = tmp_path / "session_from_config.db"
+    SessionFactory = create_session_factory_from_config(
+        {"database": {"backend": "sqlite", "path": str(db_path)}}
+    )
+
+    with SessionFactory() as session:
+        session.execute(text("CREATE TABLE sample (id INTEGER PRIMARY KEY, name TEXT)"))
+        session.execute(text("INSERT INTO sample (name) VALUES (:name)"), {"name": "Acme"})
+        session.commit()
+
+    with SessionFactory() as session:
+        row = session.execute(text("SELECT name FROM sample")).fetchone()
+
+    assert row[0] == "Acme"
