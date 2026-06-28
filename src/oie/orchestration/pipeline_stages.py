@@ -11,6 +11,7 @@ PIPELINE_STAGES = [
     "delivery",
     "company_classification",
     "opportunity_scoring",
+    "company_limit",
 ]
 
 RUN_STATUSES = [

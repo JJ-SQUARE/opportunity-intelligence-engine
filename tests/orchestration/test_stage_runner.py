@@ -1898,3 +1898,144 @@ def test_opportunity_scoring_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "OpportunityScoringStage item value must be a company object."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_company_limit_stage_loads_opportunity_scoring_output(tmp_path):
+    from oie.orchestration.company_limit_stage import CompanyLimitStage
+    from oie.orchestration.opportunity_scoring_stage import OpportunityScoringStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "opportunity_score": 87,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(OpportunityScoringStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert CompanyLimitStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_company_limit_stage(tmp_path):
+    from oie.orchestration.company_limit_stage import CompanyLimitStage
+    from oie.orchestration.opportunity_scoring_stage import OpportunityScoringStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={"limit": 1},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "opportunity_score": 87,
+            "classification_confidence_ai": 0.9,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(OpportunityScoringStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    checkpoint = StageRunner(ctx).run_stage(CompanyLimitStage)
+    paths = CompanyLimitStage(ctx).artifact_paths()
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+
+    assert checkpoint["stage"] == "company_limit"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+
+    output = json.loads(output_lines[0])
+    assert output["id"] == "Acme"
+    assert output["value"]["company"] == "Acme"
+    assert ctx.metrics["companies_limit_requested"] == 1
+    assert ctx.metrics["companies_limit_applied"] == 1
+
+
+def test_company_limit_stage_excludes_company_when_limit_zero(tmp_path):
+    from oie.orchestration.company_limit_stage import CompanyLimitStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={"limit": 0},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "opportunity_score": 87,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    output = CompanyLimitStage(ctx).process_item(item)
+
+    assert output["value"]["company_limit_excluded"] is True
+    assert ctx.metrics["companies_limit_applied"] == 0
+
+
+def test_company_limit_stage_skips_discarded_company(tmp_path):
+    from oie.orchestration.company_limit_stage import CompanyLimitStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={"limit": 0},
+    )
+    item = {
+        "id": "Rejected Co",
+        "value": {
+            "company": "Rejected Co",
+            "company_identity_ai_discarded": True,
+        },
+        "metadata": {"company": "Rejected Co"},
+    }
+
+    output = CompanyLimitStage(ctx).process_item(item)
+
+    assert output == item
+
+
+def test_company_limit_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.company_limit_stage import CompanyLimitStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        CompanyLimitStage(ctx).process_item(
+            {
+                "id": "bad",
+                "value": "not-a-dict",
+            }
+        )
+    except TypeError as exc:
+        assert str(exc) == "CompanyLimitStage item value must be a company object."
+    else:
+        raise AssertionError("Expected TypeError")
