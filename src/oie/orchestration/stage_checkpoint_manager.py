@@ -70,10 +70,19 @@ class StageCheckpointManager:
             return 0
         return int(checkpoint["last_processed_index"]) + 1
 
+    def validate_input_count_consistency(self, checkpoint: StageState, input_count: int) -> None:
+        if checkpoint["processed_count"] > input_count:
+            raise ValueError(
+                "Checkpoint/input mismatch for "
+                f"{self.stage.name}: processed_count={checkpoint['processed_count']}, "
+                f"input_count={input_count}"
+            )
+
     def prepare_checkpoint(self, input_count: int) -> tuple[StageState, int]:
         checkpoint = self.initial_checkpoint()
         previous_checkpoint = self.read_checkpoint()
         checkpoint = self.merge_previous_checkpoint(checkpoint, previous_checkpoint)
+        self.validate_input_count_consistency(checkpoint, input_count)
         checkpoint["input_count"] = input_count
         start_index = self.next_start_index(checkpoint)
         self.write_checkpoint(checkpoint)

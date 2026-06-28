@@ -674,3 +674,38 @@ def test_stage_runner_rejects_resume_when_artifact_output_count_exceeds_checkpoi
         )
     else:
         raise AssertionError("Expected ValueError")
+
+class RunnerShrunkInputStage(Stage):
+    name = "company_gate"
+    order = 2
+
+    def load_input(self):
+        return [
+            {"id": "item_1", "value": 1},
+        ]
+
+    def process_item(self, item):
+        return {
+            "id": item["id"],
+            "value": item["value"] * 10,
+        }
+
+
+def test_stage_runner_rejects_resume_when_input_shrinks_below_processed_count(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    runner = StageRunner(ctx)
+    runner.run_stage(RunnerItemsStage)
+
+    try:
+        runner.run_stage(RunnerShrunkInputStage)
+    except ValueError as exc:
+        assert str(exc) == (
+            "Checkpoint/input mismatch for company_gate: "
+            "processed_count=2, input_count=1"
+        )
+    else:
+        raise AssertionError("Expected ValueError")
