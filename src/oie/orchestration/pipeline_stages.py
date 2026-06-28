@@ -9,6 +9,7 @@ PIPELINE_STAGES = [
     "icp_match",
     "lead_generation",
     "delivery",
+    "company_classification",
 ]
 
 RUN_STATUSES = [

@@ -1643,3 +1643,128 @@ def test_company_enrichment_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "CompanyEnrichmentStage item value must be a company object."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_company_classification_stage_loads_company_enrichment_output(tmp_path):
+    from oie.orchestration.company_classification_stage import CompanyClassificationStage
+    from oie.orchestration.company_enrichment_stage import CompanyEnrichmentStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "industry": "Software",
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(CompanyEnrichmentStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert CompanyClassificationStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_company_classification_stage(monkeypatch, tmp_path):
+    from oie.orchestration.company_classification_stage import CompanyClassificationStage
+    from oie.orchestration.company_enrichment_stage import CompanyEnrichmentStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.company_classification_service import CompanyClassificationService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "industry": "Software",
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(CompanyEnrichmentStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        CompanyClassificationService,
+        "classify_companies",
+        lambda self, companies: [
+            {
+                **companies[0],
+                "company_type": "SaaS",
+            }
+        ],
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(CompanyClassificationStage)
+    paths = CompanyClassificationStage(ctx).artifact_paths()
+
+    output = json.loads(paths["output"].read_text().splitlines()[0])
+
+    assert checkpoint["stage"] == "company_classification"
+    assert checkpoint["status"] == "completed"
+    assert output["value"]["company_type"] == "SaaS"
+
+
+def test_company_classification_stage_skips_discarded_company(tmp_path):
+    from oie.orchestration.company_classification_stage import CompanyClassificationStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    item = {
+        "id": "Bad",
+        "value": {
+            "company": "Bad",
+            "company_identity_ai_discarded": True,
+        },
+        "metadata": {},
+    }
+
+    assert CompanyClassificationStage(ctx).process_item(item) == item
+
+
+def test_company_classification_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.company_classification_stage import CompanyClassificationStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        CompanyClassificationStage(ctx).process_item(
+            {
+                "id": "bad",
+                "value": "not-a-dict",
+            }
+        )
+    except TypeError as exc:
+        assert str(exc) == "CompanyClassificationStage item value must be a company object."
+    else:
+        raise AssertionError("Expected TypeError")
