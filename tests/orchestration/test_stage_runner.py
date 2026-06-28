@@ -1396,3 +1396,127 @@ def test_company_identity_ai_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "CompanyIdentityAIStage item value must be a company object."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_domain_resolution_stage_loads_company_identity_ai_output(tmp_path):
+    from oie.orchestration.company_identity_ai_stage import CompanyIdentityAIStage
+    from oie.orchestration.domain_resolution_stage import DomainResolutionStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "company_identity_ai_valid": True,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(CompanyIdentityAIStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert DomainResolutionStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_domain_resolution_stage(monkeypatch, tmp_path):
+    from oie.orchestration.company_identity_ai_stage import CompanyIdentityAIStage
+    from oie.orchestration.domain_resolution_stage import DomainResolutionStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.domain_resolution_service import DomainResolutionService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "company_identity_ai_valid": True,
+            "ai_company_gate_domain_guess": "acme.test",
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(CompanyIdentityAIStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        DomainResolutionService,
+        "resolve_domains",
+        lambda self, companies: [
+            {
+                **companies[0],
+                "resolved_domain": "acme.test",
+                "domain_resolution_status": "accepted",
+            }
+        ],
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(DomainResolutionStage)
+    paths = DomainResolutionStage(ctx).artifact_paths()
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+
+    assert checkpoint["stage"] == "lead_generation"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+
+    output = json.loads(output_lines[0])
+    assert output["id"] == "Acme"
+    assert output["value"]["resolved_domain"] == "acme.test"
+    assert output["value"]["domain_resolution_status"] == "accepted"
+
+
+def test_domain_resolution_stage_skips_discarded_company(tmp_path):
+    from oie.orchestration.domain_resolution_stage import DomainResolutionStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Bad Co",
+        "value": {
+            "company": "Bad Co",
+            "company_identity_ai_discarded": True,
+        },
+        "metadata": {"company": "Bad Co"},
+    }
+
+    output = DomainResolutionStage(ctx).process_item(item)
+
+    assert output == item
+
+
+def test_domain_resolution_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.domain_resolution_stage import DomainResolutionStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        DomainResolutionStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "DomainResolutionStage item value must be a company object."
+    else:
+        raise AssertionError("Expected TypeError")
