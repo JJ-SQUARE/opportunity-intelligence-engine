@@ -401,3 +401,73 @@ def test_run_repository_uses_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
 
     assert updated["status"] == "partial_success"
     assert updated["mode"] == "dry-run"
+
+def test_run_metrics_repository_uses_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.database import DatabaseSettings
+    from oie.persistence.models import Base, Run
+    from oie.persistence.repositories import RunMetricsRepository
+    from oie.persistence.session import create_session_factory
+
+    sqlite_db = tmp_path / "orm_metrics_backend_simulation.db"
+    sqlite_settings = DatabaseSettings(
+        backend="sqlite",
+        path=str(sqlite_db),
+        url=f"sqlite:///{sqlite_db}",
+    )
+    postgres_like_settings = DatabaseSettings(
+        backend="postgresql",
+        path=None,
+        url="postgresql+psycopg://user:pass@localhost:5432/oie",
+    )
+
+    def fake_create_session_factory(settings):
+        assert settings.backend == "postgresql"
+        return create_session_factory(sqlite_settings)
+
+    monkeypatch.setattr(
+        "oie.persistence.repositories.create_session_factory",
+        fake_create_session_factory,
+    )
+
+    SessionFactory = create_session_factory(sqlite_settings)
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    with SessionFactory() as session:
+        session.add(
+            Run(
+                run_id="run_metrics_orm",
+                run_date="2026-01-01T00:00:00+00:00",
+                status="completed",
+                mode="default",
+            )
+        )
+        session.commit()
+
+    repository = RunMetricsRepository(
+        persistence=PersistenceContext(settings=postgres_like_settings)
+    )
+
+    repository.replace_metrics(
+        "run_metrics_orm",
+        {
+            "input_count": 10,
+            "status": "completed",
+        },
+    )
+
+    assert repository.get_metrics("run_metrics_orm") == {
+        "input_count": "10",
+        "status": "completed",
+    }
+
+    repository.replace_metrics(
+        "run_metrics_orm",
+        {
+            "output_count": 7,
+        },
+    )
+
+    assert repository.get_metrics("run_metrics_orm") == {
+        "output_count": "7",
+    }
