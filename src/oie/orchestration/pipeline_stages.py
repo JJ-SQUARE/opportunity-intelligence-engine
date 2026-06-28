@@ -18,6 +18,7 @@ PIPELINE_STAGES = [
     "snapshot_persistence",
     "opportunity_dataset",
     "opportunity_dataset_export",
+    "outbound_export",
 ]
 
 RUN_STATUSES = [

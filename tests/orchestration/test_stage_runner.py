@@ -2889,3 +2889,109 @@ def test_opportunity_dataset_export_stage_rejects_non_list_dataset(tmp_path):
         assert str(exc) == "OpportunityDatasetExportStage payload dataset must be a list."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_outbound_export_stage_loads_opportunity_dataset_export_output(tmp_path):
+    from oie.orchestration.opportunity_dataset_export_stage import OpportunityDatasetExportStage
+    from oie.orchestration.outbound_export_stage import OutboundExportStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "dataset",
+        "value": {
+            "dataset_exported": True,
+            "dataset_path": "/tmp/opportunities_export.csv",
+            "top_dataset_path": "/tmp/top_opportunities_export.csv",
+        },
+        "metadata": {},
+    }
+
+    manager = StageCheckpointManager(OpportunityDatasetExportStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "dataset"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert OutboundExportStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_outbound_export_stage(monkeypatch, tmp_path):
+    from oie.orchestration.opportunity_dataset_export_stage import OpportunityDatasetExportStage
+    from oie.orchestration.outbound_export_stage import OutboundExportStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.outbound_export_service import OutboundExportService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "dataset",
+        "value": {
+            "dataset_exported": True,
+            "dataset_path": "/tmp/opportunities_export.csv",
+            "top_dataset_path": "/tmp/top_opportunities_export.csv",
+        },
+        "metadata": {},
+    }
+
+    manager = StageCheckpointManager(OpportunityDatasetExportStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "dataset"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        OutboundExportService,
+        "export_all",
+        lambda self: {"commercial_pipeline_csv": "/tmp/commercial_pipeline.csv"},
+    )
+    monkeypatch.setattr(
+        OutboundExportService,
+        "push_hubspot_payloads",
+        lambda self, provider_execution_service: {"pushed": 2, "skipped": 0},
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(OutboundExportStage)
+    paths = OutboundExportStage(ctx).artifact_paths()
+    output = json.loads(paths["output"].read_text(encoding="utf-8").splitlines()[0])
+
+    assert checkpoint["stage"] == "outbound_export"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+    assert output["value"]["outbound_exported"] is True
+    assert output["value"]["outbound_export_result"] == {
+        "commercial_pipeline_csv": "/tmp/commercial_pipeline.csv"
+    }
+    assert output["value"]["hubspot_push_result"] == {"pushed": 2, "skipped": 0}
+    assert ctx.provider_state["hubspot_push_result"] == {"pushed": 2, "skipped": 0}
+
+
+def test_outbound_export_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.outbound_export_stage import OutboundExportStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        OutboundExportStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "OutboundExportStage item value must be a payload object."
+    else:
+        raise AssertionError("Expected TypeError")
