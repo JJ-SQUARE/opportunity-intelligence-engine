@@ -603,3 +603,74 @@ def test_read_jsonl_file_reports_invalid_line_number(tmp_path):
         assert str(exc) == f"Invalid JSONL at {path}:2"
     else:
         raise AssertionError("Expected ValueError")
+
+def test_stage_runner_rerun_completed_stage_does_not_duplicate_output(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    runner = StageRunner(ctx)
+
+    first_checkpoint = runner.run_stage(RunnerItemsStage)
+    second_checkpoint = runner.run_stage(RunnerItemsStage)
+    paths = RunnerItemsStage(ctx).artifact_paths()
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+
+    assert [json.loads(line) for line in output_lines] == [
+        {"id": "item_1", "value": 10},
+        {"id": "item_2", "value": 20},
+    ]
+    assert first_checkpoint["processed_count"] == 2
+    assert second_checkpoint["processed_count"] == 2
+    assert second_checkpoint["output_count"] == 2
+    assert second_checkpoint["last_processed_index"] == 1
+
+
+def test_stage_runner_rejects_resume_when_checkpoint_output_count_exceeds_artifact(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    runner = StageRunner(ctx)
+    runner.run_stage(RunnerItemsStage)
+
+    paths = RunnerItemsStage(ctx).artifact_paths()
+    paths["output"].write_text(
+        json.dumps({"id": "item_1", "value": 10}) + "\n",
+        encoding="utf-8",
+    )
+
+    try:
+        runner.run_stage(RunnerItemsStage)
+    except ValueError as exc:
+        assert str(exc) == (
+            "Checkpoint/output mismatch for company_gate: "
+            "checkpoint output_count=2, artifact output_count=1"
+        )
+    else:
+        raise AssertionError("Expected ValueError")
+
+
+def test_stage_runner_rejects_resume_when_artifact_output_count_exceeds_checkpoint(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    runner = StageRunner(ctx)
+    runner.run_stage(RunnerItemsStage)
+
+    paths = RunnerItemsStage(ctx).artifact_paths()
+    with paths["output"].open("a", encoding="utf-8") as output_file:
+        output_file.write(json.dumps({"id": "extra", "value": 999}) + "\n")
+
+    try:
+        runner.run_stage(RunnerItemsStage)
+    except ValueError as exc:
+        assert str(exc) == (
+            "Checkpoint/output mismatch for company_gate: "
+            "checkpoint output_count=2, artifact output_count=3"
+        )
+    else:
+        raise AssertionError("Expected ValueError")

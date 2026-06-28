@@ -39,12 +39,27 @@ class StageCheckpointManager:
             return None
         return load_checkpoint_payload(checkpoint)
 
+    def output_count_from_artifact(self) -> int:
+        return len(self.read_output())
+
+    def validate_resume_consistency(self, checkpoint: StageState) -> None:
+        artifact_output_count = self.output_count_from_artifact()
+        checkpoint_output_count = checkpoint["output_count"]
+
+        if artifact_output_count != checkpoint_output_count:
+            raise ValueError(
+                "Checkpoint/output mismatch for "
+                f"{self.stage.name}: checkpoint output_count={checkpoint_output_count}, "
+                f"artifact output_count={artifact_output_count}"
+            )
+
     def merge_previous_checkpoint(
         self,
         checkpoint: StageState,
         previous_checkpoint: StageState | None,
     ) -> StageState:
         if previous_checkpoint:
+            self.validate_resume_consistency(previous_checkpoint)
             checkpoint.update(previous_checkpoint)
             checkpoint["status"] = "running"
             checkpoint["errors"] = []
