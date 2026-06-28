@@ -4,6 +4,7 @@ import traceback
 from typing import Any, Dict, List, Tuple
 
 from oie.orchestration.run_context import RunContext
+from oie.orchestration.run_manifest import finalize_manifest
 from oie.services.collection_service import CollectionService
 from oie.services.collector_contribution_export_service import CollectorContributionExportService
 from oie.services.collector_contribution_service import CollectorContributionService
@@ -581,6 +582,7 @@ class PipelineOrchestrator:
                 executive_summary=executive_summary,
             )
             self.run_analytics_export_service.export_json(run_analytics)
+            finalize_manifest(self.ctx, "completed")
 
             return {
                 "run_id": self.ctx.run_id,
@@ -663,6 +665,18 @@ class PipelineOrchestrator:
                     "error_type": exc.__class__.__name__,
                 },
             )
+
+            try:
+                finalize_manifest(
+                    self.ctx,
+                    "failed",
+                    {
+                        "error_type": exc.__class__.__name__,
+                        "error_message": str(exc),
+                    },
+                )
+            except Exception:
+                self.ctx.metrics["pipeline_failure_finalize_manifest_failed"] = True
 
             try:
                 self.persistence_service.persist_run_snapshot(

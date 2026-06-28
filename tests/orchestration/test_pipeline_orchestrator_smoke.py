@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
 
@@ -182,9 +185,12 @@ def test_orchestrator_uses_top_multiple_leads_per_company_config():
 
     result = orchestrator.run()
 
+    manifest = json.loads(Path(ctx.paths["manifest_path"]).read_text(encoding="utf-8"))
+
     assert calls["max_leads_per_company"] == 2
     assert ctx.metrics["pipeline_selected_leads_per_company"] == 2
     assert result["leads_count"] == 2
+    assert manifest["status"] == "completed"
 
 def test_orchestrator_enriches_before_classification_and_scoring():
     ctx = RunContext.create(config={})
