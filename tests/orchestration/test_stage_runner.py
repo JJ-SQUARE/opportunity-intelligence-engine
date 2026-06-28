@@ -2653,3 +2653,118 @@ def test_snapshot_persistence_stage_rejects_non_list_deduped_leads(tmp_path):
         assert str(exc) == "SnapshotPersistenceStage payload deduped_leads must be a list."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_opportunity_dataset_stage_loads_snapshot_persistence_output(tmp_path):
+    from oie.orchestration.opportunity_dataset_stage import OpportunityDatasetStage
+    from oie.orchestration.snapshot_persistence_stage import SnapshotPersistenceStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": {"company": "Acme"},
+            "snapshot_persisted": True,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(SnapshotPersistenceStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert OpportunityDatasetStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_opportunity_dataset_stage(monkeypatch, tmp_path):
+    from oie.orchestration.opportunity_dataset_stage import OpportunityDatasetStage
+    from oie.orchestration.snapshot_persistence_stage import SnapshotPersistenceStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.opportunity_dataset_export_service import OpportunityDatasetExportService
+    from oie.services.opportunity_dataset_service import OpportunityDatasetService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": {"company": "Acme"},
+            "snapshot_persisted": True,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(SnapshotPersistenceStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    monkeypatch.setattr(
+        OpportunityDatasetService,
+        "build_dataset",
+        lambda self: [{"company_key": "cmp_acme", "company_display": "Acme"}],
+    )
+    monkeypatch.setattr(
+        OpportunityDatasetService,
+        "build_top_opportunities",
+        lambda self, limit=25: [{"company_key": "cmp_acme", "company_display": "Acme"}],
+    )
+    monkeypatch.setattr(
+        OpportunityDatasetExportService,
+        "export_dataset",
+        lambda self, dataset: "/tmp/opportunities_export.csv",
+    )
+    monkeypatch.setattr(
+        OpportunityDatasetExportService,
+        "export_top_dataset",
+        lambda self, dataset: "/tmp/top_opportunities_export.csv",
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(OpportunityDatasetStage)
+    paths = OpportunityDatasetStage(ctx).artifact_paths()
+    output = json.loads(paths["output"].read_text(encoding="utf-8").splitlines()[0])
+
+    assert checkpoint["stage"] == "opportunity_dataset"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+    assert output["id"] == "Acme"
+    assert output["value"]["opportunity_dataset_exported"] is True
+    assert output["value"]["opportunity_dataset_rows"] == 1
+    assert output["value"]["top_opportunity_dataset_rows"] == 1
+    assert output["value"]["opportunity_dataset_path"] == "/tmp/opportunities_export.csv"
+    assert output["value"]["top_opportunity_dataset_path"] == "/tmp/top_opportunities_export.csv"
+
+
+def test_opportunity_dataset_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.opportunity_dataset_stage import OpportunityDatasetStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        OpportunityDatasetStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "OpportunityDatasetStage item value must be a payload object."
+    else:
+        raise AssertionError("Expected TypeError")

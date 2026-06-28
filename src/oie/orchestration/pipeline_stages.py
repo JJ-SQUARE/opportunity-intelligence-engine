@@ -16,6 +16,7 @@ PIPELINE_STAGES = [
     "lead_ranking",
     "lead_dedup",
     "snapshot_persistence",
+    "opportunity_dataset",
 ]
 
 RUN_STATUSES = [
