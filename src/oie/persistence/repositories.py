@@ -6,7 +6,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 
 from oie.persistence.context import PersistenceContext
-from oie.persistence.models import Run
+from oie.persistence.models import Run, RunMetric
 from oie.persistence.session import create_session_factory
 
 
