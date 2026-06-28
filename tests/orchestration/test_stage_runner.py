@@ -775,3 +775,112 @@ def test_stage_registry_has_validates_and_reports_presence():
         assert str(exc) == "Unknown pipeline stage: unknown_stage"
     else:
         raise AssertionError("Expected ValueError")
+
+def test_collect_jobs_stage_loads_collection_service_jobs(monkeypatch, tmp_path):
+    from oie.orchestration.collect_jobs_stage import CollectJobsStage
+    from oie.services.collection_service import CollectionService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    monkeypatch.setattr(
+        CollectionService,
+        "collect",
+        lambda self: [
+            {
+                "title": "Backend Engineer",
+                "company": "Acme",
+                "source": "google_jobs",
+                "job_url": "https://acme.test/jobs/1",
+                "apply_url": "https://acme.test/apply/1",
+            },
+            {
+                "title": "Data Engineer",
+                "company": "Beta",
+                "source": "linkedin_serpapi",
+            },
+        ],
+    )
+
+    items = CollectJobsStage(ctx).load_input()
+
+    assert items == [
+        {
+            "id": "https://acme.test/jobs/1",
+            "value": {
+                "title": "Backend Engineer",
+                "company": "Acme",
+                "source": "google_jobs",
+                "job_url": "https://acme.test/jobs/1",
+                "apply_url": "https://acme.test/apply/1",
+            },
+            "metadata": {
+                "source": "google_jobs",
+                "job_url": "https://acme.test/jobs/1",
+                "apply_url": "https://acme.test/apply/1",
+            },
+        },
+        {
+            "id": "collected_job_2",
+            "value": {
+                "title": "Data Engineer",
+                "company": "Beta",
+                "source": "linkedin_serpapi",
+            },
+            "metadata": {
+                "source": "linkedin_serpapi",
+                "job_url": None,
+                "apply_url": None,
+            },
+        },
+    ]
+
+
+def test_stage_runner_runs_collect_jobs_stage(monkeypatch, tmp_path):
+    from oie.orchestration.collect_jobs_stage import CollectJobsStage
+    from oie.services.collection_service import CollectionService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    monkeypatch.setattr(
+        CollectionService,
+        "collect",
+        lambda self: [
+            {
+                "title": "Backend Engineer",
+                "company": "Acme",
+                "source": "google_jobs",
+                "job_url": "https://acme.test/jobs/1",
+            },
+        ],
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(CollectJobsStage)
+    paths = CollectJobsStage(ctx).artifact_paths()
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+
+    assert checkpoint["stage"] == "collect_jobs"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+    assert [json.loads(line) for line in output_lines] == [
+        {
+            "id": "https://acme.test/jobs/1",
+            "value": {
+                "title": "Backend Engineer",
+                "company": "Acme",
+                "source": "google_jobs",
+                "job_url": "https://acme.test/jobs/1",
+            },
+            "metadata": {
+                "source": "google_jobs",
+                "job_url": "https://acme.test/jobs/1",
+                "apply_url": None,
+            },
+        }
+    ]
