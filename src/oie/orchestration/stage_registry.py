@@ -19,5 +19,13 @@ class StageRegistry:
         except KeyError as exc:
             raise KeyError(f"Stage is not registered: {stage_name}") from exc
 
+    def register_many(self, stage_classes: list[StageClass]) -> None:
+        for stage_cls in stage_classes:
+            self.register(stage_cls)
+
+    def has(self, stage_name: str) -> bool:
+        validate_pipeline_stage(stage_name)
+        return stage_name in self._stages
+
     def names(self) -> list[str]:
         return list(self._stages)

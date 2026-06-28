@@ -748,3 +748,30 @@ def test_stage_registry_rejects_unregistered_known_stage_lookup():
         assert str(exc) == "'Stage is not registered: collect_jobs'"
     else:
         raise AssertionError("Expected KeyError")
+
+def test_stage_registry_registers_many_stage_classes():
+    from oie.orchestration.stage_registry import StageRegistry
+
+    registry = StageRegistry()
+    registry.register_many([RunnerDummyStage, RunnerItemsStage])
+
+    assert registry.get("collect_jobs") is RunnerDummyStage
+    assert registry.get("company_gate") is RunnerItemsStage
+    assert registry.names() == ["collect_jobs", "company_gate"]
+
+
+def test_stage_registry_has_validates_and_reports_presence():
+    from oie.orchestration.stage_registry import StageRegistry
+
+    registry = StageRegistry()
+    registry.register(RunnerDummyStage)
+
+    assert registry.has("collect_jobs") is True
+    assert registry.has("company_gate") is False
+
+    try:
+        registry.has("unknown_stage")
+    except ValueError as exc:
+        assert str(exc) == "Unknown pipeline stage: unknown_stage"
+    else:
+        raise AssertionError("Expected ValueError")
