@@ -1205,3 +1205,70 @@ def test_company_gate_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "CompanyGateStage item value must be a job object."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_ai_company_gate_stage_advances_ai_approved_company(tmp_path):
+    from oie.orchestration.ai_company_gate_stage import AICompanyGateStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": "Acme",
+            "ai_company_gate_company_type": "end_client",
+            "ai_company_gate_relevance": "high",
+            "ai_company_gate_should_advance": True,
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    output = AICompanyGateStage(ctx).process_item(item)
+
+    assert output["id"] == "Acme"
+    assert output["value"]["ai_company_gate_status"] == "advanced"
+    assert "company_identity_ai_discarded" not in output["value"]
+
+
+def test_ai_company_gate_stage_rejects_ai_identified_job_board(tmp_path):
+    from oie.orchestration.ai_company_gate_stage import AICompanyGateStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    item = {
+        "id": "Job Board Co",
+        "value": {
+            "company": "Job Board Co",
+            "ai_company_gate_company_type": "job_board",
+            "ai_company_gate_relevance": "low",
+            "ai_company_gate_should_advance": False,
+        },
+        "metadata": {"company": "Job Board Co"},
+    }
+
+    output = AICompanyGateStage(ctx).process_item(item)
+
+    assert output["value"]["company_identity_ai_discarded"] is True
+    assert output["value"]["ai_company_gate_status"] == "rejected"
+    assert ctx.metrics["companies_rejected_by_ai_job_board"] == 1
+
+
+def test_ai_company_gate_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.ai_company_gate_stage import AICompanyGateStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        AICompanyGateStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "AICompanyGateStage item value must be a company object."
+    else:
+        raise AssertionError("Expected TypeError")
