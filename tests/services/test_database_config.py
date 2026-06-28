@@ -230,3 +230,39 @@ def test_repository_base_preserves_db_path_compatibility(tmp_path):
     )
 
     assert repository.get_run("run_compat")["mode"] == "default"
+
+def test_create_database_engine_for_sqlite(tmp_path):
+    from sqlalchemy import text
+
+    from oie.persistence.database import resolve_database_settings
+    from oie.persistence.engine import create_database_engine
+
+    db_path = tmp_path / "engine.db"
+    settings = resolve_database_settings(
+        {"database": {"backend": "sqlite", "path": str(db_path)}}
+    )
+
+    engine = create_database_engine(settings)
+
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE sample (id INTEGER PRIMARY KEY, name TEXT)"))
+        conn.execute(text("INSERT INTO sample (name) VALUES (:name)"), {"name": "Acme"})
+        row = conn.execute(text("SELECT name FROM sample")).fetchone()
+
+    assert row[0] == "Acme"
+
+
+def test_database_settings_supports_postgres_url_without_driver_connection():
+    from oie.persistence.database import resolve_database_settings
+
+    settings = resolve_database_settings(
+        {
+            "database": {
+                "backend": "postgresql",
+                "url": "postgresql+psycopg://user:pass@localhost:5432/oie",
+            }
+        }
+    )
+
+    assert settings.backend == "postgresql"
+    assert settings.url == "postgresql+psycopg://user:pass@localhost:5432/oie"
