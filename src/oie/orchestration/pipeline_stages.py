@@ -15,6 +15,7 @@ PIPELINE_STAGES = [
     "lead_contact_generation",
     "lead_ranking",
     "lead_dedup",
+    "snapshot_persistence",
 ]
 
 RUN_STATUSES = [

@@ -2506,3 +2506,150 @@ def test_lead_dedup_stage_rejects_non_list_selected_leads(tmp_path):
         assert str(exc) == "LeadDedupStage payload selected_leads must be a list."
     else:
         raise AssertionError("Expected TypeError")
+
+def test_snapshot_persistence_stage_loads_lead_dedup_output(tmp_path):
+    from oie.orchestration.lead_dedup_stage import LeadDedupStage
+    from oie.orchestration.snapshot_persistence_stage import SnapshotPersistenceStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": {"company": "Acme"},
+            "deduped_leads": [],
+            "duplicate_leads": [],
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(LeadDedupStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    assert SnapshotPersistenceStage(ctx).load_input() == [item]
+
+
+def test_stage_runner_runs_snapshot_persistence_stage(monkeypatch, tmp_path):
+    from oie.orchestration.lead_dedup_stage import LeadDedupStage
+    from oie.orchestration.snapshot_persistence_stage import SnapshotPersistenceStage
+    from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+    from oie.services.persistence_service import PersistenceService
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    item = {
+        "id": "Acme",
+        "value": {
+            "company": {"company": "Acme"},
+            "deduped_leads": [
+                {"company_key": "cmp_acme", "contact_name": "Jane Doe"},
+            ],
+            "duplicate_leads": [],
+        },
+        "metadata": {"company": "Acme"},
+    }
+
+    manager = StageCheckpointManager(LeadDedupStage(ctx))
+    checkpoint = manager.initial_checkpoint(status="completed")
+    checkpoint["input_count"] = 1
+    checkpoint["processed_count"] = 1
+    checkpoint["output_count"] = 1
+    checkpoint["last_processed_index"] = 0
+    checkpoint["last_processed_id"] = "Acme"
+
+    manager.append_output(item)
+    manager.write_checkpoint(checkpoint)
+
+    calls = []
+
+    def fake_persist_run_snapshot(self, status, companies=None, jobs=None, leads=None):
+        calls.append(
+            {
+                "status": status,
+                "companies": companies,
+                "jobs": jobs,
+                "leads": leads,
+            }
+        )
+
+    monkeypatch.setattr(
+        PersistenceService,
+        "persist_run_snapshot",
+        fake_persist_run_snapshot,
+    )
+
+    checkpoint = StageRunner(ctx).run_stage(SnapshotPersistenceStage)
+    paths = SnapshotPersistenceStage(ctx).artifact_paths()
+    output = json.loads(paths["output"].read_text(encoding="utf-8").splitlines()[0])
+
+    assert checkpoint["stage"] == "snapshot_persistence"
+    assert checkpoint["status"] == "completed"
+    assert checkpoint["input_count"] == 1
+    assert checkpoint["processed_count"] == 1
+    assert calls == [
+        {
+            "status": "company_pipeline_completed",
+            "companies": [{"company": "Acme"}],
+            "jobs": None,
+            "leads": [{"company_key": "cmp_acme", "contact_name": "Jane Doe"}],
+        }
+    ]
+    assert output["id"] == "Acme"
+    assert output["value"]["snapshot_persisted"] is True
+    assert output["value"]["snapshot_companies_count"] == 1
+    assert output["value"]["snapshot_leads_count"] == 1
+    assert output["value"]["snapshot_duplicate_leads_count"] == 0
+
+
+def test_snapshot_persistence_stage_rejects_non_object_stage_value(tmp_path):
+    from oie.orchestration.snapshot_persistence_stage import SnapshotPersistenceStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        SnapshotPersistenceStage(ctx).process_item({"id": "bad", "value": "not-a-dict"})
+    except TypeError as exc:
+        assert str(exc) == "SnapshotPersistenceStage item value must be a payload object."
+    else:
+        raise AssertionError("Expected TypeError")
+
+
+def test_snapshot_persistence_stage_rejects_non_list_deduped_leads(tmp_path):
+    from oie.orchestration.snapshot_persistence_stage import SnapshotPersistenceStage
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        SnapshotPersistenceStage(ctx).process_item(
+            {
+                "id": "bad",
+                "value": {
+                    "company": {"company": "Bad"},
+                    "deduped_leads": "not-a-list",
+                    "duplicate_leads": [],
+                },
+            }
+        )
+    except TypeError as exc:
+        assert str(exc) == "SnapshotPersistenceStage payload deduped_leads must be a list."
+    else:
+        raise AssertionError("Expected TypeError")
