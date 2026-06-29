@@ -349,6 +349,10 @@ class ProviderOperationMetricsRepository(RepositoryBase):
 
 class CompanyRepository(RepositoryBase):
     def upsert_companies(self, companies: List[Dict[str, Any]]) -> None:
+        if self.persistence.backend != "sqlite":
+            self._upsert_companies_orm(companies)
+            return
+
         conn = self.connection()
         try:
             conn.executemany(
@@ -479,6 +483,117 @@ class CompanyRepository(RepositoryBase):
             conn.commit()
         finally:
             conn.close()
+            return
+
+        self._upsert_companies_orm(companies)
+
+    def _coalesce_company_value(self, new_value: Any, existing_value: Any) -> Any:
+        return existing_value if new_value is None else new_value
+
+    def _bool_int(self, value: Any, default: bool = False) -> int:
+        if value is None:
+            return 1 if default else 0
+        return 1 if value else 0
+
+    def _company_orm_values(self, company: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "company_key": company.get("company_key"),
+            "company_display": company.get("company_display"),
+            "company_normalized": company.get("company_normalized"),
+            "company_root": company.get("company_root"),
+            "resolved_domain": company.get("resolved_domain"),
+            "domain_source": company.get("domain_source"),
+            "domain_confidence": company.get("domain_confidence"),
+            "domain_candidate": company.get("domain_candidate"),
+            "domain_validation_status": company.get("domain_validation_status"),
+            "domain_review_required": self._bool_int(company.get("domain_review_required")),
+            "domain_ai_validated": self._bool_int(company.get("domain_ai_validated")),
+            "domain_ai_decision": company.get("domain_ai_decision"),
+            "domain_ai_confidence": company.get("domain_ai_confidence"),
+            "domain_ai_reason": company.get("domain_ai_reason"),
+            "ai_company_identity_confidence": company.get("ai_company_identity_confidence"),
+            "ai_company_identity_source": company.get("ai_company_identity_source"),
+            "ai_company_identity_reason": company.get("ai_company_identity_reason"),
+            "company_identity_ai_valid": self._bool_int(
+                company.get("company_identity_ai_valid"),
+                default=True,
+            ),
+            "company_identity_ai_contaminated": self._bool_int(company.get("company_identity_ai_contaminated")),
+            "company_identity_ai_ambiguous": self._bool_int(company.get("company_identity_ai_ambiguous")),
+            "industry": company.get("industry"),
+            "employee_range": company.get("employee_range"),
+            "linkedin_company_url": company.get("linkedin_company_url"),
+            "company_description": company.get("company_description"),
+            "company_size": company.get("company_size"),
+            "enriched_at": company.get("enriched_at"),
+            "enrichment_source": company.get("enrichment_source"),
+            "enrichment_ai_match": self._bool_int(company.get("enrichment_ai_match")),
+            "enrichment_ai_confidence": company.get("enrichment_ai_confidence"),
+            "enrichment_ai_decision": company.get("enrichment_ai_decision"),
+            "enrichment_ai_reason": company.get("enrichment_ai_reason"),
+            "enrichment_ai_provider": company.get("enrichment_ai_provider"),
+            "enrichment_ai_model": company.get("enrichment_ai_model"),
+            "enrichment_ai_mode": company.get("enrichment_ai_mode"),
+            "company_type_ai": company.get("company_type_ai"),
+            "classification_confidence_ai": company.get("classification_confidence_ai"),
+            "classification_provider": company.get("classification_provider"),
+        }
+
+    def _upsert_companies_orm(self, companies: List[Dict[str, Any]]) -> None:
+        if not companies:
+            return
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            for company in companies:
+                values = self._company_orm_values(company)
+                company_key = values.get("company_key")
+                if not company_key:
+                    continue
+
+                existing = session.get(Company, company_key)
+                if existing is None:
+                    session.add(Company(**values))
+                    continue
+
+                existing.company_display = values["company_display"]
+                existing.company_normalized = values["company_normalized"]
+                existing.company_root = self._coalesce_company_value(values["company_root"], existing.company_root)
+                existing.resolved_domain = values["resolved_domain"]
+                existing.domain_source = values["domain_source"]
+                existing.domain_confidence = values["domain_confidence"]
+                existing.domain_candidate = values["domain_candidate"]
+                existing.domain_validation_status = values["domain_validation_status"]
+                existing.domain_review_required = values["domain_review_required"]
+                existing.domain_ai_validated = values["domain_ai_validated"]
+                existing.domain_ai_decision = values["domain_ai_decision"]
+                existing.domain_ai_confidence = values["domain_ai_confidence"]
+                existing.domain_ai_reason = values["domain_ai_reason"]
+                existing.ai_company_identity_confidence = values["ai_company_identity_confidence"]
+                existing.ai_company_identity_source = values["ai_company_identity_source"]
+                existing.ai_company_identity_reason = values["ai_company_identity_reason"]
+                existing.company_identity_ai_valid = values["company_identity_ai_valid"]
+                existing.company_identity_ai_contaminated = values["company_identity_ai_contaminated"]
+                existing.company_identity_ai_ambiguous = values["company_identity_ai_ambiguous"]
+                existing.industry = self._coalesce_company_value(values["industry"], existing.industry)
+                existing.employee_range = self._coalesce_company_value(values["employee_range"], existing.employee_range)
+                existing.linkedin_company_url = self._coalesce_company_value(values["linkedin_company_url"], existing.linkedin_company_url)
+                existing.company_description = self._coalesce_company_value(values["company_description"], existing.company_description)
+                existing.company_size = self._coalesce_company_value(values["company_size"], existing.company_size)
+                existing.enriched_at = self._coalesce_company_value(values["enriched_at"], existing.enriched_at)
+                existing.enrichment_source = self._coalesce_company_value(values["enrichment_source"], existing.enrichment_source)
+                existing.enrichment_ai_match = values["enrichment_ai_match"]
+                existing.enrichment_ai_confidence = self._coalesce_company_value(values["enrichment_ai_confidence"], existing.enrichment_ai_confidence)
+                existing.enrichment_ai_decision = self._coalesce_company_value(values["enrichment_ai_decision"], existing.enrichment_ai_decision)
+                existing.enrichment_ai_reason = self._coalesce_company_value(values["enrichment_ai_reason"], existing.enrichment_ai_reason)
+                existing.enrichment_ai_provider = self._coalesce_company_value(values["enrichment_ai_provider"], existing.enrichment_ai_provider)
+                existing.enrichment_ai_model = self._coalesce_company_value(values["enrichment_ai_model"], existing.enrichment_ai_model)
+                existing.enrichment_ai_mode = self._coalesce_company_value(values["enrichment_ai_mode"], existing.enrichment_ai_mode)
+                existing.company_type_ai = self._coalesce_company_value(values["company_type_ai"], existing.company_type_ai)
+                existing.classification_confidence_ai = self._coalesce_company_value(values["classification_confidence_ai"], existing.classification_confidence_ai)
+                existing.classification_provider = self._coalesce_company_value(values["classification_provider"], existing.classification_provider)
+
+            session.commit()
 
     def find_by_normalized_and_domain(self, company_normalized: str, resolved_domain: str | None) -> Optional[Dict[str, Any]]:
         if self.persistence.backend == "sqlite":

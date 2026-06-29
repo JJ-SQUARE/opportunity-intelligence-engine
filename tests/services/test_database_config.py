@@ -747,3 +747,97 @@ def test_company_repository_read_methods_use_orm_for_non_sqlite_backend(tmp_path
     assert by_normalized == by_domain
     assert [company["company_display"] for company in companies] == ["Acme", "Beta"]
     assert companies[0]["industry"] == "Finance"
+
+def test_company_repository_upsert_uses_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.database import DatabaseSettings
+    from oie.persistence.models import Base
+    from oie.persistence.repositories import CompanyRepository
+    from oie.persistence.session import create_session_factory
+
+    sqlite_db = tmp_path / "orm_company_upsert_backend_simulation.db"
+    sqlite_settings = DatabaseSettings(
+        backend="sqlite",
+        path=str(sqlite_db),
+        url=f"sqlite:///{sqlite_db}",
+    )
+    postgres_like_settings = DatabaseSettings(
+        backend="postgresql",
+        path=None,
+        url="postgresql+psycopg://user:pass@localhost:5432/oie",
+    )
+
+    def fake_create_session_factory(settings):
+        assert settings.backend == "postgresql"
+        return create_session_factory(sqlite_settings)
+
+    monkeypatch.setattr(
+        "oie.persistence.repositories.create_session_factory",
+        fake_create_session_factory,
+    )
+
+    SessionFactory = create_session_factory(sqlite_settings)
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    repository = CompanyRepository(
+        persistence=PersistenceContext(settings=postgres_like_settings)
+    )
+
+    repository.upsert_companies(
+        [
+            {
+                "company_key": "cmp_acme",
+                "company_display": "Acme",
+                "company_normalized": "acme",
+                "company_root": "acme",
+                "resolved_domain": "acme.com",
+                "domain_source": "serpapi",
+                "domain_confidence": 0.9,
+                "domain_review_required": True,
+                "company_identity_ai_valid": True,
+                "industry": "Finance",
+                "employee_range": "1001-5000",
+                "linkedin_company_url": "https://linkedin.com/company/acme",
+                "company_description": "Initial description",
+                "company_type_ai": "end_client",
+                "classification_confidence_ai": 0.8,
+            }
+        ]
+    )
+
+    saved = repository.find_by_domain("acme.com")
+    companies = repository.list_companies()
+
+    assert saved["company_key"] == "cmp_acme"
+    assert companies[0]["industry"] == "Finance"
+    assert companies[0]["domain_review_required"] == 1
+
+    repository.upsert_companies(
+        [
+            {
+                "company_key": "cmp_acme",
+                "company_display": "Acme Corp",
+                "company_normalized": "acme",
+                "company_root": None,
+                "resolved_domain": "acme.com",
+                "domain_source": "manual",
+                "domain_confidence": 1.0,
+                "company_identity_ai_valid": True,
+                "industry": None,
+                "employee_range": None,
+                "company_description": None,
+                "company_type_ai": None,
+            }
+        ]
+    )
+
+    updated = repository.list_companies()[0]
+
+    assert updated["company_display"] == "Acme Corp"
+    assert updated["company_root"] == "acme"
+    assert updated["domain_source"] == "manual"
+    assert updated["domain_confidence"] == 1.0
+    assert updated["industry"] == "Finance"
+    assert updated["employee_range"] == "1001-5000"
+    assert updated["company_description"] == "Initial description"
+    assert updated["company_type_ai"] == "end_client"
