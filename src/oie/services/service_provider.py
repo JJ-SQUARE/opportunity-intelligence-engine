@@ -5,8 +5,13 @@ from dataclasses import dataclass
 from oie.orchestration.run_context import RunContext
 from oie.persistence.context import PersistenceContext
 from oie.persistence.repository_provider import RepositoryProvider
+from oie.services.company_enrichment_service import CompanyEnrichmentService
 from oie.services.company_identity_service import CompanyIdentityService
+from oie.services.company_identity_ai_service import CompanyIdentityAIService
+from oie.services.company_classification_service import CompanyClassificationService
 from oie.services.db_export_service import DBExportService
+from oie.services.domain_ai_validation_service import DomainAIValidationService
+from oie.services.domain_resolution_service import DomainResolutionService
 from oie.services.executive_summary_service import ExecutiveSummaryService
 from oie.services.historical_intelligence_service import HistoricalIntelligenceService
 from oie.services.market_trends_service import MarketTrendsService
@@ -34,6 +39,11 @@ class ServiceProvider:
     opportunity_dataset_service: OpportunityDatasetService
     historical_intelligence_service: HistoricalIntelligenceService
     market_trends_service: MarketTrendsService
+    company_identity_ai_service: CompanyIdentityAIService
+    company_classification_service: CompanyClassificationService
+    company_enrichment_service: CompanyEnrichmentService
+    domain_ai_validation_service: DomainAIValidationService
+    domain_resolution_service: DomainResolutionService
 
     @classmethod
     def from_run_context(cls, ctx: RunContext) -> "ServiceProvider":
@@ -54,4 +64,13 @@ class ServiceProvider:
             opportunity_dataset_service=OpportunityDatasetService(ctx, repositories=persistence_service.repositories),
             historical_intelligence_service=HistoricalIntelligenceService(ctx, repositories=persistence_service.repositories),
             market_trends_service=MarketTrendsService(ctx, repositories=persistence_service.repositories),
+            company_identity_ai_service=CompanyIdentityAIService(ctx, provider_control_service),
+            company_classification_service=CompanyClassificationService(ctx, provider_control_service),
+            company_enrichment_service=CompanyEnrichmentService(
+                ctx,
+                provider_control_service,
+                repositories=persistence_service.repositories,
+            ),
+            domain_ai_validation_service=DomainAIValidationService(ctx, provider_control_service),
+            domain_resolution_service=DomainResolutionService(ctx, provider_control_service),
         )
