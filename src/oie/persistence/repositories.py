@@ -14,3 +14,16 @@ from oie.persistence.lead_repository import LeadRepository
 from oie.persistence.company_score_repository import CompanyScoreRepository
 
 
+__all__ = [
+    "RunRepository",
+    "RunMetricsRepository",
+    "ProviderEventRepository",
+    "ProviderOperationMetricsRepository",
+    "CompanyRepository",
+    "CompanyAliasRepository",
+    "DomainRepository",
+    "CompanyMergeCandidateRepository",
+    "JobRepository",
+    "LeadRepository",
+    "CompanyScoreRepository",
+]
