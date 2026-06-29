@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from oie.orchestration.run_context import RunContext
 from oie.utils.domain_filters import is_job_board_domain
 from oie.utils.company_name_extraction import extract_actionable_company_name
+from oie.persistence.context import PersistenceContext
 from oie.persistence.repositories import CompanyAliasRepository, CompanyRepository
 from oie.persistence.sqlite import initialize_database
 
@@ -83,11 +84,12 @@ LINKEDIN_TITLE_COMPANY_PATTERNS = [
 class CompanyIdentityService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        db_path = self.ctx.config.get("database", {}).get("path", "data/oie.db")
-        self.db_path = db_path
-        initialize_database(self.db_path)
-        self.company_repository = CompanyRepository(db_path)
-        self.company_alias_repository = CompanyAliasRepository(db_path)
+        self.persistence = PersistenceContext.from_run_context(ctx)
+        self.db_path = self.persistence.path or self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        if self.persistence.backend == "sqlite":
+            initialize_database(self.db_path)
+        self.company_repository = CompanyRepository(persistence=self.persistence)
+        self.company_alias_repository = CompanyAliasRepository(persistence=self.persistence)
 
     def _clean_company_candidate(self, value: str) -> str:
         candidate = (value or "").strip()

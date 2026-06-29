@@ -4,6 +4,7 @@ import sqlite3
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.persistence.context import PersistenceContext
 from oie.persistence.repositories import (
     CompanyAliasRepository,
     CompanyMergeCandidateRepository,
@@ -24,23 +25,29 @@ from oie.services.provider_operation_metrics_service import ProviderOperationMet
 class PersistenceService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.db_path = self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.persistence = PersistenceContext.from_run_context(ctx)
+        self.db_path = self.persistence.path or self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
         self.ctx.paths["db_path"] = self.db_path
-        self.run_repository = RunRepository(self.db_path)
-        self.run_metrics_repository = RunMetricsRepository(self.db_path)
-        self.provider_event_repository = ProviderEventRepository(self.db_path)
-        self.provider_operation_metrics_repository = ProviderOperationMetricsRepository(self.db_path)
+        self.run_repository = RunRepository(persistence=self.persistence)
+        self.run_metrics_repository = RunMetricsRepository(persistence=self.persistence)
+        self.provider_event_repository = ProviderEventRepository(persistence=self.persistence)
+        self.provider_operation_metrics_repository = ProviderOperationMetricsRepository(persistence=self.persistence)
         self.provider_operation_metrics_service = ProviderOperationMetricsService(ctx)
-        self.company_repository = CompanyRepository(self.db_path)
-        self.company_alias_repository = CompanyAliasRepository(self.db_path)
-        self.domain_repository = DomainRepository(self.db_path)
-        self.company_merge_candidate_repository = CompanyMergeCandidateRepository(self.db_path)
-        self.job_repository = JobRepository(self.db_path)
-        self.lead_repository = LeadRepository(self.db_path)
-        self.company_score_repository = CompanyScoreRepository(self.db_path)
+        self.company_repository = CompanyRepository(persistence=self.persistence)
+        self.company_alias_repository = CompanyAliasRepository(persistence=self.persistence)
+        self.domain_repository = DomainRepository(persistence=self.persistence)
+        self.company_merge_candidate_repository = CompanyMergeCandidateRepository(persistence=self.persistence)
+        self.job_repository = JobRepository(persistence=self.persistence)
+        self.lead_repository = LeadRepository(persistence=self.persistence)
+        self.company_score_repository = CompanyScoreRepository(persistence=self.persistence)
 
     def initialize(self) -> None:
-        initialize_database(self.db_path)
+        if self.persistence.backend == "sqlite":
+            initialize_database(self.db_path)
+        else:
+            from oie.persistence.migrations import run_database_migrations
+
+            run_database_migrations({"database": {"backend": self.persistence.backend, "url": self.persistence.url}})
         self.ctx.metrics["persistence_database_initialized"] = True
 
     def persist_run(self, status: str) -> None:
