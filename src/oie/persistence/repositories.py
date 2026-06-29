@@ -6,7 +6,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 
 from oie.persistence.context import PersistenceContext
-from oie.persistence.models import Run, RunMetric, ProviderEvent, ProviderOperationMetric, Company, CompanyAlias, Domain
+from oie.persistence.models import Run, RunMetric, ProviderEvent, ProviderOperationMetric, Company, CompanyAlias, Domain, CompanyMergeCandidate
 from oie.persistence.session import create_session_factory
 
 
@@ -876,6 +876,10 @@ class DomainRepository(RepositoryBase):
 
 class CompanyMergeCandidateRepository(RepositoryBase):
     def replace_merge_candidates(self, run_id: str, candidates: List[Dict[str, Any]]) -> None:
+        if self.persistence.backend != "sqlite":
+            self._replace_merge_candidates_orm(run_id, candidates)
+            return
+
         conn = self.connection()
         try:
             conn.execute("DELETE FROM company_merge_candidates WHERE run_id = ?", (run_id,))
@@ -905,6 +909,26 @@ class CompanyMergeCandidateRepository(RepositoryBase):
             conn.commit()
         finally:
             conn.close()
+
+    def _replace_merge_candidates_orm(self, run_id: str, candidates: List[Dict[str, Any]]) -> None:
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            session.query(CompanyMergeCandidate).filter(
+                CompanyMergeCandidate.run_id == run_id
+            ).delete()
+            session.add_all(
+                [
+                    CompanyMergeCandidate(
+                        run_id=run_id,
+                        company_key_left=str(candidate.get("company_key_left") or ""),
+                        company_key_right=str(candidate.get("company_key_right") or ""),
+                        reason=str(candidate.get("reason") or ""),
+                        confidence=float(candidate.get("confidence", 0.0) or 0.0),
+                    )
+                    for candidate in candidates
+                ]
+            )
+            session.commit()
 
 
 class JobRepository(RepositoryBase):

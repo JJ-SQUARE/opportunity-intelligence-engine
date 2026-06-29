@@ -965,3 +965,106 @@ def test_alias_and_domain_repositories_use_orm_for_non_sqlite_backend(tmp_path, 
     assert len(replaced_domains) == 1
     assert replaced_domains[0].domain == "updated-acme.com"
     assert replaced_domains[0].source == "hunter"
+
+def test_company_merge_candidate_repository_uses_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
+    from sqlalchemy import select
+
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.database import DatabaseSettings
+    from oie.persistence.models import Base, CompanyMergeCandidate, Run
+    from oie.persistence.repositories import CompanyMergeCandidateRepository
+    from oie.persistence.session import create_session_factory
+
+    sqlite_db = tmp_path / "orm_merge_candidates_backend_simulation.db"
+    sqlite_settings = DatabaseSettings(
+        backend="sqlite",
+        path=str(sqlite_db),
+        url=f"sqlite:///{sqlite_db}",
+    )
+    postgres_like_settings = DatabaseSettings(
+        backend="postgresql",
+        path=None,
+        url="postgresql+psycopg://user:pass@localhost:5432/oie",
+    )
+
+    def fake_create_session_factory(settings):
+        assert settings.backend == "postgresql"
+        return create_session_factory(sqlite_settings)
+
+    monkeypatch.setattr(
+        "oie.persistence.repositories.create_session_factory",
+        fake_create_session_factory,
+    )
+
+    SessionFactory = create_session_factory(sqlite_settings)
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    with SessionFactory() as session:
+        session.add(
+            Run(
+                run_id="run_merge_orm",
+                run_date="2026-01-01T00:00:00+00:00",
+                status="completed",
+                mode="default",
+            )
+        )
+        session.commit()
+
+    repository = CompanyMergeCandidateRepository(
+        persistence=PersistenceContext(settings=postgres_like_settings)
+    )
+
+    repository.replace_merge_candidates(
+        "run_merge_orm",
+        [
+            {
+                "company_key_left": "cmp_a",
+                "company_key_right": "cmp_b",
+                "reason": "same domain root",
+                "confidence": 0.87,
+            },
+            {
+                "company_key_left": "cmp_c",
+                "company_key_right": "cmp_d",
+                "reason": "same alias",
+                "confidence": 0.65,
+            },
+        ],
+    )
+
+    with SessionFactory() as session:
+        rows = session.execute(
+            select(CompanyMergeCandidate).where(
+                CompanyMergeCandidate.run_id == "run_merge_orm"
+            )
+        ).scalars().all()
+
+    assert len(rows) == 2
+    assert rows[0].company_key_left == "cmp_a"
+    assert rows[0].company_key_right == "cmp_b"
+    assert rows[0].reason == "same domain root"
+    assert rows[0].confidence == 0.87
+
+    repository.replace_merge_candidates(
+        "run_merge_orm",
+        [
+            {
+                "company_key_left": "cmp_x",
+                "company_key_right": "cmp_y",
+                "reason": "replacement",
+            }
+        ],
+    )
+
+    with SessionFactory() as session:
+        replaced = session.execute(
+            select(CompanyMergeCandidate).where(
+                CompanyMergeCandidate.run_id == "run_merge_orm"
+            )
+        ).scalars().all()
+
+    assert len(replaced) == 1
+    assert replaced[0].company_key_left == "cmp_x"
+    assert replaced[0].company_key_right == "cmp_y"
+    assert replaced[0].reason == "replacement"
+    assert replaced[0].confidence == 0.0
