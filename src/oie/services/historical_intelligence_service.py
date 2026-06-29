@@ -4,14 +4,19 @@ from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
 from oie.persistence.context import PersistenceContext
-from oie.persistence.job_repository import JobRepository
+from oie.persistence.repository_provider import RepositoryProvider
 
 
 class HistoricalIntelligenceService:
-    def __init__(self, ctx: RunContext) -> None:
+    def __init__(
+        self,
+        ctx: RunContext,
+        repositories: RepositoryProvider | None = None,
+    ) -> None:
         self.ctx = ctx
         self.persistence = PersistenceContext.from_run_context(ctx)
-        self.job_repository = JobRepository(persistence=self.persistence)
+        self.repositories = repositories or RepositoryProvider.from_persistence(self.persistence)
+        self.job_repository = self.repositories.job_repository
 
     def build_company_hiring_history(self) -> List[Dict[str, Any]]:
         history = self.job_repository.list_company_hiring_history()
