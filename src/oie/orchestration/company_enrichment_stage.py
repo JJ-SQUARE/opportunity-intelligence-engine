@@ -6,8 +6,6 @@ from oie.orchestration.domain_resolution_stage import DomainResolutionStage
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
 from oie.orchestration.stage_item import StageItem
-from oie.persistence.context import PersistenceContext
-from oie.persistence.repository_provider import RepositoryProvider
 from oie.services.company_enrichment_service import CompanyEnrichmentService
 from oie.services.provider_control_service import ProviderControlService
 
@@ -33,13 +31,10 @@ class CompanyEnrichmentStage(Stage):
         provider_control_service.initialize()
         provider_control_service.sync_budget_metrics()
 
-        repositories = RepositoryProvider.from_persistence(
-            PersistenceContext.from_run_context(self.ctx)
-        )
         enriched_companies = CompanyEnrichmentService(
             self.ctx,
             provider_control_service,
-            repositories=repositories,
+            repositories=self.repositories,
         ).enrich_companies([company])
         enriched_company = enriched_companies[0] if enriched_companies else company
 
