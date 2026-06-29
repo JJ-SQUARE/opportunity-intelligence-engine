@@ -85,7 +85,7 @@ class PipelineOrchestrator:
         self.master_dedup_service = MasterDedupService(ctx, repositories=self.repositories)
         self.duplicate_report_service = DuplicateReportService(ctx)
         self.domain_review_queue_service = DomainReviewQueueService(ctx)
-        self.db_export_service = DBExportService(ctx)
+        self.db_export_service = DBExportService(ctx, persistence=self.persistence_service.persistence)
         self.opportunity_dataset_service = OpportunityDatasetService(ctx, repositories=self.repositories)
         self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
         self.outbound_export_service = OutboundExportService(ctx)
