@@ -50,16 +50,10 @@ class PipelineOrchestrator:
         self.service_provider = ServiceProvider.from_run_context(ctx)
         self.persistence_service = self.service_provider.persistence_service
         self.provider_control_service = self.service_provider.provider_control_service
-        self.job_intelligence_service = JobIntelligenceService(
-            ctx,
-            self.provider_control_service,
-        )
+        self.job_intelligence_service = self.service_provider.job_intelligence_service
         self.company_identity_ai_service = self.service_provider.company_identity_ai_service
-        self.provider_execution_service = ProviderExecutionService(ctx, self.provider_control_service)
-        self.opportunity_scoring_service = OpportunityScoringService(
-            ctx,
-            self.provider_control_service,
-        )
+        self.provider_execution_service = self.service_provider.provider_execution_service
+        self.opportunity_scoring_service = self.service_provider.opportunity_scoring_service
         self.company_identity_service = self.service_provider.company_identity_service
         self.master_data_service = MasterDataService(ctx)
         self.master_dedup_service = self.service_provider.master_dedup_service
@@ -96,14 +90,8 @@ class PipelineOrchestrator:
         self.commercial_selection_service = CommercialSelectionService(
             self.commercial_signal_service,
         )
-        self.lead_generation_service = LeadGenerationService(
-            ctx,
-            self.provider_control_service,
-        )
-        self.lead_ranking_service = LeadRankingService(
-            ctx,
-            self.provider_control_service,
-        )
+        self.lead_generation_service = self.service_provider.lead_generation_service
+        self.lead_ranking_service = self.service_provider.lead_ranking_service
         self.domain_resolution_service = self.service_provider.domain_resolution_service
 
     def run_initial_stages(self) -> List[Dict[str, Any]]:
