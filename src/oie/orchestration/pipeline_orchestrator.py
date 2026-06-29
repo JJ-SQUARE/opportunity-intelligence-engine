@@ -63,7 +63,7 @@ class PipelineOrchestrator:
         self.normalization_service = NormalizationService(ctx)
         self.job_dedup_service = JobDedupService(ctx)
         self.hiring_signals_service = HiringSignalsService(ctx)
-        self.company_identity_service = CompanyIdentityService(ctx)
+        self.company_identity_service = None
         self.provider_control_service = ProviderControlService(ctx)
         self.job_intelligence_service = JobIntelligenceService(
             ctx,
@@ -81,6 +81,7 @@ class PipelineOrchestrator:
         )
         self.persistence_service = PersistenceService(ctx)
         self.repositories = self.persistence_service.repositories
+        self.company_identity_service = CompanyIdentityService(ctx, repositories=self.repositories)
         self.master_data_service = MasterDataService(ctx)
         self.master_dedup_service = MasterDedupService(ctx, repositories=self.repositories)
         self.duplicate_report_service = DuplicateReportService(ctx)
