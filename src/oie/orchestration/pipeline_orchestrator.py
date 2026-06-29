@@ -48,8 +48,6 @@ class PipelineOrchestrator:
         self.job_dedup_service = JobDedupService(ctx)
         self.hiring_signals_service = HiringSignalsService(ctx)
         self.service_provider = ServiceProvider.from_run_context(ctx)
-        self.persistence_service = self.service_provider.persistence_service
-        self.repositories = self.service_provider.repositories
         self.provider_control_service = self.service_provider.provider_control_service
         self.job_intelligence_service = JobIntelligenceService(
             ctx,
@@ -57,7 +55,6 @@ class PipelineOrchestrator:
         )
         self.company_identity_ai_service = self.service_provider.company_identity_ai_service
         self.provider_execution_service = ProviderExecutionService(ctx, self.provider_control_service)
-        self.domain_resolution_service = self.service_provider.domain_resolution_service
         self.opportunity_scoring_service = OpportunityScoringService(
             ctx,
             self.provider_control_service,
@@ -106,8 +103,6 @@ class PipelineOrchestrator:
             ctx,
             self.provider_control_service,
         )
-        self.serpapi_search_service = self.service_provider.serpapi_search_service
-        self.domain_ai_validation_service = self.service_provider.domain_ai_validation_service
         self.domain_resolution_service = self.service_provider.domain_resolution_service
 
     def run_initial_stages(self) -> List[Dict[str, Any]]:
