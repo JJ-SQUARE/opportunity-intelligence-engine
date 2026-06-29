@@ -14,7 +14,13 @@ def get_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     return ConnectionFactory(settings).connect()
 
 
-def initialize_database(db_path: str = DEFAULT_DB_PATH) -> None:
+def initialize_database(db_path: str = DEFAULT_DB_PATH, use_migrations: bool = False) -> None:
+    if use_migrations:
+        from oie.persistence.migrations import run_database_migrations
+
+        run_database_migrations({"database": {"backend": "sqlite", "path": db_path}})
+        return
+
     conn = get_connection(db_path)
     try:
         conn.executescript(
