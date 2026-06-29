@@ -48,6 +48,7 @@ class PipelineOrchestrator:
         self.job_dedup_service = JobDedupService(ctx)
         self.hiring_signals_service = HiringSignalsService(ctx)
         self.service_provider = ServiceProvider.from_run_context(ctx)
+        self.persistence_service = self.service_provider.persistence_service
         self.provider_control_service = self.service_provider.provider_control_service
         self.job_intelligence_service = JobIntelligenceService(
             ctx,
