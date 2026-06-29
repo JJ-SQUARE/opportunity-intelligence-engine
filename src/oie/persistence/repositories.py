@@ -1210,6 +1210,173 @@ class JobRepository(RepositoryBase):
             )
             return [dict(row._mapping) for row in rows]
 
+    def list_source_trends(self) -> List[Dict[str, Any]]:
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT
+                        source,
+                        COUNT(DISTINCT job_key) AS jobs_count,
+                        COUNT(DISTINCT company_key) AS companies_count,
+                        COUNT(DISTINCT run_id) AS runs_count
+                    FROM jobs
+                    GROUP BY source
+                    ORDER BY jobs_count DESC, companies_count DESC, source ASC
+                    """
+                ).fetchall()
+                return [dict(row) for row in rows]
+            finally:
+                conn.close()
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            rows = (
+                session.query(
+                    Job.source.label("source"),
+                    func.count(func.distinct(Job.job_key)).label("jobs_count"),
+                    func.count(func.distinct(Job.company_key)).label("companies_count"),
+                    func.count(func.distinct(Job.run_id)).label("runs_count"),
+                )
+                .group_by(Job.source)
+                .order_by(
+                    func.count(func.distinct(Job.job_key)).desc(),
+                    func.count(func.distinct(Job.company_key)).desc(),
+                    Job.source.asc(),
+                )
+                .all()
+            )
+            return [
+                {
+                    "source": row.source,
+                    "jobs_count": row.jobs_count,
+                    "companies_count": row.companies_count,
+                    "runs_count": row.runs_count,
+                }
+                for row in rows
+            ]
+
+    def list_location_trends(self) -> List[Dict[str, Any]]:
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT
+                        location,
+                        COUNT(DISTINCT job_key) AS jobs_count,
+                        COUNT(DISTINCT company_key) AS companies_count
+                    FROM jobs
+                    WHERE COALESCE(location, '') != ''
+                    GROUP BY location
+                    ORDER BY jobs_count DESC, companies_count DESC, location ASC
+                    """
+                ).fetchall()
+                return [dict(row) for row in rows]
+            finally:
+                conn.close()
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            rows = (
+                session.query(
+                    Job.location.label("location"),
+                    func.count(func.distinct(Job.job_key)).label("jobs_count"),
+                    func.count(func.distinct(Job.company_key)).label("companies_count"),
+                )
+                .filter(Job.location != None)
+                .filter(Job.location != "")
+                .group_by(Job.location)
+                .order_by(
+                    func.count(func.distinct(Job.job_key)).desc(),
+                    func.count(func.distinct(Job.company_key)).desc(),
+                    Job.location.asc(),
+                )
+                .all()
+            )
+            return [
+                {
+                    "location": row.location,
+                    "jobs_count": row.jobs_count,
+                    "companies_count": row.companies_count,
+                }
+                for row in rows
+            ]
+
+    def list_new_companies_by_source(self) -> List[Dict[str, Any]]:
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                rows = conn.execute(
+                    """
+                    WITH company_first_source AS (
+                        SELECT
+                            j.company_key,
+                            MIN(j.run_date) AS first_run_date
+                        FROM jobs j
+                        WHERE j.company_key IS NOT NULL
+                        GROUP BY j.company_key
+                    ),
+                    company_first_source_detail AS (
+                        SELECT
+                            j.company_key,
+                            j.source,
+                            j.run_date
+                        FROM jobs j
+                        JOIN company_first_source cfs
+                          ON cfs.company_key = j.company_key
+                         AND cfs.first_run_date = j.run_date
+                    )
+                    SELECT
+                        source,
+                        COUNT(DISTINCT company_key) AS new_companies_count
+                    FROM company_first_source_detail
+                    GROUP BY source
+                    ORDER BY new_companies_count DESC, source ASC
+                    """
+                ).fetchall()
+                return [dict(row) for row in rows]
+            finally:
+                conn.close()
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            first_dates = (
+                session.query(
+                    Job.company_key.label("company_key"),
+                    func.min(Job.run_date).label("first_run_date"),
+                )
+                .filter(Job.company_key != None)
+                .group_by(Job.company_key)
+                .subquery()
+            )
+
+            rows = (
+                session.query(
+                    Job.source.label("source"),
+                    func.count(func.distinct(Job.company_key)).label("new_companies_count"),
+                )
+                .join(
+                    first_dates,
+                    (Job.company_key == first_dates.c.company_key)
+                    & (Job.run_date == first_dates.c.first_run_date),
+                )
+                .group_by(Job.source)
+                .order_by(
+                    func.count(func.distinct(Job.company_key)).desc(),
+                    Job.source.asc(),
+                )
+                .all()
+            )
+            return [
+                {
+                    "source": row.source,
+                    "new_companies_count": row.new_companies_count,
+                }
+                for row in rows
+            ]
+
 
 class LeadRepository(RepositoryBase):
     def _build_lead_fingerprint(self, lead: Dict[str, Any]) -> str:

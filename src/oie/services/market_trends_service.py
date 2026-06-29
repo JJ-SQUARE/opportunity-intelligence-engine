@@ -1,98 +1,30 @@
 from __future__ import annotations
 
-import sqlite3
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.persistence.context import PersistenceContext
+from oie.persistence.repositories import JobRepository
 
 
 class MarketTrendsService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.db_path = self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.persistence = PersistenceContext.from_run_context(ctx)
+        self.job_repository = JobRepository(persistence=self.persistence)
 
     def build_source_trends(self) -> List[Dict[str, Any]]:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            rows = conn.execute(
-                """
-                SELECT
-                    source,
-                    COUNT(DISTINCT job_key) AS jobs_count,
-                    COUNT(DISTINCT company_key) AS companies_count,
-                    COUNT(DISTINCT run_id) AS runs_count
-                FROM jobs
-                GROUP BY source
-                ORDER BY jobs_count DESC, companies_count DESC, source ASC
-                """
-            ).fetchall()
-        finally:
-            conn.close()
-
-        result = [dict(row) for row in rows]
+        result = self.job_repository.list_source_trends()
         self.ctx.metrics["market_trends_sources_rows"] = len(result)
         return result
 
     def build_country_trends(self) -> List[Dict[str, Any]]:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            rows = conn.execute(
-                """
-                SELECT
-                    location,
-                    COUNT(DISTINCT job_key) AS jobs_count,
-                    COUNT(DISTINCT company_key) AS companies_count
-                FROM jobs
-                WHERE COALESCE(location, '') != ''
-                GROUP BY location
-                ORDER BY jobs_count DESC, companies_count DESC, location ASC
-                """
-            ).fetchall()
-        finally:
-            conn.close()
-
-        result = [dict(row) for row in rows]
+        result = self.job_repository.list_location_trends()
         self.ctx.metrics["market_trends_country_rows"] = len(result)
         return result
 
     def build_new_companies_by_source(self) -> List[Dict[str, Any]]:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            rows = conn.execute(
-                """
-                WITH company_first_source AS (
-                    SELECT
-                        j.company_key,
-                        MIN(j.run_date) AS first_run_date
-                    FROM jobs j
-                    WHERE j.company_key IS NOT NULL
-                    GROUP BY j.company_key
-                ),
-                company_first_source_detail AS (
-                    SELECT
-                        j.company_key,
-                        j.source,
-                        j.run_date
-                    FROM jobs j
-                    JOIN company_first_source cfs
-                      ON cfs.company_key = j.company_key
-                     AND cfs.first_run_date = j.run_date
-                )
-                SELECT
-                    source,
-                    COUNT(DISTINCT company_key) AS new_companies_count
-                FROM company_first_source_detail
-                GROUP BY source
-                ORDER BY new_companies_count DESC, source ASC
-                """
-            ).fetchall()
-        finally:
-            conn.close()
-
-        result = [dict(row) for row in rows]
+        result = self.job_repository.list_new_companies_by_source()
         self.ctx.metrics["market_trends_new_companies_rows"] = len(result)
         return result
 
