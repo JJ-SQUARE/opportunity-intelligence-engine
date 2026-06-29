@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
@@ -118,13 +117,14 @@ class PersistenceService:
             self.ctx.metrics.get("persistence_errors_count", 0) or 0
         ) + 1
 
-        if isinstance(exc, sqlite3.OperationalError):
+        if exc.__class__.__name__ == "OperationalError":
             self.ctx.metrics["persistence_schema_errors_count"] = int(
                 self.ctx.metrics.get("persistence_schema_errors_count", 0) or 0
             ) + 1
-            self.ctx.metrics["persistence_sqlite_operational_errors_count"] = int(
-                self.ctx.metrics.get("persistence_sqlite_operational_errors_count", 0) or 0
-            ) + 1
+            if self.persistence.backend == "sqlite":
+                self.ctx.metrics["persistence_sqlite_operational_errors_count"] = int(
+                    self.ctx.metrics.get("persistence_sqlite_operational_errors_count", 0) or 0
+                ) + 1
 
         self.ctx.add_provider_event(
             provider="persistence",
