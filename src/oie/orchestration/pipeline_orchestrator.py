@@ -38,11 +38,11 @@ from oie.services.domain_review_queue_service import DomainReviewQueueService
 class PipelineOrchestrator:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
+        self.service_provider = ServiceProvider.from_run_context(ctx)
         self.collection_service = self.service_provider.collection_service
         self.normalization_service = self.service_provider.normalization_service
         self.job_dedup_service = self.service_provider.job_dedup_service
         self.hiring_signals_service = self.service_provider.hiring_signals_service
-        self.service_provider = ServiceProvider.from_run_context(ctx)
         self.persistence_service = self.service_provider.persistence_service
         self.provider_control_service = self.service_provider.provider_control_service
         self.job_intelligence_service = self.service_provider.job_intelligence_service
