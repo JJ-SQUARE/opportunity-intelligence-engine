@@ -9,5 +9,6 @@ from oie.persistence.models.domain import Domain
 from oie.persistence.models.company_merge_candidate import CompanyMergeCandidate
 from oie.persistence.models.job import Job
 from oie.persistence.models.lead import Lead
+from oie.persistence.models.company_score import CompanyScore
 
-__all__ = ["Base", "Run", "RunMetric", "ProviderEvent", "ProviderOperationMetric", "Company", "CompanyAlias", "Domain", "CompanyMergeCandidate", "Job", "Lead"]
+__all__ = ["Base", "Run", "RunMetric", "ProviderEvent", "ProviderOperationMetric", "Company", "CompanyAlias", "Domain", "CompanyMergeCandidate", "Job", "Lead", "CompanyScore"]

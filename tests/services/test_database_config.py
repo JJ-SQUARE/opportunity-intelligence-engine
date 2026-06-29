@@ -1303,3 +1303,120 @@ def test_lead_repository_replace_and_list_uses_orm_for_non_sqlite_backend(tmp_pa
     assert replaced[0]["contact_name"] == "John Smith"
     assert replaced[0]["email"] == ""
     assert replaced[0]["lead_confidence"] == 0.0
+
+def test_company_score_repository_uses_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
+    from sqlalchemy import select
+
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.database import DatabaseSettings
+    from oie.persistence.models import Base, Company, CompanyScore, Run
+    from oie.persistence.repositories import CompanyScoreRepository
+    from oie.persistence.session import create_session_factory
+
+    sqlite_db = tmp_path / "orm_company_scores_backend_simulation.db"
+    sqlite_settings = DatabaseSettings(
+        backend="sqlite",
+        path=str(sqlite_db),
+        url=f"sqlite:///{sqlite_db}",
+    )
+    postgres_like_settings = DatabaseSettings(
+        backend="postgresql",
+        path=None,
+        url="postgresql+psycopg://user:pass@localhost:5432/oie",
+    )
+
+    def fake_create_session_factory(settings):
+        assert settings.backend == "postgresql"
+        return create_session_factory(sqlite_settings)
+
+    monkeypatch.setattr(
+        "oie.persistence.repositories.create_session_factory",
+        fake_create_session_factory,
+    )
+
+    SessionFactory = create_session_factory(sqlite_settings)
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    with SessionFactory() as session:
+        session.add(
+            Run(
+                run_id="run_scores_orm",
+                run_date="2026-01-01T00:00:00+00:00",
+                status="completed",
+                mode="default",
+            )
+        )
+        session.add(
+            Company(
+                company_key="cmp_acme",
+                company_display="Acme",
+                company_normalized="acme",
+            )
+        )
+        session.commit()
+
+    repository = CompanyScoreRepository(
+        persistence=PersistenceContext(settings=postgres_like_settings)
+    )
+
+    repository.replace_company_scores(
+        "run_scores_orm",
+        [
+            {
+                "company_key": "cmp_acme",
+                "opportunity_score": 87,
+                "opportunity_label": "high",
+                "icp_bucket": "strong_fit",
+                "commercial_bucket": "priority",
+                "pain_urgency": "high",
+                "recommended_service": "ASD",
+                "reason": "many relevant openings",
+                "score_openings": 10,
+                "score_remote": 8,
+                "score_icp_fit": 9,
+                "primary_service_fit": "ASD",
+                "buyer_persona_fit": "Engineering",
+                "opportunity_score_reason": "strong demand",
+                "scoring_provider": "openai",
+                "scoring_model": "test-model",
+                "scoring_mode": "mock",
+            },
+            {
+                "company_key": None,
+                "opportunity_score": 1,
+            },
+        ],
+    )
+
+    with SessionFactory() as session:
+        rows = session.execute(
+            select(CompanyScore).where(CompanyScore.run_id == "run_scores_orm")
+        ).scalars().all()
+
+    assert len(rows) == 1
+    assert rows[0].company_key == "cmp_acme"
+    assert rows[0].opportunity_score == 87
+    assert rows[0].opportunity_label == "high"
+    assert rows[0].recommended_service == "ASD"
+    assert rows[0].score_openings == 10
+    assert rows[0].scoring_provider == "openai"
+
+    repository.replace_company_scores(
+        "run_scores_orm",
+        [
+            {
+                "company_key": "cmp_acme",
+                "opportunity_score": 55,
+                "opportunity_label": "medium",
+            }
+        ],
+    )
+
+    with SessionFactory() as session:
+        replaced = session.execute(
+            select(CompanyScore).where(CompanyScore.run_id == "run_scores_orm")
+        ).scalars().all()
+
+    assert len(replaced) == 1
+    assert replaced[0].opportunity_score == 55
+    assert replaced[0].opportunity_label == "medium"
