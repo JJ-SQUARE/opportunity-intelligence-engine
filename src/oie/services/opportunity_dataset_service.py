@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
 from oie.persistence.context import PersistenceContext
-from oie.persistence.repositories import CompanyRepository
+from oie.persistence.company_repository import CompanyRepository
 from oie.services.commercial_selection_service import CommercialSelectionService
 from oie.services.commercial_signal_service import CommercialSignalService
 

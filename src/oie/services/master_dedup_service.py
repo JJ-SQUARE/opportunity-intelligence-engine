@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from oie.orchestration.run_context import RunContext
-from oie.persistence.repositories import JobRepository, LeadRepository
+from oie.persistence.job_repository import JobRepository
+from oie.persistence.lead_repository import LeadRepository
 from oie.services.master_data_service import MasterDataService
 
 

@@ -8,7 +8,8 @@ from oie.orchestration.run_context import RunContext
 from oie.utils.domain_filters import is_job_board_domain
 from oie.utils.company_name_extraction import extract_actionable_company_name
 from oie.persistence.context import PersistenceContext
-from oie.persistence.repositories import CompanyAliasRepository, CompanyRepository
+from oie.persistence.company_alias_repository import CompanyAliasRepository
+from oie.persistence.company_repository import CompanyRepository
 
 
 LEGAL_SUFFIXES = {

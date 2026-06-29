@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
 from oie.persistence.context import PersistenceContext
-from oie.persistence.repositories import JobRepository
+from oie.persistence.job_repository import JobRepository
 
 
 class HistoricalIntelligenceService:
