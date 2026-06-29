@@ -841,3 +841,127 @@ def test_company_repository_upsert_uses_orm_for_non_sqlite_backend(tmp_path, mon
     assert updated["employee_range"] == "1001-5000"
     assert updated["company_description"] == "Initial description"
     assert updated["company_type_ai"] == "end_client"
+
+def test_alias_and_domain_repositories_use_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
+    from sqlalchemy import select
+
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.database import DatabaseSettings
+    from oie.persistence.models import Base, Company, Domain
+    from oie.persistence.repositories import CompanyAliasRepository, DomainRepository
+    from oie.persistence.session import create_session_factory
+
+    sqlite_db = tmp_path / "orm_alias_domain_backend_simulation.db"
+    sqlite_settings = DatabaseSettings(
+        backend="sqlite",
+        path=str(sqlite_db),
+        url=f"sqlite:///{sqlite_db}",
+    )
+    postgres_like_settings = DatabaseSettings(
+        backend="postgresql",
+        path=None,
+        url="postgresql+psycopg://user:pass@localhost:5432/oie",
+    )
+
+    def fake_create_session_factory(settings):
+        assert settings.backend == "postgresql"
+        return create_session_factory(sqlite_settings)
+
+    monkeypatch.setattr(
+        "oie.persistence.repositories.create_session_factory",
+        fake_create_session_factory,
+    )
+
+    SessionFactory = create_session_factory(sqlite_settings)
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    with SessionFactory() as session:
+        session.add(
+            Company(
+                company_key="cmp_acme",
+                company_display="Acme",
+                company_normalized="acme",
+                company_root="acme",
+                resolved_domain="acme.com",
+            )
+        )
+        session.commit()
+
+    persistence = PersistenceContext(settings=postgres_like_settings)
+    alias_repository = CompanyAliasRepository(persistence=persistence)
+    domain_repository = DomainRepository(persistence=persistence)
+
+    companies = [
+        {
+            "company_key": "cmp_acme",
+            "company_normalized": "acme",
+            "resolved_domain": "acme.com",
+            "domain_source": "manual",
+            "domain_confidence": 0.95,
+            "aliases": ["ACME Inc", "Acme Corp"],
+            "alias_type_map": {
+                "ACME Inc": "acme inc",
+                "ACME Inc__type": "legal_name",
+                "Acme Corp": "acme corp",
+                "Acme Corp__type": "observed_name",
+            },
+        }
+    ]
+
+    alias_repository.replace_aliases(companies)
+    domain_repository.replace_domains(companies)
+
+    found = alias_repository.find_company_by_alias_normalized("acme inc")
+
+    assert found == {
+        "company_key": "cmp_acme",
+        "company_display": "Acme",
+        "company_normalized": "acme",
+        "resolved_domain": "acme.com",
+    }
+
+    with SessionFactory() as session:
+        domains = session.execute(
+            select(Domain).where(Domain.company_key == "cmp_acme")
+        ).scalars().all()
+
+    assert len(domains) == 1
+    assert domains[0].domain == "acme.com"
+    assert domains[0].source == "manual"
+    assert domains[0].confidence == 0.95
+    assert domains[0].is_primary == 1
+
+    alias_repository.replace_aliases(
+        [
+            {
+                "company_key": "cmp_acme",
+                "company_normalized": "acme",
+                "aliases": ["Acme Updated"],
+                "alias_type_map": {
+                    "Acme Updated": "acme updated",
+                },
+            }
+        ]
+    )
+    domain_repository.replace_domains(
+        [
+            {
+                "company_key": "cmp_acme",
+                "resolved_domain": "updated-acme.com",
+                "domain_source": "hunter",
+                "domain_confidence": 0.8,
+            }
+        ]
+    )
+
+    assert alias_repository.find_company_by_alias_normalized("acme inc") is None
+    assert alias_repository.find_company_by_alias_normalized("acme updated")["company_key"] == "cmp_acme"
+
+    with SessionFactory() as session:
+        replaced_domains = session.execute(
+            select(Domain).where(Domain.company_key == "cmp_acme")
+        ).scalars().all()
+
+    assert len(replaced_domains) == 1
+    assert replaced_domains[0].domain == "updated-acme.com"
+    assert replaced_domains[0].source == "hunter"
