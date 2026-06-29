@@ -9,9 +9,13 @@ from oie.persistence.context import PersistenceContext
 
 
 class DBExportService:
-    def __init__(self, ctx: RunContext) -> None:
+    def __init__(
+        self,
+        ctx: RunContext,
+        persistence: PersistenceContext | None = None,
+    ) -> None:
         self.ctx = ctx
-        self.persistence = PersistenceContext.from_run_context(ctx)
+        self.persistence = persistence or PersistenceContext.from_run_context(ctx)
 
     def _get_output_dir(self) -> Path:
         output_dir_value = self.ctx.paths.get("output_dir")
