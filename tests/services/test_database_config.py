@@ -699,7 +699,7 @@ def test_company_repository_read_methods_use_orm_for_non_sqlite_backend(tmp_path
         return create_session_factory(sqlite_settings)
 
     monkeypatch.setattr(
-        "oie.persistence.repositories.create_session_factory",
+        "oie.persistence.company_repository.create_session_factory",
         fake_create_session_factory,
     )
 
@@ -772,7 +772,7 @@ def test_company_repository_upsert_uses_orm_for_non_sqlite_backend(tmp_path, mon
         return create_session_factory(sqlite_settings)
 
     monkeypatch.setattr(
-        "oie.persistence.repositories.create_session_factory",
+        "oie.persistence.company_repository.create_session_factory",
         fake_create_session_factory,
     )
 
