@@ -496,7 +496,7 @@ def test_provider_event_repository_uses_orm_for_non_sqlite_backend(tmp_path, mon
         return create_session_factory(sqlite_settings)
 
     monkeypatch.setattr(
-        "oie.persistence.repositories.create_session_factory",
+        "oie.persistence.provider_event_repository.create_session_factory",
         fake_create_session_factory,
     )
 
