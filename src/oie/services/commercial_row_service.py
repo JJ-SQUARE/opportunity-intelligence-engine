@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import sqlite3
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.persistence.context import PersistenceContext
 from oie.services.commercial_selection_service import CommercialSelectionService
 from oie.services.commercial_signal_service import CommercialSignalService
 
@@ -21,8 +21,10 @@ class CommercialRowService:
 
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
+        self.persistence = PersistenceContext.from_run_context(ctx)
         self.db_path = (
-            self.ctx.paths.get("db_path")
+            self.persistence.path
+            or self.ctx.paths.get("db_path")
             or self.ctx.config.get("database", {}).get("path", "data/oie.db")
         )
         self.commercial_signal_service = CommercialSignalService()
@@ -31,8 +33,7 @@ class CommercialRowService:
         )
 
     def query_rows(self, query: str, params: tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self.persistence.connection()
         try:
             rows = conn.execute(query, params).fetchall()
             return [dict(row) for row in rows]
