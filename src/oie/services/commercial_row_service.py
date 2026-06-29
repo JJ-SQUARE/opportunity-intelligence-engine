@@ -19,9 +19,13 @@ class CommercialRowService:
     - Apollo import
     """
 
-    def __init__(self, ctx: RunContext) -> None:
+    def __init__(
+        self,
+        ctx: RunContext,
+        persistence: PersistenceContext | None = None,
+    ) -> None:
         self.ctx = ctx
-        self.persistence = PersistenceContext.from_run_context(ctx)
+        self.persistence = persistence or PersistenceContext.from_run_context(ctx)
         self.db_path = (
             self.persistence.path
             or self.ctx.paths.get("db_path")
