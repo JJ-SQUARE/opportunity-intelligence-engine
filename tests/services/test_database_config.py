@@ -1068,3 +1068,124 @@ def test_company_merge_candidate_repository_uses_orm_for_non_sqlite_backend(tmp_
     assert replaced[0].company_key_right == "cmp_y"
     assert replaced[0].reason == "replacement"
     assert replaced[0].confidence == 0.0
+
+def test_job_repository_replace_jobs_uses_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
+    from sqlalchemy import select
+
+    from oie.persistence.context import PersistenceContext
+    from oie.persistence.database import DatabaseSettings
+    from oie.persistence.models import Base, Company, Job, Run
+    from oie.persistence.repositories import JobRepository
+    from oie.persistence.session import create_session_factory
+
+    sqlite_db = tmp_path / "orm_jobs_backend_simulation.db"
+    sqlite_settings = DatabaseSettings(
+        backend="sqlite",
+        path=str(sqlite_db),
+        url=f"sqlite:///{sqlite_db}",
+    )
+    postgres_like_settings = DatabaseSettings(
+        backend="postgresql",
+        path=None,
+        url="postgresql+psycopg://user:pass@localhost:5432/oie",
+    )
+
+    def fake_create_session_factory(settings):
+        assert settings.backend == "postgresql"
+        return create_session_factory(sqlite_settings)
+
+    monkeypatch.setattr(
+        "oie.persistence.repositories.create_session_factory",
+        fake_create_session_factory,
+    )
+
+    SessionFactory = create_session_factory(sqlite_settings)
+    Base.metadata.create_all(bind=SessionFactory.kw["bind"])
+
+    with SessionFactory() as session:
+        session.add(
+            Run(
+                run_id="run_jobs_orm",
+                run_date="2026-01-01T00:00:00+00:00",
+                status="completed",
+                mode="default",
+            )
+        )
+        session.add(
+            Company(
+                company_key="cmp_acme",
+                company_display="Acme",
+                company_normalized="acme",
+            )
+        )
+        session.commit()
+
+    repository = JobRepository(
+        persistence=PersistenceContext(settings=postgres_like_settings)
+    )
+
+    repository.replace_jobs(
+        "run_jobs_orm",
+        "2026-01-01T00:00:00+00:00",
+        [
+            {
+                "title": "Senior Python Engineer",
+                "company": "Acme",
+                "company_key": "cmp_acme",
+                "location": "Remote LATAM",
+                "job_url": "https://acme.com/jobs/1",
+                "apply_url": "https://acme.com/apply/1",
+                "description": "Build platforms",
+                "source": "serpapi",
+                "detected_at": "2026-01-01",
+                "is_remote": True,
+                "is_contractor": True,
+                "is_full_time": False,
+                "nearshore_friendly": True,
+                "us_only": False,
+                "remote_flag": True,
+                "contractor_flag": True,
+                "many_openings_signal": True,
+                "offshore_mentioned": False,
+                "urgency_hits": 2,
+            }
+        ],
+    )
+
+    with SessionFactory() as session:
+        rows = session.execute(
+            select(Job).where(Job.run_id == "run_jobs_orm")
+        ).scalars().all()
+
+    assert len(rows) == 1
+    assert rows[0].title == "Senior Python Engineer"
+    assert rows[0].company_key == "cmp_acme"
+    assert rows[0].is_remote == 1
+    assert rows[0].is_contractor == 1
+    assert rows[0].is_full_time == 0
+    assert rows[0].urgency_hits == 2
+    assert rows[0].job_key.startswith("job_")
+    assert rows[0].job_fingerprint.startswith("jobfp_")
+
+    repository.replace_jobs(
+        "run_jobs_orm",
+        "2026-01-01T00:00:00+00:00",
+        [
+            {
+                "title": "Data Engineer",
+                "company": "Acme",
+                "company_key": "cmp_acme",
+                "location": "Mexico",
+                "description": "Data pipelines",
+            }
+        ],
+    )
+
+    with SessionFactory() as session:
+        replaced = session.execute(
+            select(Job).where(Job.run_id == "run_jobs_orm")
+        ).scalars().all()
+
+    assert len(replaced) == 1
+    assert replaced[0].title == "Data Engineer"
+    assert replaced[0].is_remote == 0

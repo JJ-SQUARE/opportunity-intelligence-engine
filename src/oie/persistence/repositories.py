@@ -6,7 +6,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 
 from oie.persistence.context import PersistenceContext
-from oie.persistence.models import Run, RunMetric, ProviderEvent, ProviderOperationMetric, Company, CompanyAlias, Domain, CompanyMergeCandidate
+from oie.persistence.models import Run, RunMetric, ProviderEvent, ProviderOperationMetric, Company, CompanyAlias, Domain, CompanyMergeCandidate, Job
 from oie.persistence.session import create_session_factory
 
 
@@ -962,6 +962,10 @@ class JobRepository(RepositoryBase):
         return f"job_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
 
     def replace_jobs(self, run_id: str, run_date: str, jobs: List[Dict[str, Any]]) -> None:
+        if self.persistence.backend != "sqlite":
+            self._replace_jobs_orm(run_id, run_date, jobs)
+            return
+
         conn = self.connection()
         try:
             conn.execute("DELETE FROM jobs WHERE run_id = ?", (run_id,))
@@ -1028,6 +1032,42 @@ class JobRepository(RepositoryBase):
             conn.commit()
         finally:
             conn.close()
+
+    def _replace_jobs_orm(self, run_id: str, run_date: str, jobs: List[Dict[str, Any]]) -> None:
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            session.query(Job).filter(Job.run_id == run_id).delete()
+            session.add_all(
+                [
+                    Job(
+                        job_key=self._build_job_key(job, run_id),
+                        job_fingerprint=self._build_job_fingerprint(job),
+                        run_id=run_id,
+                        run_date=run_date,
+                        title=job.get("title"),
+                        company=job.get("company"),
+                        company_key=job.get("company_key"),
+                        location=job.get("location"),
+                        job_url=job.get("job_url"),
+                        apply_url=job.get("apply_url"),
+                        description=job.get("description"),
+                        source=job.get("source"),
+                        detected_at=job.get("detected_at"),
+                        is_remote=1 if job.get("is_remote") else 0,
+                        is_contractor=1 if job.get("is_contractor") else 0,
+                        is_full_time=1 if job.get("is_full_time") else 0,
+                        nearshore_friendly=1 if job.get("nearshore_friendly") else 0,
+                        us_only=1 if job.get("us_only") else 0,
+                        remote_flag=1 if job.get("remote_flag") else 0,
+                        contractor_flag=1 if job.get("contractor_flag") else 0,
+                        many_openings_signal=1 if job.get("many_openings_signal") else 0,
+                        offshore_mentioned=1 if job.get("offshore_mentioned") else 0,
+                        urgency_hits=int(job.get("urgency_hits") or 0),
+                    )
+                    for job in jobs
+                ]
+            )
+            session.commit()
 
     def list_jobs_by_run(self, run_id: str) -> List[Dict[str, Any]]:
         conn = self.connection()
