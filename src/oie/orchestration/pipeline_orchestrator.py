@@ -61,12 +61,9 @@ class PipelineOrchestrator:
             ctx,
             self.provider_control_service,
         )
-        self.company_identity_ai_service = CompanyIdentityAIService(
-            ctx,
-            self.provider_control_service,
-        )
+        self.company_identity_ai_service = self.service_provider.company_identity_ai_service
         self.provider_execution_service = ProviderExecutionService(ctx, self.provider_control_service)
-        self.domain_resolution_service = DomainResolutionService(ctx, self.provider_control_service)
+        self.domain_resolution_service = self.service_provider.domain_resolution_service
         self.opportunity_scoring_service = OpportunityScoringService(
             ctx,
             self.provider_control_service,
@@ -101,15 +98,8 @@ class PipelineOrchestrator:
         self.run_analytics_export_service = RunAnalyticsExportService(ctx)
         self.provider_operation_metrics_service = ProviderOperationMetricsService(ctx)
         self.provider_operation_metrics_export_service = ProviderOperationMetricsExportService(ctx)
-        self.company_classification_service = CompanyClassificationService(
-            ctx,
-            self.provider_control_service,
-        )
-        self.company_enrichment_service = CompanyEnrichmentService(
-            ctx,
-            self.provider_control_service,
-            repositories=self.repositories,
-        )
+        self.company_classification_service = self.service_provider.company_classification_service
+        self.company_enrichment_service = self.service_provider.company_enrichment_service
         self.commercial_signal_service = CommercialSignalService()
         self.commercial_selection_service = CommercialSelectionService(
             self.commercial_signal_service,
@@ -123,10 +113,7 @@ class PipelineOrchestrator:
             self.provider_control_service,
         )
         self.serpapi_search_service = SerpAPISearchService(ctx, self.provider_control_service)
-        self.domain_ai_validation_service = DomainAIValidationService(
-            ctx,
-            self.provider_control_service,
-        )
+        self.domain_ai_validation_service = self.service_provider.domain_ai_validation_service
         self.domain_resolution_service = DomainResolutionService(
             ctx,
             self.provider_control_service,
