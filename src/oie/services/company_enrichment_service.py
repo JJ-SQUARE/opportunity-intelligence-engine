@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
 from oie.persistence.context import PersistenceContext
-from oie.persistence.company_repository import CompanyRepository
+from oie.persistence.repository_provider import RepositoryProvider
 from oie.services.cached_provider_service import CachedProviderService
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.provider_execution_service import (
@@ -42,6 +42,7 @@ class CompanyEnrichmentService:
         self,
         ctx: RunContext,
         provider_control_service: ProviderControlService,
+        repositories: RepositoryProvider | None = None,
     ) -> None:
         self.ctx = ctx
         self.provider_control_service = provider_control_service
@@ -56,7 +57,8 @@ class CompanyEnrichmentService:
 
         self.persistence = PersistenceContext.from_run_context(ctx)
         self.db_path = self.persistence.path or self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
-        self.company_repository = CompanyRepository(persistence=self.persistence)
+        self.repositories = repositories or RepositoryProvider.from_persistence(self.persistence)
+        self.company_repository = self.repositories.company_repository
 
         enrichment_cfg = self.ctx.config.get("enrichment", {}) or {}
         self.ttl_days = int(enrichment_cfg.get("apollo_company_ttl_days", 30))
