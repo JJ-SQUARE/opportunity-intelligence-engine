@@ -8,8 +8,7 @@ from oie.orchestration.run_context import RunContext
 from oie.utils.domain_filters import is_job_board_domain
 from oie.utils.company_name_extraction import extract_actionable_company_name
 from oie.persistence.context import PersistenceContext
-from oie.persistence.company_alias_repository import CompanyAliasRepository
-from oie.persistence.company_repository import CompanyRepository
+from oie.persistence.repository_provider import RepositoryProvider
 
 
 LEGAL_SUFFIXES = {
@@ -82,12 +81,17 @@ LINKEDIN_TITLE_COMPANY_PATTERNS = [
 
 
 class CompanyIdentityService:
-    def __init__(self, ctx: RunContext) -> None:
+    def __init__(
+        self,
+        ctx: RunContext,
+        repositories: RepositoryProvider | None = None,
+    ) -> None:
         self.ctx = ctx
         self.persistence = PersistenceContext.from_run_context(ctx)
         self.db_path = self.persistence.path or self.ctx.config.get("database", {}).get("path", "data/oie.db")
-        self.company_repository = CompanyRepository(persistence=self.persistence)
-        self.company_alias_repository = CompanyAliasRepository(persistence=self.persistence)
+        self.repositories = repositories or RepositoryProvider.from_persistence(self.persistence)
+        self.company_repository = self.repositories.company_repository
+        self.company_alias_repository = self.repositories.company_alias_repository
 
     def _clean_company_candidate(self, value: str) -> str:
         candidate = (value or "").strip()
