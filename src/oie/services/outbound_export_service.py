@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.persistence.context import PersistenceContext
 from oie.services.commercial_selection_service import CommercialSelectionService
 from oie.services.commercial_row_service import CommercialRowService
 from oie.services.commercial_signal_service import CommercialSignalService
@@ -102,9 +103,13 @@ APOLLO_IMPORT_FIELDS = [
 ]
 
 class OutboundExportService:
-    def __init__(self, ctx: RunContext) -> None:
+    def __init__(
+        self,
+        ctx: RunContext,
+        persistence: PersistenceContext | None = None,
+    ) -> None:
         self.ctx = ctx
-        self.commercial_row_service = CommercialRowService(ctx)
+        self.commercial_row_service = CommercialRowService(ctx, persistence=persistence)
         self.commercial_signal_service = self.commercial_row_service.commercial_signal_service
         self.commercial_selection_service = self.commercial_row_service.commercial_selection_service
 
