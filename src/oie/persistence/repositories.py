@@ -760,6 +760,271 @@ class CompanyRepository(RepositoryBase):
                 for company in rows
             ]
 
+    def list_opportunity_dataset_by_run(self, run_id: str) -> List[Dict[str, Any]]:
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                rows = conn.execute(
+                    """
+                    WITH jobs_agg AS (
+                        SELECT
+                            j.company_key,
+                            COUNT(DISTINCT j.job_key) AS jobs_count,
+                            COALESCE(MAX(j.title), '') AS sample_job_title
+                        FROM jobs j
+                        WHERE j.run_id = ?
+                        GROUP BY j.company_key
+                    ),
+                    scores_agg AS (
+                        SELECT
+                            cs.company_key,
+                            COALESCE(MAX(cs.opportunity_score), 0) AS opportunity_score,
+                            COALESCE(MAX(cs.score_openings), 0) AS score_openings,
+                            COALESCE(MAX(cs.score_remote), 0) AS score_remote,
+                            COALESCE(MAX(cs.score_contractor), 0) AS score_contractor,
+                            COALESCE(MAX(cs.score_multi_source), 0) AS score_multi_source,
+                            COALESCE(MAX(cs.score_company_type), 0) AS score_company_type,
+                            COALESCE(MAX(cs.score_icp_fit), 0) AS score_icp_fit,
+                            COALESCE(MAX(cs.score_pain_urgency), 0) AS score_pain_urgency,
+                            COALESCE(MAX(cs.score_region_fit), 0) AS score_region_fit,
+                            COALESCE(MAX(cs.score_company_scale), 0) AS score_company_scale,
+                            COALESCE(MAX(cs.score_role_seniority_mix), 0) AS score_role_seniority_mix,
+                            COALESCE(MAX(cs.score_penalty_competitor), 0) AS score_penalty_competitor,
+                            COALESCE(MAX(cs.score_penalty_negative_signals), 0) AS score_penalty_negative_signals,
+                            COALESCE(MAX(cs.primary_service_fit), '') AS primary_service_fit,
+                            COALESCE(MAX(cs.buyer_persona_fit), '') AS buyer_persona_fit,
+                            COALESCE(MAX(cs.opportunity_label), '') AS opportunity_label,
+                            COALESCE(MAX(cs.opportunity_score_reason), '') AS opportunity_score_reason,
+                            COALESCE(MAX(cs.scoring_provider), '') AS scoring_provider,
+                            COALESCE(MAX(cs.scoring_model), '') AS scoring_model,
+                            COALESCE(MAX(cs.scoring_mode), '') AS scoring_mode
+                        FROM company_scores cs
+                        WHERE cs.run_id = ?
+                        GROUP BY cs.company_key
+                    ),
+                    ranked_leads AS (
+                        SELECT
+                            l.company_key,
+                            COALESCE(l.contact_name, '') AS contact_name,
+                            COALESCE(l.contact_title, '') AS contact_title,
+                            COALESCE(l.email, '') AS email,
+                            COALESCE(l.linkedin_url, '') AS linkedin_url,
+                            COALESCE(l.lead_source, '') AS lead_source,
+                            COALESCE(l.lead_confidence, 0) AS lead_confidence,
+                            COALESCE(l.email_quality_score, 0) AS email_quality_score,
+                            COALESCE(l.lead_capture_reason, '') AS lead_capture_reason,
+                            COALESCE(l.lead_relevance_score, 0) AS lead_relevance_score,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY l.company_key
+                                ORDER BY
+                                    COALESCE(l.lead_relevance_score, 0) DESC,
+                                    COALESCE(l.email_quality_score, 0) DESC,
+                                    COALESCE(l.lead_confidence, 0) DESC,
+                                    CASE LOWER(COALESCE(l.lead_source, ''))
+                                        WHEN 'apollo_people' THEN 3
+                                        WHEN 'hunter_domain_search' THEN 2
+                                        WHEN 'stub_generation' THEN 1
+                                        ELSE 0
+                                    END DESC,
+                                    CASE WHEN COALESCE(l.linkedin_url, '') <> '' THEN 1 ELSE 0 END DESC,
+                                    COALESCE(l.contact_name, '') ASC,
+                                    l.lead_key DESC
+                            ) AS rn
+                        FROM leads l
+                        WHERE l.run_id = ?
+                    ),
+                    lead_stats AS (
+                        SELECT
+                            l.company_key,
+                            COUNT(*) AS lead_count,
+                            SUM(CASE WHEN LOWER(COALESCE(l.lead_source, '')) = 'apollo_people' THEN 1 ELSE 0 END) AS apollo_leads_count,
+                            SUM(CASE WHEN LOWER(COALESCE(l.lead_source, '')) = 'hunter_domain_search' THEN 1 ELSE 0 END) AS hunter_leads_count,
+                            SUM(CASE WHEN COALESCE(l.email, '') <> '' THEN 1 ELSE 0 END) AS contacts_with_email_count,
+                            SUM(CASE WHEN COALESCE(l.linkedin_url, '') <> '' THEN 1 ELSE 0 END) AS contacts_with_linkedin_count
+                        FROM leads l
+                        WHERE l.run_id = ?
+                        GROUP BY l.company_key
+                    ),
+                    best_lead AS (
+                        SELECT *
+                        FROM ranked_leads
+                        WHERE rn = 1
+                    )
+                    SELECT
+                        c.company_key,
+                        c.company_display,
+                        c.company_normalized,
+                        c.resolved_domain,
+                        c.domain_source,
+                        c.domain_confidence,
+                        c.domain_candidate,
+                        c.domain_validation_status,
+                        c.domain_review_required,
+                        c.domain_ai_decision,
+                        c.industry,
+                        c.employee_range,
+                        c.linkedin_company_url,
+                        c.company_description,
+                        c.company_type_ai,
+                        c.classification_confidence_ai,
+                        COALESCE(j.sample_job_title, '') AS sample_job_title,
+                        COALESCE(j.jobs_count, 0) AS jobs_count,
+                        COALESCE(s.opportunity_score, 0) AS opportunity_score,
+                        COALESCE(s.opportunity_label, '') AS opportunity_label,
+                        COALESCE(s.score_openings, 0) AS score_openings,
+                        COALESCE(s.score_remote, 0) AS score_remote,
+                        COALESCE(s.score_contractor, 0) AS score_contractor,
+                        COALESCE(s.score_multi_source, 0) AS score_multi_source,
+                        COALESCE(s.score_company_type, 0) AS score_company_type,
+                        COALESCE(s.score_icp_fit, 0) AS score_icp_fit,
+                        COALESCE(s.score_pain_urgency, 0) AS score_pain_urgency,
+                        COALESCE(s.score_region_fit, 0) AS score_region_fit,
+                        COALESCE(s.score_company_scale, 0) AS score_company_scale,
+                        COALESCE(s.score_role_seniority_mix, 0) AS score_role_seniority_mix,
+                        COALESCE(s.score_penalty_competitor, 0) AS score_penalty_competitor,
+                        COALESCE(s.score_penalty_negative_signals, 0) AS score_penalty_negative_signals,
+                        COALESCE(s.primary_service_fit, '') AS primary_service_fit,
+                        COALESCE(s.buyer_persona_fit, '') AS buyer_persona_fit,
+                        COALESCE(s.opportunity_score_reason, '') AS opportunity_score_reason,
+                        COALESCE(s.scoring_provider, '') AS scoring_provider,
+                        COALESCE(s.scoring_model, '') AS scoring_model,
+                        COALESCE(s.scoring_mode, '') AS scoring_mode,
+                        COALESCE(ls.lead_count, 0) AS lead_count,
+                        COALESCE(ls.apollo_leads_count, 0) AS apollo_leads_count,
+                        COALESCE(ls.hunter_leads_count, 0) AS hunter_leads_count,
+                        COALESCE(ls.contacts_with_email_count, 0) AS contacts_with_email_count,
+                        COALESCE(ls.contacts_with_linkedin_count, 0) AS contacts_with_linkedin_count,
+                        COALESCE(bl.contact_name, '') AS contact_name,
+                        COALESCE(bl.contact_title, '') AS contact_title,
+                        COALESCE(bl.email, '') AS email,
+                        COALESCE(bl.linkedin_url, '') AS linkedin_url,
+                        COALESCE(bl.lead_source, '') AS lead_source,
+                        COALESCE(bl.lead_confidence, 0) AS lead_confidence,
+                        COALESCE(bl.email_quality_score, 0) AS email_quality_score,
+                        COALESCE(bl.lead_capture_reason, '') AS lead_capture_reason,
+                        COALESCE(bl.lead_relevance_score, 0) AS lead_relevance_score
+                    FROM companies c
+                    LEFT JOIN jobs_agg j ON j.company_key = c.company_key
+                    LEFT JOIN scores_agg s ON s.company_key = c.company_key
+                    LEFT JOIN lead_stats ls ON ls.company_key = c.company_key
+                    LEFT JOIN best_lead bl ON bl.company_key = c.company_key
+                    WHERE COALESCE(j.jobs_count, 0) > 0
+                    ORDER BY
+                        COALESCE(s.opportunity_score, 0) DESC,
+                        COALESCE(j.jobs_count, 0) DESC,
+                        c.company_display ASC
+                    """,
+                    (run_id, run_id, run_id, run_id),
+                ).fetchall()
+                return [dict(row) for row in rows]
+            finally:
+                conn.close()
+
+        # Conservative fallback for non-SQLite: reuse ORM table reads and compose in Python.
+        companies = self.list_companies()
+        jobs = JobRepository(persistence=self.persistence).list_jobs_by_run(run_id)
+        leads = LeadRepository(persistence=self.persistence).list_leads_by_run(run_id)
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            scores = (
+                session.query(CompanyScore)
+                .filter(CompanyScore.run_id == run_id)
+                .all()
+            )
+
+        jobs_by_company: dict[str, list[dict[str, Any]]] = {}
+        for job in jobs:
+            company_key = job.get("company_key")
+            if company_key:
+                jobs_by_company.setdefault(company_key, []).append(job)
+
+        scores_by_company = {score.company_key: score for score in scores}
+        leads_by_company: dict[str, list[dict[str, Any]]] = {}
+        for lead in leads:
+            company_key = lead.get("company_key")
+            if company_key:
+                leads_by_company.setdefault(company_key, []).append(lead)
+
+        rows: list[dict[str, Any]] = []
+        for company in companies:
+            company_key = company.get("company_key")
+            company_jobs = jobs_by_company.get(company_key, [])
+            if not company_jobs:
+                continue
+
+            company_leads = leads_by_company.get(company_key, [])
+            best_lead = sorted(
+                company_leads,
+                key=lambda lead: (
+                    float(lead.get("lead_relevance_score") or 0),
+                    int(lead.get("email_quality_score") or 0),
+                    float(lead.get("lead_confidence") or 0),
+                    {"apollo_people": 3, "hunter_domain_search": 2, "stub_generation": 1}.get(
+                        str(lead.get("lead_source") or "").lower(),
+                        0,
+                    ),
+                    1 if lead.get("linkedin_url") else 0,
+                    str(lead.get("contact_name") or ""),
+                ),
+                reverse=True,
+            )
+            lead = best_lead[0] if best_lead else {}
+            score = scores_by_company.get(company_key)
+
+            row = dict(company)
+            row.update(
+                {
+                    "sample_job_title": max(str(job.get("title") or "") for job in company_jobs),
+                    "jobs_count": len({job.get("job_key") for job in company_jobs}),
+                    "opportunity_score": getattr(score, "opportunity_score", 0) if score else 0,
+                    "opportunity_label": getattr(score, "opportunity_label", "") if score else "",
+                    "score_openings": getattr(score, "score_openings", 0) if score else 0,
+                    "score_remote": getattr(score, "score_remote", 0) if score else 0,
+                    "score_contractor": getattr(score, "score_contractor", 0) if score else 0,
+                    "score_multi_source": getattr(score, "score_multi_source", 0) if score else 0,
+                    "score_company_type": getattr(score, "score_company_type", 0) if score else 0,
+                    "score_icp_fit": getattr(score, "score_icp_fit", 0) if score else 0,
+                    "score_pain_urgency": getattr(score, "score_pain_urgency", 0) if score else 0,
+                    "score_region_fit": getattr(score, "score_region_fit", 0) if score else 0,
+                    "score_company_scale": getattr(score, "score_company_scale", 0) if score else 0,
+                    "score_role_seniority_mix": getattr(score, "score_role_seniority_mix", 0) if score else 0,
+                    "score_penalty_competitor": getattr(score, "score_penalty_competitor", 0) if score else 0,
+                    "score_penalty_negative_signals": getattr(score, "score_penalty_negative_signals", 0) if score else 0,
+                    "primary_service_fit": getattr(score, "primary_service_fit", "") if score else "",
+                    "buyer_persona_fit": getattr(score, "buyer_persona_fit", "") if score else "",
+                    "opportunity_score_reason": getattr(score, "opportunity_score_reason", "") if score else "",
+                    "scoring_provider": getattr(score, "scoring_provider", "") if score else "",
+                    "scoring_model": getattr(score, "scoring_model", "") if score else "",
+                    "scoring_mode": getattr(score, "scoring_mode", "") if score else "",
+                    "lead_count": len(company_leads),
+                    "apollo_leads_count": sum(1 for item in company_leads if str(item.get("lead_source") or "").lower() == "apollo_people"),
+                    "hunter_leads_count": sum(1 for item in company_leads if str(item.get("lead_source") or "").lower() == "hunter_domain_search"),
+                    "contacts_with_email_count": sum(1 for item in company_leads if item.get("email")),
+                    "contacts_with_linkedin_count": sum(1 for item in company_leads if item.get("linkedin_url")),
+                    "contact_name": lead.get("contact_name", ""),
+                    "contact_title": lead.get("contact_title", ""),
+                    "email": lead.get("email", ""),
+                    "linkedin_url": lead.get("linkedin_url", ""),
+                    "lead_source": lead.get("lead_source", ""),
+                    "lead_confidence": lead.get("lead_confidence", 0),
+                    "email_quality_score": lead.get("email_quality_score", 0),
+                    "lead_capture_reason": lead.get("lead_capture_reason", ""),
+                    "lead_relevance_score": lead.get("lead_relevance_score", 0),
+                }
+            )
+            rows.append(row)
+
+        rows.sort(
+            key=lambda row: (
+                float(row.get("opportunity_score") or 0),
+                int(row.get("jobs_count") or 0),
+                str(row.get("company_display") or ""),
+            ),
+            reverse=True,
+        )
+        return rows
+
 
 class CompanyAliasRepository(RepositoryBase):
     def replace_aliases(self, companies: List[Dict[str, Any]]) -> None:
