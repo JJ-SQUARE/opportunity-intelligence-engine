@@ -21,6 +21,7 @@ from oie.services.outbound_export_service import OutboundExportService
 from oie.services.persistence_service import PersistenceService
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.run_readiness_service import RunReadinessService
+from oie.services.serpapi_search_service import SerpAPISearchService
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class ServiceProvider:
     company_classification_service: CompanyClassificationService
     company_enrichment_service: CompanyEnrichmentService
     domain_ai_validation_service: DomainAIValidationService
+    serpapi_search_service: SerpAPISearchService
     domain_resolution_service: DomainResolutionService
 
     @classmethod
@@ -72,5 +74,11 @@ class ServiceProvider:
                 repositories=persistence_service.repositories,
             ),
             domain_ai_validation_service=DomainAIValidationService(ctx, provider_control_service),
-            domain_resolution_service=DomainResolutionService(ctx, provider_control_service),
+            serpapi_search_service=SerpAPISearchService(ctx, provider_control_service),
+            domain_resolution_service=DomainResolutionService(
+                ctx,
+                provider_control_service,
+                SerpAPISearchService(ctx, provider_control_service),
+                DomainAIValidationService(ctx, provider_control_service),
+            ),
         )
