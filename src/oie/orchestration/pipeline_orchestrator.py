@@ -14,7 +14,6 @@ from oie.services.collector_roi_export_service import CollectorROIExportService
 from oie.services.collector_roi_service import CollectorROIService
 from oie.services.commercial_selection_service import CommercialSelectionService
 from oie.services.commercial_signal_service import CommercialSignalService
-from oie.services.domain_resolution_service import DomainResolutionService
 from oie.services.duplicate_report_service import DuplicateReportService
 from oie.services.historical_export_service import HistoricalExportService
 from oie.services.hiring_signals_service import HiringSignalsService
@@ -37,7 +36,6 @@ from oie.services.run_metrics_summary_export_service import RunMetricsSummaryExp
 from oie.services.run_metrics_summary_service import RunMetricsSummaryService
 from oie.services.run_analytics_export_service import RunAnalyticsExportService
 from oie.services.run_analytics_service import RunAnalyticsService
-from oie.services.serpapi_search_service import SerpAPISearchService
 from oie.services.service_provider import ServiceProvider
 from oie.services.domain_review_queue_service import DomainReviewQueueService
 
