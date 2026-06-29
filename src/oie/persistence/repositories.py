@@ -6,7 +6,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 
 from oie.persistence.context import PersistenceContext
-from oie.persistence.models import Run, RunMetric, ProviderEvent, ProviderOperationMetric, Company, CompanyAlias, Domain, CompanyMergeCandidate, Job
+from oie.persistence.models import Run, RunMetric, ProviderEvent, ProviderOperationMetric, Company, CompanyAlias, Domain, CompanyMergeCandidate, Job, Lead
 from oie.persistence.session import create_session_factory
 
 
@@ -1127,6 +1127,10 @@ class LeadRepository(RepositoryBase):
         return f"lead_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:20]}"
 
     def replace_leads(self, run_id: str, run_date: str, leads: List[Dict[str, Any]]) -> None:
+        if self.persistence.backend != "sqlite":
+            self._replace_leads_orm(run_id, run_date, leads)
+            return
+
         conn = self.connection()
         try:
             conn.execute("DELETE FROM leads WHERE run_id = ?", (run_id,))
@@ -1238,21 +1242,99 @@ class LeadRepository(RepositoryBase):
         finally:
             conn.close()
 
+    def _clean_lead_value(self, value: Any) -> str:
+        return (value or "").strip()
+
+    def _clean_lead_email(self, value: Any) -> str:
+        return (value or "").strip().lower()
+
+    def _replace_leads_orm(self, run_id: str, run_date: str, leads: List[Dict[str, Any]]) -> None:
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            session.query(Lead).filter(Lead.run_id == run_id).delete()
+            session.add_all(
+                [
+                    Lead(
+                        lead_key=self._build_lead_key(lead, run_id),
+                        lead_fingerprint=self._build_lead_fingerprint(lead),
+                        run_id=run_id,
+                        run_date=run_date,
+                        company_key=self._clean_lead_value(lead.get("company_key")),
+                        contact_name=self._clean_lead_value(lead.get("contact_name")),
+                        contact_title=self._clean_lead_value(lead.get("contact_title")),
+                        email=self._clean_lead_email(lead.get("email")),
+                        linkedin_url=self._clean_lead_value(lead.get("linkedin_url")),
+                        lead_source=self._clean_lead_value(lead.get("lead_source")),
+                        lead_confidence=float(lead.get("lead_confidence") or 0),
+                        email_quality_score=int(lead.get("email_quality_score") or 0),
+                        lead_capture_reason=self._clean_lead_value(lead.get("lead_capture_reason")),
+                        lead_relevance_score=float(lead.get("lead_relevance_score") or 0),
+                        lead_priority_label=self._clean_lead_value(lead.get("lead_priority_label")),
+                        lead_decision_maker_score=float(lead.get("lead_decision_maker_score") or 0),
+                        lead_icp_fit_score=float(lead.get("lead_icp_fit_score") or 0),
+                        lead_contact_completeness_score=float(lead.get("lead_contact_completeness_score") or 0),
+                        lead_penalty_negative_title=float(lead.get("lead_penalty_negative_title") or 0),
+                        lead_score_reason=self._clean_lead_value(lead.get("lead_score_reason")),
+                        lead_scoring_provider=self._clean_lead_value(lead.get("lead_scoring_provider")),
+                        lead_scoring_model=self._clean_lead_value(lead.get("lead_scoring_model")),
+                        lead_scoring_mode=self._clean_lead_value(lead.get("lead_scoring_mode")),
+                        lead_score_title=float(lead.get("lead_score_title") or 0),
+                        lead_score_source=float(lead.get("lead_score_source") or 0),
+                        lead_score_email=float(lead.get("lead_score_email") or 0),
+                        lead_score_linkedin=float(lead.get("lead_score_linkedin") or 0),
+                        lead_score_email_quality=float(lead.get("lead_score_email_quality") or 0),
+                        lead_score_confidence=float(lead.get("lead_score_confidence") or 0),
+                        lead_score_completeness_penalty=float(lead.get("lead_score_completeness_penalty") or 0),
+                        lead_score_company_penalty=float(lead.get("lead_score_company_penalty") or 0),
+                        target_persona=self._clean_lead_value(lead.get("target_persona")),
+                        suggested_titles=self._clean_lead_value(lead.get("suggested_titles")),
+                        search_reason=self._clean_lead_value(lead.get("search_reason")),
+                        pain_alignment=self._clean_lead_value(lead.get("pain_alignment")),
+                        priority=self._clean_lead_value(lead.get("priority")),
+                        recommended_channel=self._clean_lead_value(lead.get("recommended_channel")),
+                        lead_role_type=self._clean_lead_value(lead.get("lead_role_type")),
+                        why_selected=self._clean_lead_value(lead.get("why_selected")),
+                        outreach_angle=self._clean_lead_value(lead.get("outreach_angle")),
+                        expected_relevance=self._clean_lead_value(lead.get("expected_relevance")),
+                        risk_or_uncertainty=self._clean_lead_value(lead.get("risk_or_uncertainty")),
+                    )
+                    for lead in leads
+                ]
+            )
+            session.commit()
+
     def list_leads_by_run(self, run_id: str) -> List[Dict[str, Any]]:
-        conn = self.connection()
-        try:
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM leads
-                WHERE run_id = ?
-                ORDER BY rowid ASC
-                """,
-                (run_id,),
-            ).fetchall()
-            return [dict(row) for row in rows]
-        finally:
-            conn.close()
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM leads
+                    WHERE run_id = ?
+                    ORDER BY rowid ASC
+                    """,
+                    (run_id,),
+                ).fetchall()
+                return [dict(row) for row in rows]
+            finally:
+                conn.close()
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            rows = (
+                session.query(Lead)
+                .filter(Lead.run_id == run_id)
+                .order_by(Lead.lead_key.asc())
+                .all()
+            )
+            return [
+                {
+                    column.name: getattr(lead, column.name)
+                    for column in Lead.__table__.columns
+                }
+                for lead in rows
+            ]
 
 
 class CompanyScoreRepository(RepositoryBase):
