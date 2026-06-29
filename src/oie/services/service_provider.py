@@ -15,6 +15,8 @@ from oie.services.collector_metrics_export_service import CollectorMetricsExport
 from oie.services.collector_metrics_service import CollectorMetricsService
 from oie.services.collector_roi_export_service import CollectorROIExportService
 from oie.services.collector_roi_service import CollectorROIService
+from oie.services.commercial_selection_service import CommercialSelectionService
+from oie.services.commercial_signal_service import CommercialSignalService
 from oie.services.company_classification_service import CompanyClassificationService
 from oie.services.db_export_service import DBExportService
 from oie.services.domain_review_queue_service import DomainReviewQueueService
@@ -24,14 +26,19 @@ from oie.services.job_dedup_service import JobDedupService
 from oie.services.domain_ai_validation_service import DomainAIValidationService
 from oie.services.domain_resolution_service import DomainResolutionService
 from oie.services.executive_summary_service import ExecutiveSummaryService
+from oie.services.historical_export_service import HistoricalExportService
 from oie.services.historical_intelligence_service import HistoricalIntelligenceService
 from oie.services.job_intelligence_service import JobIntelligenceService
 from oie.services.lead_generation_service import LeadGenerationService
 from oie.services.lead_ranking_service import LeadRankingService
+from oie.services.market_segmentation_export_service import MarketSegmentationExportService
+from oie.services.market_segmentation_service import MarketSegmentationService
+from oie.services.market_trends_export_service import MarketTrendsExportService
 from oie.services.market_trends_service import MarketTrendsService
 from oie.services.master_data_service import MasterDataService
 from oie.services.master_dedup_service import MasterDedupService
 from oie.services.normalization_service import NormalizationService
+from oie.services.opportunity_dataset_export_service import OpportunityDatasetExportService
 from oie.services.opportunity_dataset_service import OpportunityDatasetService
 from oie.services.outbound_export_service import OutboundExportService
 from oie.services.persistence_service import PersistenceService
@@ -90,6 +97,13 @@ class ServiceProvider:
     opportunity_dataset_service: OpportunityDatasetService
     historical_intelligence_service: HistoricalIntelligenceService
     market_trends_service: MarketTrendsService
+    opportunity_dataset_export_service: OpportunityDatasetExportService
+    historical_export_service: HistoricalExportService
+    market_trends_export_service: MarketTrendsExportService
+    market_segmentation_service: MarketSegmentationService
+    market_segmentation_export_service: MarketSegmentationExportService
+    commercial_signal_service: CommercialSignalService
+    commercial_selection_service: CommercialSelectionService
     company_identity_ai_service: CompanyIdentityAIService
     company_classification_service: CompanyClassificationService
     company_enrichment_service: CompanyEnrichmentService
@@ -143,6 +157,13 @@ class ServiceProvider:
             opportunity_dataset_service=OpportunityDatasetService(ctx, repositories=persistence_service.repositories),
             historical_intelligence_service=HistoricalIntelligenceService(ctx, repositories=persistence_service.repositories),
             market_trends_service=MarketTrendsService(ctx, repositories=persistence_service.repositories),
+            opportunity_dataset_export_service=OpportunityDatasetExportService(ctx),
+            historical_export_service=HistoricalExportService(ctx),
+            market_trends_export_service=MarketTrendsExportService(ctx),
+            market_segmentation_service=MarketSegmentationService(ctx),
+            market_segmentation_export_service=MarketSegmentationExportService(ctx),
+            commercial_signal_service=CommercialSignalService(),
+            commercial_selection_service=CommercialSelectionService(CommercialSignalService()),
             company_identity_ai_service=CompanyIdentityAIService(ctx, provider_control_service),
             company_classification_service=CompanyClassificationService(ctx, provider_control_service),
             company_enrichment_service=CompanyEnrichmentService(

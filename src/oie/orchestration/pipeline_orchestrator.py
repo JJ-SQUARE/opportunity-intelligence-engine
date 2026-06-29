@@ -5,13 +5,6 @@ from typing import Any, Dict, List, Tuple
 
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import finalize_manifest
-from oie.services.commercial_selection_service import CommercialSelectionService
-from oie.services.commercial_signal_service import CommercialSignalService
-from oie.services.historical_export_service import HistoricalExportService
-from oie.services.market_segmentation_export_service import MarketSegmentationExportService
-from oie.services.market_segmentation_service import MarketSegmentationService
-from oie.services.market_trends_export_service import MarketTrendsExportService
-from oie.services.opportunity_dataset_export_service import OpportunityDatasetExportService
 from oie.services.service_provider import ServiceProvider
 
 
@@ -36,15 +29,15 @@ class PipelineOrchestrator:
         self.domain_review_queue_service = self.service_provider.domain_review_queue_service
         self.db_export_service = self.service_provider.db_export_service
         self.opportunity_dataset_service = self.service_provider.opportunity_dataset_service
-        self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
+        self.opportunity_dataset_export_service = self.service_provider.opportunity_dataset_export_service
         self.outbound_export_service = self.service_provider.outbound_export_service
         self.executive_summary_service = self.service_provider.executive_summary_service
         self.historical_intelligence_service = self.service_provider.historical_intelligence_service
-        self.historical_export_service = HistoricalExportService(ctx)
+        self.historical_export_service = self.service_provider.historical_export_service
         self.market_trends_service = self.service_provider.market_trends_service
-        self.market_trends_export_service = MarketTrendsExportService(ctx)
-        self.market_segmentation_service = MarketSegmentationService(ctx)
-        self.market_segmentation_export_service = MarketSegmentationExportService(ctx)
+        self.market_trends_export_service = self.service_provider.market_trends_export_service
+        self.market_segmentation_service = self.service_provider.market_segmentation_service
+        self.market_segmentation_export_service = self.service_provider.market_segmentation_export_service
         self.collector_metrics_service = self.service_provider.collector_metrics_service
         self.collector_metrics_export_service = self.service_provider.collector_metrics_export_service
         self.collector_contribution_service = self.service_provider.collector_contribution_service
@@ -61,10 +54,8 @@ class PipelineOrchestrator:
         self.provider_operation_metrics_export_service = self.service_provider.provider_operation_metrics_export_service
         self.company_classification_service = self.service_provider.company_classification_service
         self.company_enrichment_service = self.service_provider.company_enrichment_service
-        self.commercial_signal_service = CommercialSignalService()
-        self.commercial_selection_service = CommercialSelectionService(
-            self.commercial_signal_service,
-        )
+        self.commercial_signal_service = self.service_provider.commercial_signal_service
+        self.commercial_selection_service = self.service_provider.commercial_selection_service
         self.lead_generation_service = self.service_provider.lead_generation_service
         self.lead_ranking_service = self.service_provider.lead_ranking_service
         self.domain_resolution_service = self.service_provider.domain_resolution_service
