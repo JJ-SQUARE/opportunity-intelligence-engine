@@ -1,4 +1,5 @@
-from oie.persistence.repositories import JobRepository, LeadRepository
+from oie.persistence.job_repository import JobRepository
+from oie.persistence.lead_repository import LeadRepository
 
 
 def test_job_fingerprint_is_stable_across_runs_when_job_url_exists():
