@@ -3,17 +3,23 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from oie.orchestration.run_context import RunContext
-from oie.persistence.job_repository import JobRepository
-from oie.persistence.lead_repository import LeadRepository
+from oie.persistence.context import PersistenceContext
+from oie.persistence.repository_provider import RepositoryProvider
 from oie.services.master_data_service import MasterDataService
 
 
 class MasterDedupService:
-    def __init__(self, ctx: RunContext) -> None:
+    def __init__(
+        self,
+        ctx: RunContext,
+        repositories: RepositoryProvider | None = None,
+    ) -> None:
         self.ctx = ctx
         self.master_data_service = MasterDataService(ctx)
-        self.job_repository = JobRepository()
-        self.lead_repository = LeadRepository()
+        self.persistence = PersistenceContext.from_run_context(ctx)
+        self.repositories = repositories or RepositoryProvider.from_persistence(self.persistence)
+        self.job_repository = self.repositories.job_repository
+        self.lead_repository = self.repositories.lead_repository
 
     def _job_dedupe_key(self, job: Dict[str, Any]) -> Tuple[str, str]:
         return ("job_fingerprint", self.job_repository._build_job_fingerprint(job))
