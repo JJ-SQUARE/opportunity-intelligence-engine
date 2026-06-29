@@ -9,6 +9,12 @@ from oie.services.company_enrichment_service import CompanyEnrichmentService
 from oie.services.company_identity_service import CompanyIdentityService
 from oie.services.company_identity_ai_service import CompanyIdentityAIService
 from oie.services.collection_service import CollectionService
+from oie.services.collector_contribution_export_service import CollectorContributionExportService
+from oie.services.collector_contribution_service import CollectorContributionService
+from oie.services.collector_metrics_export_service import CollectorMetricsExportService
+from oie.services.collector_metrics_service import CollectorMetricsService
+from oie.services.collector_roi_export_service import CollectorROIExportService
+from oie.services.collector_roi_service import CollectorROIService
 from oie.services.company_classification_service import CompanyClassificationService
 from oie.services.db_export_service import DBExportService
 from oie.services.domain_review_queue_service import DomainReviewQueueService
@@ -29,9 +35,16 @@ from oie.services.normalization_service import NormalizationService
 from oie.services.opportunity_dataset_service import OpportunityDatasetService
 from oie.services.outbound_export_service import OutboundExportService
 from oie.services.persistence_service import PersistenceService
+from oie.services.provider_operation_metrics_export_service import ProviderOperationMetricsExportService
+from oie.services.provider_operation_metrics_service import ProviderOperationMetricsService
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.provider_execution_service import ProviderExecutionService
 from oie.services.opportunity_scoring_service import OpportunityScoringService
+from oie.services.run_analytics_export_service import RunAnalyticsExportService
+from oie.services.run_analytics_service import RunAnalyticsService
+from oie.services.run_metrics_summary_export_service import RunMetricsSummaryExportService
+from oie.services.run_metrics_summary_service import RunMetricsSummaryService
+from oie.services.run_readiness_export_service import RunReadinessExportService
 from oie.services.run_readiness_service import RunReadinessService
 from oie.services.serpapi_search_service import SerpAPISearchService
 
@@ -59,6 +72,19 @@ class ServiceProvider:
     outbound_export_service: OutboundExportService
     executive_summary_service: ExecutiveSummaryService
     run_readiness_service: RunReadinessService
+    collector_metrics_service: CollectorMetricsService
+    collector_metrics_export_service: CollectorMetricsExportService
+    collector_contribution_service: CollectorContributionService
+    collector_contribution_export_service: CollectorContributionExportService
+    collector_roi_service: CollectorROIService
+    collector_roi_export_service: CollectorROIExportService
+    run_readiness_export_service: RunReadinessExportService
+    run_metrics_summary_service: RunMetricsSummaryService
+    run_metrics_summary_export_service: RunMetricsSummaryExportService
+    run_analytics_service: RunAnalyticsService
+    run_analytics_export_service: RunAnalyticsExportService
+    provider_operation_metrics_service: ProviderOperationMetricsService
+    provider_operation_metrics_export_service: ProviderOperationMetricsExportService
     company_identity_service: CompanyIdentityService
     master_dedup_service: MasterDedupService
     opportunity_dataset_service: OpportunityDatasetService
@@ -99,6 +125,19 @@ class ServiceProvider:
             outbound_export_service=OutboundExportService(ctx, persistence=persistence_service.persistence),
             executive_summary_service=ExecutiveSummaryService(ctx, persistence=persistence_service.persistence),
             run_readiness_service=RunReadinessService(ctx, persistence=persistence_service.persistence),
+            collector_metrics_service=CollectorMetricsService(ctx),
+            collector_metrics_export_service=CollectorMetricsExportService(ctx),
+            collector_contribution_service=CollectorContributionService(ctx),
+            collector_contribution_export_service=CollectorContributionExportService(ctx),
+            collector_roi_service=CollectorROIService(ctx),
+            collector_roi_export_service=CollectorROIExportService(ctx),
+            run_readiness_export_service=RunReadinessExportService(ctx),
+            run_metrics_summary_service=RunMetricsSummaryService(ctx),
+            run_metrics_summary_export_service=RunMetricsSummaryExportService(ctx),
+            run_analytics_service=RunAnalyticsService(ctx),
+            run_analytics_export_service=RunAnalyticsExportService(ctx),
+            provider_operation_metrics_service=ProviderOperationMetricsService(ctx),
+            provider_operation_metrics_export_service=ProviderOperationMetricsExportService(ctx),
             company_identity_service=CompanyIdentityService(ctx, repositories=persistence_service.repositories),
             master_dedup_service=MasterDedupService(ctx, repositories=persistence_service.repositories),
             opportunity_dataset_service=OpportunityDatasetService(ctx, repositories=persistence_service.repositories),
