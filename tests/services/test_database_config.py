@@ -1218,7 +1218,7 @@ def test_lead_repository_replace_and_list_uses_orm_for_non_sqlite_backend(tmp_pa
         return create_session_factory(sqlite_settings)
 
     monkeypatch.setattr(
-        "oie.persistence.repositories.create_session_factory",
+        "oie.persistence.lead_repository.create_session_factory",
         fake_create_session_factory,
     )
 
