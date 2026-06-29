@@ -117,6 +117,7 @@ class ServiceProvider:
         provider_control_service = ProviderControlService(ctx)
         domain_ai_validation_service = DomainAIValidationService(ctx, provider_control_service)
         serpapi_search_service = SerpAPISearchService(ctx, provider_control_service)
+        commercial_signal_service = CommercialSignalService()
         return cls(
             ctx=ctx,
             persistence_service=persistence_service,
@@ -162,8 +163,8 @@ class ServiceProvider:
             market_trends_export_service=MarketTrendsExportService(ctx),
             market_segmentation_service=MarketSegmentationService(ctx),
             market_segmentation_export_service=MarketSegmentationExportService(ctx),
-            commercial_signal_service=CommercialSignalService(),
-            commercial_selection_service=CommercialSelectionService(CommercialSignalService()),
+            commercial_signal_service=commercial_signal_service,
+            commercial_selection_service=CommercialSelectionService(commercial_signal_service),
             company_identity_ai_service=CompanyIdentityAIService(ctx, provider_control_service),
             company_classification_service=CompanyClassificationService(ctx, provider_control_service),
             company_enrichment_service=CompanyEnrichmentService(
