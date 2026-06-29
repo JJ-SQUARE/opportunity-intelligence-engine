@@ -1099,7 +1099,7 @@ def test_job_repository_replace_jobs_uses_orm_for_non_sqlite_backend(tmp_path, m
         return create_session_factory(sqlite_settings)
 
     monkeypatch.setattr(
-        "oie.persistence.repositories.create_session_factory",
+        "oie.persistence.job_repository.create_session_factory",
         fake_create_session_factory,
     )
 
