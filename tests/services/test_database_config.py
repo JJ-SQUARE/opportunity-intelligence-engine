@@ -1334,7 +1334,7 @@ def test_company_score_repository_uses_orm_for_non_sqlite_backend(tmp_path, monk
         return create_session_factory(sqlite_settings)
 
     monkeypatch.setattr(
-        "oie.persistence.repositories.create_session_factory",
+        "oie.persistence.company_score_repository.create_session_factory",
         fake_create_session_factory,
     )
 
