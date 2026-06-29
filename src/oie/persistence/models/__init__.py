@@ -6,5 +6,6 @@ from oie.persistence.models.provider_operation_metric import ProviderOperationMe
 from oie.persistence.models.company import Company
 from oie.persistence.models.company_alias import CompanyAlias
 from oie.persistence.models.domain import Domain
+from oie.persistence.models.company_merge_candidate import CompanyMergeCandidate
 
-__all__ = ["Base", "Run", "RunMetric", "ProviderEvent", "ProviderOperationMetric", "Company", "CompanyAlias", "Domain"]
+__all__ = ["Base", "Run", "RunMetric", "ProviderEvent", "ProviderOperationMetric", "Company", "CompanyAlias", "Domain", "CompanyMergeCandidate"]
