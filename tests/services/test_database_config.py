@@ -195,7 +195,7 @@ def test_persistence_context_from_run_context_supports_postgres_settings(tmp_pat
 
 def test_repository_base_uses_persistence_context_connection(tmp_path):
     from oie.persistence.context import PersistenceContext
-    from oie.persistence.repositories import RunRepository
+    from oie.persistence.run_repository import RunRepository
     from oie.persistence.sqlite import initialize_database
 
     db_path = tmp_path / "repo_base.db"
@@ -215,7 +215,7 @@ def test_repository_base_uses_persistence_context_connection(tmp_path):
 
 
 def test_repository_base_preserves_db_path_compatibility(tmp_path):
-    from oie.persistence.repositories import RunRepository
+    from oie.persistence.run_repository import RunRepository
     from oie.persistence.sqlite import initialize_database
 
     db_path = tmp_path / "repo_compat.db"
@@ -346,7 +346,7 @@ def test_run_repository_uses_orm_for_non_sqlite_backend(tmp_path, monkeypatch):
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base
-    from oie.persistence.repositories import RunRepository
+    from oie.persistence.run_repository import RunRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_backend_simulation.db"
@@ -406,7 +406,7 @@ def test_run_metrics_repository_uses_orm_for_non_sqlite_backend(tmp_path, monkey
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base, Run
-    from oie.persistence.repositories import RunMetricsRepository
+    from oie.persistence.run_metrics_repository import RunMetricsRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_metrics_backend_simulation.db"
@@ -476,7 +476,7 @@ def test_provider_event_repository_uses_orm_for_non_sqlite_backend(tmp_path, mon
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base, Run
-    from oie.persistence.repositories import ProviderEventRepository
+    from oie.persistence.provider_event_repository import ProviderEventRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_provider_events_backend_simulation.db"
@@ -573,7 +573,7 @@ def test_provider_operation_metrics_repository_uses_orm_for_non_sqlite_backend(t
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base, ProviderOperationMetric, Run
-    from oie.persistence.repositories import ProviderOperationMetricsRepository
+    from oie.persistence.provider_operation_metrics_repository import ProviderOperationMetricsRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_provider_operation_metrics_backend_simulation.db"
@@ -679,7 +679,7 @@ def test_company_repository_read_methods_use_orm_for_non_sqlite_backend(tmp_path
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base, Company
-    from oie.persistence.repositories import CompanyRepository
+    from oie.persistence.company_repository import CompanyRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_company_backend_simulation.db"
@@ -752,7 +752,7 @@ def test_company_repository_upsert_uses_orm_for_non_sqlite_backend(tmp_path, mon
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base
-    from oie.persistence.repositories import CompanyRepository
+    from oie.persistence.company_repository import CompanyRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_company_upsert_backend_simulation.db"
@@ -848,7 +848,8 @@ def test_alias_and_domain_repositories_use_orm_for_non_sqlite_backend(tmp_path, 
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base, Company, Domain
-    from oie.persistence.repositories import CompanyAliasRepository, DomainRepository
+    from oie.persistence.company_alias_repository import CompanyAliasRepository
+    from oie.persistence.domain_repository import DomainRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_alias_domain_backend_simulation.db"
@@ -976,7 +977,7 @@ def test_company_merge_candidate_repository_uses_orm_for_non_sqlite_backend(tmp_
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base, CompanyMergeCandidate, Run
-    from oie.persistence.repositories import CompanyMergeCandidateRepository
+    from oie.persistence.company_merge_candidate_repository import CompanyMergeCandidateRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_merge_candidates_backend_simulation.db"
@@ -1079,7 +1080,7 @@ def test_job_repository_replace_jobs_uses_orm_for_non_sqlite_backend(tmp_path, m
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base, Company, Job, Run
-    from oie.persistence.repositories import JobRepository
+    from oie.persistence.job_repository import JobRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_jobs_backend_simulation.db"
@@ -1198,7 +1199,7 @@ def test_lead_repository_replace_and_list_uses_orm_for_non_sqlite_backend(tmp_pa
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base, Company, Run
-    from oie.persistence.repositories import LeadRepository
+    from oie.persistence.lead_repository import LeadRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_leads_backend_simulation.db"
@@ -1314,7 +1315,7 @@ def test_company_score_repository_uses_orm_for_non_sqlite_backend(tmp_path, monk
     from oie.persistence.context import PersistenceContext
     from oie.persistence.database import DatabaseSettings
     from oie.persistence.models import Base, Company, CompanyScore, Run
-    from oie.persistence.repositories import CompanyScoreRepository
+    from oie.persistence.company_score_repository import CompanyScoreRepository
     from oie.persistence.session import create_session_factory
 
     sqlite_db = tmp_path / "orm_company_scores_backend_simulation.db"
