@@ -33,6 +33,7 @@ PLACEHOLDER_COMPANY_VALUES = {
 COMPANY_TYPE_ALIASES = {
     "staffing_agency": "staffing",
     "outsourcing": "consulting",
+    "product_company": "end_client",
 }
 
 
