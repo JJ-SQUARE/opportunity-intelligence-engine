@@ -4,17 +4,7 @@ from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
 from oie.persistence.context import PersistenceContext
-from oie.persistence.company_alias_repository import CompanyAliasRepository
-from oie.persistence.company_merge_candidate_repository import CompanyMergeCandidateRepository
-from oie.persistence.company_repository import CompanyRepository
-from oie.persistence.company_score_repository import CompanyScoreRepository
-from oie.persistence.domain_repository import DomainRepository
-from oie.persistence.job_repository import JobRepository
-from oie.persistence.lead_repository import LeadRepository
-from oie.persistence.provider_event_repository import ProviderEventRepository
-from oie.persistence.provider_operation_metrics_repository import ProviderOperationMetricsRepository
-from oie.persistence.run_metrics_repository import RunMetricsRepository
-from oie.persistence.run_repository import RunRepository
+from oie.persistence.repository_provider import RepositoryProvider
 from oie.persistence.sqlite import initialize_database
 from oie.services.provider_operation_metrics_service import ProviderOperationMetricsService
 
@@ -25,18 +15,19 @@ class PersistenceService:
         self.persistence = PersistenceContext.from_run_context(ctx)
         self.db_path = self.persistence.path or self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
         self.ctx.paths["db_path"] = self.db_path
-        self.run_repository = RunRepository(persistence=self.persistence)
-        self.run_metrics_repository = RunMetricsRepository(persistence=self.persistence)
-        self.provider_event_repository = ProviderEventRepository(persistence=self.persistence)
-        self.provider_operation_metrics_repository = ProviderOperationMetricsRepository(persistence=self.persistence)
+        self.repositories = RepositoryProvider.from_persistence(self.persistence)
+        self.run_repository = self.repositories.run_repository
+        self.run_metrics_repository = self.repositories.run_metrics_repository
+        self.provider_event_repository = self.repositories.provider_event_repository
+        self.provider_operation_metrics_repository = self.repositories.provider_operation_metrics_repository
         self.provider_operation_metrics_service = ProviderOperationMetricsService(ctx)
-        self.company_repository = CompanyRepository(persistence=self.persistence)
-        self.company_alias_repository = CompanyAliasRepository(persistence=self.persistence)
-        self.domain_repository = DomainRepository(persistence=self.persistence)
-        self.company_merge_candidate_repository = CompanyMergeCandidateRepository(persistence=self.persistence)
-        self.job_repository = JobRepository(persistence=self.persistence)
-        self.lead_repository = LeadRepository(persistence=self.persistence)
-        self.company_score_repository = CompanyScoreRepository(persistence=self.persistence)
+        self.company_repository = self.repositories.company_repository
+        self.company_alias_repository = self.repositories.company_alias_repository
+        self.domain_repository = self.repositories.domain_repository
+        self.company_merge_candidate_repository = self.repositories.company_merge_candidate_repository
+        self.job_repository = self.repositories.job_repository
+        self.lead_repository = self.repositories.lead_repository
+        self.company_score_repository = self.repositories.company_score_repository
 
     def initialize(self) -> None:
         if self.persistence.backend == "sqlite":
