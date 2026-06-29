@@ -858,7 +858,7 @@ def test_create_run_writes_initial_manifest(tmp_path):
     payload = response.json()
     assert payload["run_id"]
     assert payload["status"] == "pending"
-    assert payload["current_stage"] == "collect_jobs"
+    assert payload["current_stage"] is None
     assert payload["manifest_path"].endswith("manifest.json")
 
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
