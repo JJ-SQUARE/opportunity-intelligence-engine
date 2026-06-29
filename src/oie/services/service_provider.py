@@ -51,6 +51,8 @@ class ServiceProvider:
     def from_run_context(cls, ctx: RunContext) -> "ServiceProvider":
         persistence_service = PersistenceService(ctx)
         provider_control_service = ProviderControlService(ctx)
+        domain_ai_validation_service = DomainAIValidationService(ctx, provider_control_service)
+        serpapi_search_service = SerpAPISearchService(ctx, provider_control_service)
         return cls(
             ctx=ctx,
             persistence_service=persistence_service,
@@ -73,12 +75,12 @@ class ServiceProvider:
                 provider_control_service,
                 repositories=persistence_service.repositories,
             ),
-            domain_ai_validation_service=DomainAIValidationService(ctx, provider_control_service),
-            serpapi_search_service=SerpAPISearchService(ctx, provider_control_service),
+            domain_ai_validation_service=domain_ai_validation_service,
+            serpapi_search_service=serpapi_search_service,
             domain_resolution_service=DomainResolutionService(
                 ctx,
                 provider_control_service,
-                SerpAPISearchService(ctx, provider_control_service),
-                DomainAIValidationService(ctx, provider_control_service),
+                serpapi_search_service,
+                domain_ai_validation_service,
             ),
         )
