@@ -401,6 +401,7 @@ class PipelineOrchestrator:
         return advanced
 
     def run_company_pipeline(self) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+        self.persistence_service.initialize()
         jobs = self.run_initial_stages()
         unique_jobs, duplicate_jobs = self.master_dedup_service.dedupe_jobs_against_master(jobs)
 
