@@ -38,10 +38,10 @@ from oie.services.domain_review_queue_service import DomainReviewQueueService
 class PipelineOrchestrator:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.collection_service = CollectionService(ctx)
-        self.normalization_service = NormalizationService(ctx)
-        self.job_dedup_service = JobDedupService(ctx)
-        self.hiring_signals_service = HiringSignalsService(ctx)
+        self.collection_service = self.service_provider.collection_service
+        self.normalization_service = self.service_provider.normalization_service
+        self.job_dedup_service = self.service_provider.job_dedup_service
+        self.hiring_signals_service = self.service_provider.hiring_signals_service
         self.service_provider = ServiceProvider.from_run_context(ctx)
         self.persistence_service = self.service_provider.persistence_service
         self.provider_control_service = self.service_provider.provider_control_service
@@ -50,10 +50,10 @@ class PipelineOrchestrator:
         self.provider_execution_service = self.service_provider.provider_execution_service
         self.opportunity_scoring_service = self.service_provider.opportunity_scoring_service
         self.company_identity_service = self.service_provider.company_identity_service
-        self.master_data_service = MasterDataService(ctx)
+        self.master_data_service = self.service_provider.master_data_service
         self.master_dedup_service = self.service_provider.master_dedup_service
-        self.duplicate_report_service = DuplicateReportService(ctx)
-        self.domain_review_queue_service = DomainReviewQueueService(ctx)
+        self.duplicate_report_service = self.service_provider.duplicate_report_service
+        self.domain_review_queue_service = self.service_provider.domain_review_queue_service
         self.db_export_service = self.service_provider.db_export_service
         self.opportunity_dataset_service = self.service_provider.opportunity_dataset_service
         self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
