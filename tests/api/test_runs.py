@@ -154,7 +154,7 @@ def test_get_run_stages_returns_existing_stage_statuses(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()[0] == {"stage": "collect_jobs", "status": "pending"}
-    assert response.json()[-1] == {"stage": "delivery", "status": "pending"}
+    assert response.json()[-1] == {"stage": "outbound_export", "status": "pending"}
 
 
 def test_get_run_stages_returns_404_for_missing_run(tmp_path, monkeypatch):

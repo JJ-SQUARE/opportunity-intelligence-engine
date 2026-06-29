@@ -29,6 +29,7 @@ RUN_STATUSES = [
     "failed",
     "skipped",
     "waiting_for_user",
+    "company_pipeline_completed",
 ]
 
 PIPELINE_STAGE_SET = set(PIPELINE_STAGES)
