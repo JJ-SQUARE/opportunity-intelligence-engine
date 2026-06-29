@@ -14,12 +14,17 @@ from oie.services.domain_ai_validation_service import DomainAIValidationService
 from oie.services.domain_resolution_service import DomainResolutionService
 from oie.services.executive_summary_service import ExecutiveSummaryService
 from oie.services.historical_intelligence_service import HistoricalIntelligenceService
+from oie.services.job_intelligence_service import JobIntelligenceService
+from oie.services.lead_generation_service import LeadGenerationService
+from oie.services.lead_ranking_service import LeadRankingService
 from oie.services.market_trends_service import MarketTrendsService
 from oie.services.master_dedup_service import MasterDedupService
 from oie.services.opportunity_dataset_service import OpportunityDatasetService
 from oie.services.outbound_export_service import OutboundExportService
 from oie.services.persistence_service import PersistenceService
 from oie.services.provider_control_service import ProviderControlService
+from oie.services.provider_execution_service import ProviderExecutionService
+from oie.services.opportunity_scoring_service import OpportunityScoringService
 from oie.services.run_readiness_service import RunReadinessService
 from oie.services.serpapi_search_service import SerpAPISearchService
 
@@ -31,6 +36,11 @@ class ServiceProvider:
     persistence: PersistenceContext
     repositories: RepositoryProvider
     provider_control_service: ProviderControlService
+    provider_execution_service: ProviderExecutionService
+    job_intelligence_service: JobIntelligenceService
+    opportunity_scoring_service: OpportunityScoringService
+    lead_generation_service: LeadGenerationService
+    lead_ranking_service: LeadRankingService
     db_export_service: DBExportService
     outbound_export_service: OutboundExportService
     executive_summary_service: ExecutiveSummaryService
@@ -59,6 +69,11 @@ class ServiceProvider:
             persistence=persistence_service.persistence,
             repositories=persistence_service.repositories,
             provider_control_service=provider_control_service,
+            provider_execution_service=ProviderExecutionService(ctx, provider_control_service),
+            job_intelligence_service=JobIntelligenceService(ctx, provider_control_service),
+            opportunity_scoring_service=OpportunityScoringService(ctx, provider_control_service),
+            lead_generation_service=LeadGenerationService(ctx, provider_control_service),
+            lead_ranking_service=LeadRankingService(ctx, provider_control_service),
             db_export_service=DBExportService(ctx, persistence=persistence_service.persistence),
             outbound_export_service=OutboundExportService(ctx, persistence=persistence_service.persistence),
             executive_summary_service=ExecutiveSummaryService(ctx, persistence=persistence_service.persistence),
