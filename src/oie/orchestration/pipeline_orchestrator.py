@@ -80,18 +80,19 @@ class PipelineOrchestrator:
             self.provider_control_service,
         )
         self.persistence_service = PersistenceService(ctx)
+        self.repositories = self.persistence_service.repositories
         self.master_data_service = MasterDataService(ctx)
-        self.master_dedup_service = MasterDedupService(ctx)
+        self.master_dedup_service = MasterDedupService(ctx, repositories=self.repositories)
         self.duplicate_report_service = DuplicateReportService(ctx)
         self.domain_review_queue_service = DomainReviewQueueService(ctx)
         self.db_export_service = DBExportService(ctx)
-        self.opportunity_dataset_service = OpportunityDatasetService(ctx)
+        self.opportunity_dataset_service = OpportunityDatasetService(ctx, repositories=self.repositories)
         self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
         self.outbound_export_service = OutboundExportService(ctx)
         self.executive_summary_service = ExecutiveSummaryService(ctx)
-        self.historical_intelligence_service = HistoricalIntelligenceService(ctx)
+        self.historical_intelligence_service = HistoricalIntelligenceService(ctx, repositories=self.repositories)
         self.historical_export_service = HistoricalExportService(ctx)
-        self.market_trends_service = MarketTrendsService(ctx)
+        self.market_trends_service = MarketTrendsService(ctx, repositories=self.repositories)
         self.market_trends_export_service = MarketTrendsExportService(ctx)
         self.market_segmentation_service = MarketSegmentationService(ctx)
         self.market_segmentation_export_service = MarketSegmentationExportService(ctx)
@@ -116,6 +117,7 @@ class PipelineOrchestrator:
         self.company_enrichment_service = CompanyEnrichmentService(
             ctx,
             self.provider_control_service,
+            repositories=self.repositories,
         )
         self.commercial_signal_service = CommercialSignalService()
         self.commercial_selection_service = CommercialSelectionService(
