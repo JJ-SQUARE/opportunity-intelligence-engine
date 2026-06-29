@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from oie.api.main import app
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
+from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, write_manifest
 
 
 def test_list_runs_returns_existing_run_summaries(tmp_path, monkeypatch):
@@ -864,3 +864,53 @@ def test_create_run_writes_initial_manifest(tmp_path):
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
     manifest_path = runs_path / payload["run_id"] / "manifest.json"
     assert manifest_path.exists()
+
+
+def test_execute_run_runs_existing_manifest(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    class FakePipelineOrchestrator:
+        def __init__(self, run_ctx):
+            self.ctx = run_ctx
+
+        def run(self):
+            finalize_manifest(self.ctx, "completed")
+            return {
+                "run_id": self.ctx.run_id,
+                "status": "completed",
+                "jobs_count": 0,
+                "companies_count": 0,
+                "leads_count": 0,
+            }
+
+    monkeypatch.setattr("oie.api.main.PipelineOrchestrator", FakePipelineOrchestrator)
+
+    client = TestClient(app)
+    response = client.post(
+        f"/runs/{ctx.run_id}/execute",
+        json={"config": {"runs": {"path": str(runs_path)}}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["run_id"] == ctx.run_id
+    assert response.json()["status"] == "completed"
+
+    detail_response = client.get(f"/runs/{ctx.run_id}")
+    assert detail_response.status_code == 200
+    assert detail_response.json()["status"] == "completed"
+
+
+def test_execute_run_returns_404_for_missing_run(tmp_path):
+    runs_path = tmp_path / "runs"
+    client = TestClient(app)
+
+    response = client.post(
+        "/runs/missing_run/execute",
+        json={"config": {"runs": {"path": str(runs_path)}}},
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run not found"}

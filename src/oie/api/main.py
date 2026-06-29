@@ -4,6 +4,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from oie.orchestration.json_payload import JSONPayload
+from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
+from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
 from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.run_context import RunConfig, RunFlags, RunContext
@@ -25,6 +27,12 @@ class CreateRunResponse(BaseModel):
     manifest_path: str
 
 
+class ExecuteRunRequest(BaseModel):
+    config: RunConfig = Field(default_factory=dict)
+    flags: RunFlags = Field(default_factory=dict)
+    mode: str | None = None
+
+
 def _run_repository() -> RunRepository:
     return RunRepository.create()
 
@@ -39,6 +47,37 @@ def _stage_artifact_repository(
     if stage is None:
         raise HTTPException(status_code=404, detail=not_found_detail)
     return StageArtifactRepository(repository.ctx, run_id)
+
+
+def _ctx_for_existing_run(
+    run_id: str,
+    config: RunConfig,
+    flags: RunFlags,
+    mode: str | None,
+) -> RunContext:
+    repository = _run_repository()
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    ctx = RunContext.create(
+        config=config,
+        flags=flags,
+        mode=mode or str(manifest.get("mode") or "default"),
+    )
+    ctx.run_id = run_id
+    ctx.run_date = str(manifest.get("run_date") or ctx.run_date)
+    ctx.mode = str(manifest.get("mode") or ctx.mode)
+
+    runs_base_dir = ctx.paths["runs_base_dir"]
+    run_dir = f"{runs_base_dir}/{run_id}"
+    ctx.paths["run_dir"] = run_dir
+    ctx.paths["manifest_path"] = f"{run_dir}/manifest.json"
+    ctx.paths["stage_dirs"] = {
+        stage: f"{run_dir}/{index:02d}_{stage}"
+        for index, stage in enumerate(PIPELINE_STAGES, start=1)
+    }
+    return ctx
 
 
 @app.get("/health")
@@ -61,6 +100,18 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
         current_stage=manifest["current_stage"],
         manifest_path=ctx.paths["manifest_path"],
     )
+
+
+@app.post("/runs/{run_id}/execute")
+def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    result = PipelineOrchestrator(ctx).run()
+    return dict(result)
 
 
 @app.get("/runs")
