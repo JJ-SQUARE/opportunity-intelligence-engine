@@ -593,7 +593,7 @@ def test_provider_operation_metrics_repository_uses_orm_for_non_sqlite_backend(t
         return create_session_factory(sqlite_settings)
 
     monkeypatch.setattr(
-        "oie.persistence.repositories.create_session_factory",
+        "oie.persistence.provider_operation_metrics_repository.create_session_factory",
         fake_create_session_factory,
     )
 
