@@ -87,11 +87,11 @@ class PipelineOrchestrator:
         self.master_dedup_service = MasterDedupService(ctx, repositories=self.repositories)
         self.duplicate_report_service = DuplicateReportService(ctx)
         self.domain_review_queue_service = DomainReviewQueueService(ctx)
-        self.db_export_service = DBExportService(ctx, persistence=self.persistence_service.persistence)
+        self.db_export_service = self.service_provider.db_export_service
         self.opportunity_dataset_service = OpportunityDatasetService(ctx, repositories=self.repositories)
         self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
-        self.outbound_export_service = OutboundExportService(ctx, persistence=self.persistence_service.persistence)
-        self.executive_summary_service = ExecutiveSummaryService(ctx, persistence=self.persistence_service.persistence)
+        self.outbound_export_service = self.service_provider.outbound_export_service
+        self.executive_summary_service = self.service_provider.executive_summary_service
         self.historical_intelligence_service = HistoricalIntelligenceService(ctx, repositories=self.repositories)
         self.historical_export_service = HistoricalExportService(ctx)
         self.market_trends_service = MarketTrendsService(ctx, repositories=self.repositories)
@@ -104,7 +104,7 @@ class PipelineOrchestrator:
         self.collector_contribution_export_service = CollectorContributionExportService(ctx)
         self.collector_roi_service = CollectorROIService(ctx)
         self.collector_roi_export_service = CollectorROIExportService(ctx)
-        self.run_readiness_service = RunReadinessService(ctx, persistence=self.persistence_service.persistence)
+        self.run_readiness_service = self.service_provider.run_readiness_service
         self.run_readiness_export_service = RunReadinessExportService(ctx)
         self.run_metrics_summary_service = RunMetricsSummaryService(ctx)
         self.run_metrics_summary_export_service = RunMetricsSummaryExportService(ctx)
