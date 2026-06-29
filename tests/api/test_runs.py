@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from oie.api.main import app
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, write_manifest
+from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, read_run_manifest, write_manifest
 
 
 def test_list_runs_returns_existing_run_summaries(tmp_path, monkeypatch):
@@ -898,9 +898,9 @@ def test_execute_run_runs_existing_manifest(tmp_path, monkeypatch):
     assert response.json()["run_id"] == ctx.run_id
     assert response.json()["status"] == "completed"
 
-    detail_response = client.get(f"/runs/{ctx.run_id}")
-    assert detail_response.status_code == 200
-    assert detail_response.json()["status"] == "completed"
+    updated_manifest = read_run_manifest(ctx, ctx.run_id)
+    assert updated_manifest is not None
+    assert updated_manifest["status"] == "completed"
 
 
 def test_execute_run_returns_404_for_missing_run(tmp_path):
