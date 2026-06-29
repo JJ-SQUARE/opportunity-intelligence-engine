@@ -1,12 +1,28 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
 from oie.orchestration.json_payload import JSONPayload
+from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
 from oie.orchestration.run_repository import RunRepository
+from oie.orchestration.run_context import RunConfig, RunFlags, RunContext
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 
 app = FastAPI(title="Opportunity Intelligence Engine API")
+
+
+class CreateRunRequest(BaseModel):
+    config: RunConfig = Field(default_factory=dict)
+    flags: RunFlags = Field(default_factory=dict)
+    mode: str | None = None
+
+
+class CreateRunResponse(BaseModel):
+    run_id: str
+    status: str
+    current_stage: str | None
+    manifest_path: str
 
 
 def _run_repository() -> RunRepository:
@@ -28,6 +44,23 @@ def _stage_artifact_repository(
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/runs")
+def create_run(request: CreateRunRequest) -> CreateRunResponse:
+    ctx = RunContext.create(
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+    return CreateRunResponse(
+        run_id=manifest["run_id"],
+        status=manifest["status"],
+        current_stage=manifest["current_stage"],
+        manifest_path=ctx.paths["manifest_path"],
+    )
 
 
 @app.get("/runs")

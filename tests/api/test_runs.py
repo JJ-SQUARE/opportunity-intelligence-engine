@@ -840,3 +840,27 @@ def test_get_run_stage_errors_returns_404_for_missing_run(tmp_path, monkeypatch)
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Stage errors not found"}
+
+
+def test_create_run_writes_initial_manifest(tmp_path):
+    runs_path = tmp_path / "runs"
+    client = TestClient(app)
+
+    response = client.post(
+        "/runs",
+        json={
+            "config": {"runs": {"path": str(runs_path)}},
+            "flags": {"dry_run": True},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_id"]
+    assert payload["status"] == "pending"
+    assert payload["current_stage"] == "collect_jobs"
+    assert payload["manifest_path"].endswith("manifest.json")
+
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest_path = runs_path / payload["run_id"] / "manifest.json"
+    assert manifest_path.exists()
