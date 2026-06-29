@@ -1,12 +1,10 @@
 from oie.orchestration.run_context import RunContext
-from oie.persistence.repositories import (
-    CompanyRepository,
-    JobRepository,
-    LeadRepository,
-    ProviderEventRepository,
-    RunMetricsRepository,
-    RunRepository,
-)
+from oie.persistence.company_repository import CompanyRepository
+from oie.persistence.job_repository import JobRepository
+from oie.persistence.lead_repository import LeadRepository
+from oie.persistence.provider_event_repository import ProviderEventRepository
+from oie.persistence.run_metrics_repository import RunMetricsRepository
+from oie.persistence.run_repository import RunRepository
 from oie.services.persistence_service import PersistenceService
 
 
