@@ -1,51 +1,20 @@
 from __future__ import annotations
 
-import sqlite3
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.persistence.context import PersistenceContext
+from oie.persistence.repositories import JobRepository
 
 
 class HistoricalIntelligenceService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.db_path = (
-            self.ctx.paths.get("db_path")
-            or self.ctx.config.get("database", {}).get("path", "data/oie.db")
-        )
+        self.persistence = PersistenceContext.from_run_context(ctx)
+        self.job_repository = JobRepository(persistence=self.persistence)
 
     def build_company_hiring_history(self) -> List[Dict[str, Any]]:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            rows = conn.execute(
-                """
-                SELECT
-                    c.company_key,
-                    c.company_display,
-                    c.resolved_domain,
-                    j.run_id,
-                    j.run_date,
-                    COUNT(DISTINCT j.job_key) AS openings
-                FROM companies c
-                JOIN jobs j
-                    ON j.company_key = c.company_key
-                GROUP BY
-                    c.company_key,
-                    c.company_display,
-                    c.resolved_domain,
-                    j.run_id,
-                    j.run_date
-                ORDER BY
-                    c.company_display ASC,
-                    j.run_date ASC,
-                    j.run_id ASC
-                """
-            ).fetchall()
-        finally:
-            conn.close()
-
-        history = [dict(row) for row in rows]
+        history = self.job_repository.list_company_hiring_history()
         self.ctx.metrics["historical_company_rows"] = len(history)
         return history
 

@@ -1150,6 +1150,66 @@ class JobRepository(RepositoryBase):
         finally:
             conn.close()
 
+    def list_company_hiring_history(self) -> List[Dict[str, Any]]:
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT
+                        c.company_key,
+                        c.company_display,
+                        c.resolved_domain,
+                        j.run_id,
+                        j.run_date,
+                        COUNT(DISTINCT j.job_key) AS openings
+                    FROM companies c
+                    JOIN jobs j
+                        ON j.company_key = c.company_key
+                    GROUP BY
+                        c.company_key,
+                        c.company_display,
+                        c.resolved_domain,
+                        j.run_id,
+                        j.run_date
+                    ORDER BY
+                        c.company_display ASC,
+                        j.run_date ASC,
+                        j.run_id ASC
+                    """
+                ).fetchall()
+                return [dict(row) for row in rows]
+            finally:
+                conn.close()
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            rows = (
+                session.query(
+                    Company.company_key,
+                    Company.company_display,
+                    Company.resolved_domain,
+                    Job.run_id,
+                    Job.run_date,
+                    func.count(func.distinct(Job.job_key)).label("openings"),
+                )
+                .join(Job, Job.company_key == Company.company_key)
+                .group_by(
+                    Company.company_key,
+                    Company.company_display,
+                    Company.resolved_domain,
+                    Job.run_id,
+                    Job.run_date,
+                )
+                .order_by(
+                    Company.company_display.asc(),
+                    Job.run_date.asc(),
+                    Job.run_id.asc(),
+                )
+                .all()
+            )
+            return [dict(row._mapping) for row in rows]
+
 
 class LeadRepository(RepositoryBase):
     def _build_lead_fingerprint(self, lead: Dict[str, Any]) -> str:
