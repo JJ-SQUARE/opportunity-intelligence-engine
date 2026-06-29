@@ -134,6 +134,48 @@ def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     return status
 
 
+@app.post("/runs/{run_id}/pause")
+def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    manifest = RunRepository(ctx).read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    manifest["status"] = "waiting_for_user"
+    write_manifest(ctx, manifest)
+
+    status = RunRepository(ctx).read_status(run_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return status
+
+
+@app.post("/runs/{run_id}/resume")
+def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    manifest = RunRepository(ctx).read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    manifest["status"] = "pending"
+    write_manifest(ctx, manifest)
+
+    status = RunRepository(ctx).read_status(run_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return status
+
+
 @app.get("/runs")
 def list_runs() -> list[JSONPayload]:
     repository = _run_repository()
