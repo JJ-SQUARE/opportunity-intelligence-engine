@@ -63,7 +63,6 @@ class PipelineOrchestrator:
         self.normalization_service = NormalizationService(ctx)
         self.job_dedup_service = JobDedupService(ctx)
         self.hiring_signals_service = HiringSignalsService(ctx)
-        self.company_identity_service = None
         self.provider_control_service = ProviderControlService(ctx)
         self.job_intelligence_service = JobIntelligenceService(
             ctx,
