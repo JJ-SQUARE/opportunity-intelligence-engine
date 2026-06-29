@@ -872,7 +872,7 @@ def test_alias_and_domain_repositories_use_orm_for_non_sqlite_backend(tmp_path, 
         fake_create_session_factory,
     )
     monkeypatch.setattr(
-        "oie.persistence.repositories.create_session_factory",
+        "oie.persistence.domain_repository.create_session_factory",
         fake_create_session_factory,
     )
 
