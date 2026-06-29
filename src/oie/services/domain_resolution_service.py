@@ -396,10 +396,8 @@ class DomainResolutionService:
             return []
 
         queries = [
-            f'"{company_name}" official website',
-            f'"{company_name}" company',
-            f'"{company_name}" linkedin company',
-            f"{company_name} company official site",
+            f"{company_name} official website",
+            f"{company_name} company",
         ]
 
         candidates: List[Dict[str, Any]] = []
@@ -554,7 +552,7 @@ class DomainResolutionService:
                         "source": source,
                         "score": max(score, float(ai_result.get("confidence", score) or score)),
                         "candidate": domain,
-                        "validation_status": "accepted_ai_validated",
+                        "validation_status": "accepted",
                         "review_required": False,
                         "ai_validated": 1,
                         "ai_decision": ai_result.get("decision"),
@@ -562,7 +560,7 @@ class DomainResolutionService:
                         "ai_reason": ai_result.get("reason"),
                     }
 
-            rejected_status = "rejected_aggregator" if is_aggregator else "rejected_low_confidence"
+            rejected_status = "rejected"
             return {
                 "domain": None,
                 "source": source,
@@ -600,7 +598,7 @@ class DomainResolutionService:
                 ai_result.get("decision") == "accepted"
                 and ai_result.get("selected_domain") == domain
             ):
-                validation_status = "accepted_ai_validated"
+                validation_status = "accepted"
                 review_required = False
                 score = max(score, float(ai_result.get("confidence", score)))
 
