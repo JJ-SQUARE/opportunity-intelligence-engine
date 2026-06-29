@@ -64,6 +64,10 @@ class PipelineOrchestrator:
         self.normalization_service = NormalizationService(ctx)
         self.job_dedup_service = JobDedupService(ctx)
         self.hiring_signals_service = HiringSignalsService(ctx)
+        self.service_provider = ServiceProvider.from_run_context(ctx)
+        self.persistence_service = self.service_provider.persistence_service
+        self.repositories = self.service_provider.repositories
+        self.provider_control_service = self.service_provider.provider_control_service
         self.job_intelligence_service = JobIntelligenceService(
             ctx,
             self.provider_control_service,
@@ -78,10 +82,6 @@ class PipelineOrchestrator:
             ctx,
             self.provider_control_service,
         )
-        self.service_provider = ServiceProvider.from_run_context(ctx)
-        self.persistence_service = self.service_provider.persistence_service
-        self.repositories = self.service_provider.repositories
-        self.provider_control_service = self.service_provider.provider_control_service
         self.company_identity_service = CompanyIdentityService(ctx, repositories=self.repositories)
         self.master_data_service = MasterDataService(ctx)
         self.master_dedup_service = MasterDedupService(ctx, repositories=self.repositories)
