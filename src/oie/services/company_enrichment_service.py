@@ -6,7 +6,6 @@ from typing import Any, Dict, List
 from oie.orchestration.run_context import RunContext
 from oie.persistence.context import PersistenceContext
 from oie.persistence.repositories import CompanyRepository
-from oie.persistence.sqlite import initialize_database
 from oie.services.cached_provider_service import CachedProviderService
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.provider_execution_service import (
@@ -70,9 +69,6 @@ class CompanyEnrichmentService:
         }
         self.min_domain_match_confidence = float(enrichment_cfg.get("min_domain_match_confidence", 0.80))
         self.domain_confidence_service = DomainConfidenceService()
-
-        if self.persistence.backend == "sqlite":
-            initialize_database(self.db_path)
 
     def _is_placeholder_company_name(self, company: Dict[str, Any]) -> bool:
         values = [

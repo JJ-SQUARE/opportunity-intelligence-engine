@@ -9,7 +9,6 @@ from oie.utils.domain_filters import is_job_board_domain
 from oie.utils.company_name_extraction import extract_actionable_company_name
 from oie.persistence.context import PersistenceContext
 from oie.persistence.repositories import CompanyAliasRepository, CompanyRepository
-from oie.persistence.sqlite import initialize_database
 
 
 LEGAL_SUFFIXES = {
@@ -86,8 +85,6 @@ class CompanyIdentityService:
         self.ctx = ctx
         self.persistence = PersistenceContext.from_run_context(ctx)
         self.db_path = self.persistence.path or self.ctx.config.get("database", {}).get("path", "data/oie.db")
-        if self.persistence.backend == "sqlite":
-            initialize_database(self.db_path)
         self.company_repository = CompanyRepository(persistence=self.persistence)
         self.company_alias_repository = CompanyAliasRepository(persistence=self.persistence)
 
