@@ -914,3 +914,37 @@ def test_execute_run_returns_404_for_missing_run(tmp_path):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run not found"}
+
+
+def test_cancel_run_marks_existing_manifest_cancelled(tmp_path):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    client = TestClient(app)
+    response = client.post(
+        f"/runs/{ctx.run_id}/cancel",
+        json={"config": {"runs": {"path": str(runs_path)}}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["run_id"] == ctx.run_id
+    assert response.json()["status"] == "cancelled"
+
+    updated_manifest = read_run_manifest(ctx, ctx.run_id)
+    assert updated_manifest is not None
+    assert updated_manifest["status"] == "cancelled"
+
+
+def test_cancel_run_returns_404_for_missing_run(tmp_path):
+    runs_path = tmp_path / "runs"
+    client = TestClient(app)
+
+    response = client.post(
+        "/runs/missing_run/cancel",
+        json={"config": {"runs": {"path": str(runs_path)}}},
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run not found"}

@@ -27,6 +27,7 @@ RUN_STATUSES = [
     "completed",
     "partial_success",
     "failed",
+    "cancelled",
     "skipped",
     "waiting_for_user",
     "company_pipeline_completed",
