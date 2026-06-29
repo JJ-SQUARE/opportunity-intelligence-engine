@@ -703,6 +703,33 @@ class CompanyRepository(RepositoryBase):
                 "resolved_domain": company.resolved_domain,
             }
 
+    def get_company_by_key(self, company_key: str) -> Optional[Dict[str, Any]]:
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                row = conn.execute(
+                    """
+                    SELECT *
+                    FROM companies
+                    WHERE company_key = ?
+                    LIMIT 1
+                    """,
+                    (company_key,),
+                ).fetchone()
+                return dict(row) if row else None
+            finally:
+                conn.close()
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            company = session.get(Company, company_key)
+            if company is None:
+                return None
+            return {
+                column.name: getattr(company, column.name)
+                for column in Company.__table__.columns
+            }
+
     def list_companies(self) -> List[Dict[str, Any]]:
         if self.persistence.backend == "sqlite":
             conn = self.connection()

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.persistence.context import PersistenceContext
+from oie.persistence.repositories import CompanyRepository
 from oie.persistence.sqlite import initialize_database
 from oie.services.cached_provider_service import CachedProviderService
 from oie.services.provider_control_service import ProviderControlService
@@ -54,7 +55,9 @@ class CompanyEnrichmentService:
             self.ctx.provider_state["failed_enrichment_domains"] = failed_enrichment_domains
         self._failed_enrichment_domains = failed_enrichment_domains
 
-        self.db_path = self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.persistence = PersistenceContext.from_run_context(ctx)
+        self.db_path = self.persistence.path or self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.company_repository = CompanyRepository(persistence=self.persistence)
 
         enrichment_cfg = self.ctx.config.get("enrichment", {}) or {}
         self.ttl_days = int(enrichment_cfg.get("apollo_company_ttl_days", 30))
@@ -68,7 +71,8 @@ class CompanyEnrichmentService:
         self.min_domain_match_confidence = float(enrichment_cfg.get("min_domain_match_confidence", 0.80))
         self.domain_confidence_service = DomainConfidenceService()
 
-        initialize_database(self.db_path)
+        if self.persistence.backend == "sqlite":
+            initialize_database(self.db_path)
 
     def _is_placeholder_company_name(self, company: Dict[str, Any]) -> bool:
         values = [
@@ -79,25 +83,15 @@ class CompanyEnrichmentService:
         return any(value in PLACEHOLDER_COMPANY_VALUES for value in values if value)
 
     def _is_recently_enriched(self, company_key: str) -> bool:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            try:
-                row = conn.execute(
-                    """
-                    SELECT enriched_at
-                    FROM companies
-                    WHERE company_key = ?
-                    LIMIT 1
-                    """,
-                    (company_key,),
-                ).fetchone()
-            except sqlite3.OperationalError:
-                return False
-        finally:
-            conn.close()
+        if not company_key:
+            return False
 
-        if not row or not row["enriched_at"]:
+        try:
+            row = self.company_repository.get_company_by_key(company_key)
+        except Exception:
+            return False
+
+        if not row or not row.get("enriched_at"):
             return False
 
         try:
