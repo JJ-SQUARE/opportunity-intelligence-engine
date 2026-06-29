@@ -81,6 +81,33 @@ def _ctx_for_existing_run(
     return ctx
 
 
+def _update_run_status(
+    run_id: str,
+    request: ExecuteRunRequest,
+    status: str,
+    current_stage: str | None = None,
+) -> JSONPayload:
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    repository = RunRepository(ctx)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    manifest["status"] = status
+    manifest["current_stage"] = current_stage
+    write_manifest(ctx, manifest)
+
+    updated_status = repository.read_status(run_id)
+    if updated_status is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return updated_status
+
+
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
@@ -117,63 +144,30 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
 
 @app.post("/runs/{run_id}/cancel")
 def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
-    ctx = _ctx_for_existing_run(
+    return _update_run_status(
         run_id=run_id,
-        config=request.config,
-        flags=request.flags,
-        mode=request.mode,
+        request=request,
+        status="cancelled",
+        current_stage=None,
     )
-    write_manifest(ctx, {
-        **RunRepository(ctx).read_detail(run_id),
-        "status": "cancelled",
-        "current_stage": None,
-    })
-    status = RunRepository(ctx).read_status(run_id)
-    if status is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return status
 
 
 @app.post("/runs/{run_id}/pause")
 def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
-    ctx = _ctx_for_existing_run(
+    return _update_run_status(
         run_id=run_id,
-        config=request.config,
-        flags=request.flags,
-        mode=request.mode,
+        request=request,
+        status="waiting_for_user",
     )
-    manifest = RunRepository(ctx).read_detail(run_id)
-    if manifest is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-
-    manifest["status"] = "waiting_for_user"
-    write_manifest(ctx, manifest)
-
-    status = RunRepository(ctx).read_status(run_id)
-    if status is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return status
 
 
 @app.post("/runs/{run_id}/resume")
 def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
-    ctx = _ctx_for_existing_run(
+    return _update_run_status(
         run_id=run_id,
-        config=request.config,
-        flags=request.flags,
-        mode=request.mode,
+        request=request,
+        status="pending",
     )
-    manifest = RunRepository(ctx).read_detail(run_id)
-    if manifest is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-
-    manifest["status"] = "pending"
-    write_manifest(ctx, manifest)
-
-    status = RunRepository(ctx).read_status(run_id)
-    if status is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return status
 
 
 @app.get("/runs")
