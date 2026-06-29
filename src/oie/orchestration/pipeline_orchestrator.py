@@ -53,6 +53,7 @@ from oie.services.run_metrics_summary_service import RunMetricsSummaryService
 from oie.services.run_analytics_export_service import RunAnalyticsExportService
 from oie.services.run_analytics_service import RunAnalyticsService
 from oie.services.serpapi_search_service import SerpAPISearchService
+from oie.services.service_provider import ServiceProvider
 from oie.services.domain_review_queue_service import DomainReviewQueueService
 
 
@@ -63,7 +64,6 @@ class PipelineOrchestrator:
         self.normalization_service = NormalizationService(ctx)
         self.job_dedup_service = JobDedupService(ctx)
         self.hiring_signals_service = HiringSignalsService(ctx)
-        self.provider_control_service = ProviderControlService(ctx)
         self.job_intelligence_service = JobIntelligenceService(
             ctx,
             self.provider_control_service,
@@ -78,8 +78,10 @@ class PipelineOrchestrator:
             ctx,
             self.provider_control_service,
         )
-        self.persistence_service = PersistenceService(ctx)
-        self.repositories = self.persistence_service.repositories
+        self.service_provider = ServiceProvider.from_run_context(ctx)
+        self.persistence_service = self.service_provider.persistence_service
+        self.repositories = self.service_provider.repositories
+        self.provider_control_service = self.service_provider.provider_control_service
         self.company_identity_service = CompanyIdentityService(ctx, repositories=self.repositories)
         self.master_data_service = MasterDataService(ctx)
         self.master_dedup_service = MasterDedupService(ctx, repositories=self.repositories)
