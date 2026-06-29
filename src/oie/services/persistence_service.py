@@ -4,19 +4,17 @@ from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
 from oie.persistence.context import PersistenceContext
-from oie.persistence.repositories import (
-    CompanyAliasRepository,
-    CompanyMergeCandidateRepository,
-    CompanyRepository,
-    CompanyScoreRepository,
-    DomainRepository,
-    JobRepository,
-    LeadRepository,
-    ProviderEventRepository,
-    ProviderOperationMetricsRepository,
-    RunMetricsRepository,
-    RunRepository,
-)
+from oie.persistence.company_alias_repository import CompanyAliasRepository
+from oie.persistence.company_merge_candidate_repository import CompanyMergeCandidateRepository
+from oie.persistence.company_repository import CompanyRepository
+from oie.persistence.company_score_repository import CompanyScoreRepository
+from oie.persistence.domain_repository import DomainRepository
+from oie.persistence.job_repository import JobRepository
+from oie.persistence.lead_repository import LeadRepository
+from oie.persistence.provider_event_repository import ProviderEventRepository
+from oie.persistence.provider_operation_metrics_repository import ProviderOperationMetricsRepository
+from oie.persistence.run_metrics_repository import RunMetricsRepository
+from oie.persistence.run_repository import RunRepository
 from oie.persistence.sqlite import initialize_database
 from oie.services.provider_operation_metrics_service import ProviderOperationMetricsService
 
