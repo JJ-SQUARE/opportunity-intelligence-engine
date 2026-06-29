@@ -8,8 +8,13 @@ from oie.persistence.repository_provider import RepositoryProvider
 from oie.services.company_enrichment_service import CompanyEnrichmentService
 from oie.services.company_identity_service import CompanyIdentityService
 from oie.services.company_identity_ai_service import CompanyIdentityAIService
+from oie.services.collection_service import CollectionService
 from oie.services.company_classification_service import CompanyClassificationService
 from oie.services.db_export_service import DBExportService
+from oie.services.domain_review_queue_service import DomainReviewQueueService
+from oie.services.duplicate_report_service import DuplicateReportService
+from oie.services.hiring_signals_service import HiringSignalsService
+from oie.services.job_dedup_service import JobDedupService
 from oie.services.domain_ai_validation_service import DomainAIValidationService
 from oie.services.domain_resolution_service import DomainResolutionService
 from oie.services.executive_summary_service import ExecutiveSummaryService
@@ -18,7 +23,9 @@ from oie.services.job_intelligence_service import JobIntelligenceService
 from oie.services.lead_generation_service import LeadGenerationService
 from oie.services.lead_ranking_service import LeadRankingService
 from oie.services.market_trends_service import MarketTrendsService
+from oie.services.master_data_service import MasterDataService
 from oie.services.master_dedup_service import MasterDedupService
+from oie.services.normalization_service import NormalizationService
 from oie.services.opportunity_dataset_service import OpportunityDatasetService
 from oie.services.outbound_export_service import OutboundExportService
 from oie.services.persistence_service import PersistenceService
@@ -36,6 +43,13 @@ class ServiceProvider:
     persistence: PersistenceContext
     repositories: RepositoryProvider
     provider_control_service: ProviderControlService
+    collection_service: CollectionService
+    normalization_service: NormalizationService
+    job_dedup_service: JobDedupService
+    hiring_signals_service: HiringSignalsService
+    master_data_service: MasterDataService
+    duplicate_report_service: DuplicateReportService
+    domain_review_queue_service: DomainReviewQueueService
     provider_execution_service: ProviderExecutionService
     job_intelligence_service: JobIntelligenceService
     opportunity_scoring_service: OpportunityScoringService
@@ -69,6 +83,13 @@ class ServiceProvider:
             persistence=persistence_service.persistence,
             repositories=persistence_service.repositories,
             provider_control_service=provider_control_service,
+            collection_service=CollectionService(ctx),
+            normalization_service=NormalizationService(ctx),
+            job_dedup_service=JobDedupService(ctx),
+            hiring_signals_service=HiringSignalsService(ctx),
+            master_data_service=MasterDataService(ctx),
+            duplicate_report_service=DuplicateReportService(ctx),
+            domain_review_queue_service=DomainReviewQueueService(ctx),
             provider_execution_service=ProviderExecutionService(ctx, provider_control_service),
             job_intelligence_service=JobIntelligenceService(ctx, provider_control_service),
             opportunity_scoring_service=OpportunityScoringService(ctx, provider_control_service),
