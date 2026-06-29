@@ -108,14 +108,9 @@ class PipelineOrchestrator:
             ctx,
             self.provider_control_service,
         )
-        self.serpapi_search_service = SerpAPISearchService(ctx, self.provider_control_service)
+        self.serpapi_search_service = self.service_provider.serpapi_search_service
         self.domain_ai_validation_service = self.service_provider.domain_ai_validation_service
-        self.domain_resolution_service = DomainResolutionService(
-            ctx,
-            self.provider_control_service,
-            self.serpapi_search_service,
-            self.domain_ai_validation_service,
-        )
+        self.domain_resolution_service = self.service_provider.domain_resolution_service
 
     def run_initial_stages(self) -> List[Dict[str, Any]]:
         jobs = self.collection_service.collect()
