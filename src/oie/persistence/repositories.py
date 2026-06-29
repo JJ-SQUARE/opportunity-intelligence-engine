@@ -631,6 +631,44 @@ class CompanyRepository(RepositoryBase):
                 "resolved_domain": company.resolved_domain,
             }
 
+    def find_unique_by_normalized(self, company_normalized: str) -> Optional[Dict[str, Any]]:
+        if self.persistence.backend == "sqlite":
+            conn = self.connection()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT company_key, company_display, company_normalized, company_root, resolved_domain
+                    FROM companies
+                    WHERE company_normalized = ?
+                    ORDER BY company_key ASC
+                    LIMIT 2
+                    """,
+                    (company_normalized,),
+                ).fetchall()
+                return dict(rows[0]) if len(rows) == 1 else None
+            finally:
+                conn.close()
+
+        SessionFactory = create_session_factory(self.persistence.settings)
+        with SessionFactory() as session:
+            rows = (
+                session.query(Company)
+                .filter(Company.company_normalized == company_normalized)
+                .order_by(Company.company_key.asc())
+                .limit(2)
+                .all()
+            )
+            if len(rows) != 1:
+                return None
+            company = rows[0]
+            return {
+                "company_key": company.company_key,
+                "company_display": company.company_display,
+                "company_normalized": company.company_normalized,
+                "company_root": company.company_root,
+                "resolved_domain": company.resolved_domain,
+            }
+
     def find_by_domain(self, resolved_domain: str) -> Optional[Dict[str, Any]]:
         if self.persistence.backend == "sqlite":
             conn = self.connection()

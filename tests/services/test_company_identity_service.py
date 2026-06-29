@@ -434,3 +434,43 @@ def test_build_aliases_does_not_keep_unknown_or_placeholder_aliases():
     assert "unknown" not in alias_type_map
     assert "Empresa Confidencial" not in alias_type_map
 
+def test_reconcile_existing_company_key_by_unique_normalized_without_domain(tmp_path):
+    db_path = tmp_path / "oie_test.db"
+
+    seed_ctx = RunContext.create(
+        config={"database": {"path": str(db_path)}},
+        flags={},
+    )
+    seed_service = PersistenceService(seed_ctx)
+    seed_service.persist_run_snapshot(
+        status="ok",
+        companies=[
+            {
+                "company_key": "cmp_existing_normalized",
+                "company_display": "Acme Inc.",
+                "company_normalized": "acme",
+                "resolved_domain": "acme.com",
+                "aliases": [],
+                "alias_type_map": {},
+            }
+        ],
+    )
+
+    ctx = RunContext.create(
+        config={"database": {"path": str(db_path)}},
+        flags={},
+    )
+    service = CompanyIdentityService(ctx)
+
+    enriched = service.enrich_company_identity(
+        [
+            {
+                "company": "Acme",
+                "resolved_domain": None,
+                "sources": ["google_jobs"],
+            }
+        ]
+    )
+
+    assert enriched[0]["company_key"] == "cmp_existing_normalized"
+    assert ctx.metrics["company_identity_reused_by_normalized_unique"] == 1

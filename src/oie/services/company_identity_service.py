@@ -292,6 +292,13 @@ class CompanyIdentityService:
             )
             return existing["company_key"]
 
+        existing = self.company_repository.find_unique_by_normalized(company_normalized)
+        if existing:
+            self.ctx.metrics["company_identity_reused_by_normalized_unique"] = (
+                int(self.ctx.metrics.get("company_identity_reused_by_normalized_unique", 0)) + 1
+            )
+            return existing["company_key"]
+
         if resolved_domain and not is_job_board_domain(resolved_domain):
             existing = self.company_repository.find_by_domain(resolved_domain)
             if existing:
