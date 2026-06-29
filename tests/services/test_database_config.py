@@ -1420,3 +1420,29 @@ def test_company_score_repository_uses_orm_for_non_sqlite_backend(tmp_path, monk
     assert len(replaced) == 1
     assert replaced[0].opportunity_score == 55
     assert replaced[0].opportunity_label == "medium"
+
+def test_run_database_migrations_initializes_sqlite_schema(tmp_path):
+    import sqlite3
+
+    from oie.persistence.migrations import run_database_migrations
+
+    db_path = tmp_path / "migrated.db"
+
+    run_database_migrations(
+        {"database": {"backend": "sqlite", "path": str(db_path)}}
+    )
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+
+    assert "runs" in tables
+    assert "companies" in tables
+    assert "company_scores" in tables

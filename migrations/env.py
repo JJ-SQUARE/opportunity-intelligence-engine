@@ -24,6 +24,10 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
+    configured_url = config.get_main_option("sqlalchemy.url")
+    if configured_url:
+        return configured_url
+
     settings = resolve_database_settings({})
     return settings.url
 
