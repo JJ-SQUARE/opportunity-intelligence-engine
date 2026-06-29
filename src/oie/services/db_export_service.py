@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import csv
-import sqlite3
 from pathlib import Path
 from typing import List
 
 from oie.orchestration.run_context import RunContext
+from oie.persistence.context import PersistenceContext
 
 
 class DBExportService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.db_path = self.ctx.paths.get("db_path") or self.ctx.config.get("database", {}).get("path", "data/oie.db")
+        self.persistence = PersistenceContext.from_run_context(ctx)
 
     def _get_output_dir(self) -> Path:
         output_dir_value = self.ctx.paths.get("output_dir")
@@ -29,20 +29,20 @@ class DBExportService:
         output_dir = self._get_output_dir()
         output_path = output_dir / output_name
 
-        conn = sqlite3.connect(self.db_path)
+        conn = self.persistence.connection()
         try:
-            conn.row_factory = sqlite3.Row
             rows = conn.execute(sql, params).fetchall()
+            rows_as_dicts = [dict(row) for row in rows]
         finally:
             conn.close()
 
-        fieldnames: List[str] = list(rows[0].keys()) if rows else []
+        fieldnames: List[str] = list(rows_as_dicts[0].keys()) if rows_as_dicts else []
 
         with output_path.open("w", encoding="utf-8", newline="") as fh:
             if fieldnames:
                 writer = csv.DictWriter(fh, fieldnames=fieldnames)
                 writer.writeheader()
-                writer.writerows([dict(row) for row in rows])
+                writer.writerows(rows_as_dicts)
             else:
                 fh.write("")
 
