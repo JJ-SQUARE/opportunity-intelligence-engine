@@ -76,19 +76,19 @@ class PipelineOrchestrator:
             ctx,
             self.provider_control_service,
         )
-        self.company_identity_service = CompanyIdentityService(ctx, repositories=self.repositories)
+        self.company_identity_service = self.service_provider.company_identity_service
         self.master_data_service = MasterDataService(ctx)
-        self.master_dedup_service = MasterDedupService(ctx, repositories=self.repositories)
+        self.master_dedup_service = self.service_provider.master_dedup_service
         self.duplicate_report_service = DuplicateReportService(ctx)
         self.domain_review_queue_service = DomainReviewQueueService(ctx)
         self.db_export_service = self.service_provider.db_export_service
-        self.opportunity_dataset_service = OpportunityDatasetService(ctx, repositories=self.repositories)
+        self.opportunity_dataset_service = self.service_provider.opportunity_dataset_service
         self.opportunity_dataset_export_service = OpportunityDatasetExportService(ctx)
         self.outbound_export_service = self.service_provider.outbound_export_service
         self.executive_summary_service = self.service_provider.executive_summary_service
-        self.historical_intelligence_service = HistoricalIntelligenceService(ctx, repositories=self.repositories)
+        self.historical_intelligence_service = self.service_provider.historical_intelligence_service
         self.historical_export_service = HistoricalExportService(ctx)
-        self.market_trends_service = MarketTrendsService(ctx, repositories=self.repositories)
+        self.market_trends_service = self.service_provider.market_trends_service
         self.market_trends_export_service = MarketTrendsExportService(ctx)
         self.market_segmentation_service = MarketSegmentationService(ctx)
         self.market_segmentation_export_service = MarketSegmentationExportService(ctx)
