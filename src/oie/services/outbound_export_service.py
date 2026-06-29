@@ -4,7 +4,6 @@ import csv
 import json
 import os
 import re
-import sqlite3
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any, Dict, List
@@ -106,7 +105,6 @@ class OutboundExportService:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
         self.commercial_row_service = CommercialRowService(ctx)
-        self.db_path = self.commercial_row_service.db_path
         self.commercial_signal_service = self.commercial_row_service.commercial_signal_service
         self.commercial_selection_service = self.commercial_row_service.commercial_selection_service
 
@@ -190,7 +188,7 @@ class OutboundExportService:
         for query in queries:
             try:
                 return self._query_rows(query, (self.ctx.run_id, company_key))
-            except sqlite3.OperationalError as exc:
+            except Exception as exc:
                 last_error = exc
 
         if last_error is not None:
