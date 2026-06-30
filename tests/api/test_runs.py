@@ -42,6 +42,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["put"]["summary"] == "Update run HubSpot delivery"
     assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["get"]["summary"] == "Get run HubSpot delivery"
     assert schema["paths"]["/runs/{run_id}/icp-profiles"]["put"]["summary"] == "Update run ICP profiles"
+    assert schema["paths"]["/runs/{run_id}/icp-profiles"]["post"]["summary"] == "Add run ICP profile"
     assert schema["paths"]["/runs/{run_id}/icp-profiles"]["get"]["summary"] == "Get run ICP profiles"
     assert schema["paths"]["/runs/{run_id}/cancel"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunStatusResponse")
     assert schema["paths"]["/runs/{run_id}/pause"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunStatusResponse")
@@ -71,6 +72,7 @@ def test_openapi_documents_run_routes():
     assert "RunScheduleStatusResponse" in schema["components"]["schemas"]
     assert "HubSpotDeliveryRequest" in schema["components"]["schemas"]
     assert "HubSpotDeliveryResponse" in schema["components"]["schemas"]
+    assert "ICPProfileRequest" in schema["components"]["schemas"]
     assert "ICPProfilesRequest" in schema["components"]["schemas"]
     assert "ICPProfilesResponse" in schema["components"]["schemas"]
     assert "ErrorResponse" in schema["components"]["schemas"]
@@ -670,6 +672,77 @@ def test_update_and_get_run_icp_profiles(tmp_path, monkeypatch):
     assert get_response.json() == {"run_id": ctx.run_id, **payload}
     assert detail_response.status_code == 200
     assert detail_response.json()["icp_profiles"] == payload["icp_profiles"]
+
+def test_add_run_icp_profile_appends_single_profile(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.post(
+        f"/runs/{ctx.run_id}/icp-profiles",
+        json={
+            "profile": {
+                "profile_id": "asd-midmarket",
+                "service_line": "ASD",
+                "name": "ASD Midmarket",
+                "enabled": True,
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "icp_profiles": [
+            {
+                "profile_id": "asd-midmarket",
+                "service_line": "ASD",
+                "name": "ASD Midmarket",
+                "enabled": True,
+            }
+        ],
+    }
+
+
+def test_add_run_icp_profile_rejects_duplicate_profile_id(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["icp_profiles"] = [{"profile_id": "asd-midmarket"}]
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.post(
+        f"/runs/{ctx.run_id}/icp-profiles",
+        json={"profile": {"profile_id": "asd-midmarket"}},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "ICP profile already exists: asd-midmarket"}
 
 def test_ctx_for_existing_run_inherits_manifest_icp_profiles(tmp_path):
     from oie.api.routers.runs import _ctx_for_existing_run

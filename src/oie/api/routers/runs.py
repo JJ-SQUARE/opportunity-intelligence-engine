@@ -14,6 +14,7 @@ from oie.api.schemas.runs import (
     HTTPErrorResponse,
     HubSpotDeliveryRequest,
     HubSpotDeliveryResponse,
+    ICPProfileRequest,
     ICPProfilesRequest,
     ICPProfilesResponse,
     RunExecutionResponse,
@@ -352,6 +353,31 @@ def update_run_icp_profiles(run_id: str, request: ICPProfilesRequest) -> JSONPay
     return {
         "run_id": run_id,
         "icp_profiles": request.icp_profiles,
+    }
+
+
+@router.post("/runs/{run_id}/icp-profiles", summary="Add run ICP profile", response_model=ICPProfilesResponse)
+def add_run_icp_profile(run_id: str, request: ICPProfileRequest) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    profile_id = request.profile.get("profile_id")
+    if not profile_id:
+        raise HTTPException(status_code=422, detail="ICP profile requires profile_id")
+
+    icp_profiles = list(manifest.get("icp_profiles", []) or [])
+    if any(profile.get("profile_id") == profile_id for profile in icp_profiles):
+        raise HTTPException(status_code=409, detail=f"ICP profile already exists: {profile_id}")
+
+    icp_profiles.append(request.profile)
+    manifest["icp_profiles"] = icp_profiles
+    repository.write_detail(manifest)
+
+    return {
+        "run_id": run_id,
+        "icp_profiles": icp_profiles,
     }
 
 
