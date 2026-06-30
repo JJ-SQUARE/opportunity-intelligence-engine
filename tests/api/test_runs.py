@@ -36,6 +36,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/schedule"]["post"]["summary"] == "Create run schedule"
     assert schema["paths"]["/runs/{run_id}/schedule"]["put"]["summary"] == "Update run schedule"
     assert schema["paths"]["/runs/{run_id}/schedule"]["get"]["summary"] == "Get run schedule"
+    assert schema["paths"]["/runs/{run_id}/schedule/status"]["get"]["summary"] == "Get run schedule status"
     assert schema["paths"]["/runs/{run_id}/artifacts"]["get"]["summary"] == "Get artifact catalog"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/summary"]["get"]["summary"] == "Get stage artifact summary"
@@ -346,6 +347,45 @@ def test_update_run_schedule_replaces_existing_schedule(tmp_path, monkeypatch):
     assert update_response.json() == {"run_id": ctx.run_id, **update_payload}
     assert get_response.status_code == 200
     assert get_response.json() == {"run_id": ctx.run_id, **update_payload}
+
+
+def test_get_run_schedule_status_returns_due_payload(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    schedule_payload = {
+        "frequency": "daily",
+        "duration": "permanent",
+        "scheduled_times": [],
+        "scheduled_days": [],
+        "enabled": True,
+    }
+
+    create_response = client.post(f"/runs/{ctx.run_id}/schedule", json=schedule_payload)
+    status_response = client.get(f"/runs/{ctx.run_id}/schedule/status")
+
+    assert create_response.status_code == 200
+    assert status_response.status_code == 200
+    payload = status_response.json()
+    assert payload["run_id"] == ctx.run_id
+    assert payload["scheduled"] is True
+    assert payload["enabled"] is True
+    assert payload["due"] is True
+    assert payload["frequency"] == "daily"
 
 
 def test_get_run_schedule_returns_404_when_missing(tmp_path, monkeypatch):
