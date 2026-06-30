@@ -93,6 +93,9 @@ def _ctx_for_existing_run(
         if metadata_key not in merged_config and manifest.get(metadata_key):
             merged_config[metadata_key] = dict(manifest.get(metadata_key, {}) or {})
 
+    if "icp_profiles" not in merged_config and manifest.get("icp_profiles"):
+        merged_config["icp_profiles"] = list(manifest.get("icp_profiles", []) or [])
+
     ctx = RunContext.create(
         config=merged_config,
         flags=flags,

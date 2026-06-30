@@ -671,6 +671,31 @@ def test_update_and_get_run_icp_profiles(tmp_path, monkeypatch):
     assert detail_response.status_code == 200
     assert detail_response.json()["icp_profiles"] == payload["icp_profiles"]
 
+def test_ctx_for_existing_run_inherits_manifest_icp_profiles(tmp_path):
+    from oie.api.routers.runs import _ctx_for_existing_run
+
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["icp_profiles"] = [
+        {
+            "profile_id": "asd-midmarket",
+            "service_line": "ASD",
+            "name": "ASD Midmarket",
+            "enabled": True,
+        }
+    ]
+    write_manifest(ctx, manifest)
+
+    existing_ctx = _ctx_for_existing_run(
+        run_id=ctx.run_id,
+        config={"runs": {"path": str(runs_path)}},
+        flags={},
+        mode=None,
+    )
+
+    assert existing_ctx.config["icp_profiles"] == manifest["icp_profiles"]
+
 
 def test_get_run_icp_profiles_returns_404_for_missing_run(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
