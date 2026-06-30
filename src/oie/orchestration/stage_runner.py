@@ -22,10 +22,8 @@ class StageRunner:
         manifest_path = Path(self.ctx.paths["manifest_path"])
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
-        manifest = read_manifest(self.ctx)
-        if manifest is None:
-            manifest = build_initial_manifest(self.ctx)
-            write_manifest(self.ctx, manifest)
+        if read_manifest(self.ctx) is None:
+            write_manifest(self.ctx, build_initial_manifest(self.ctx))
 
     def run_stage(self, stage_cls: StageClass, *, reset: bool = False) -> StageState:
         stage = stage_cls(self.ctx)
