@@ -630,6 +630,30 @@ class PipelineOrchestrator:
         return executive_summary
 
 
+    def build_completed_result(
+        self,
+        *,
+        status: str,
+        unique_jobs: List[Dict[str, Any]],
+        companies: List[Dict[str, Any]],
+        best_leads: List[Dict[str, Any]],
+        run_metrics_summary: Dict[str, Any] | None,
+        executive_summary: Dict[str, Any] | None,
+        run_analytics: Dict[str, Any] | None,
+    ) -> Dict[str, Any]:
+        result = self.build_result_payload(
+            status=status,
+            unique_jobs=unique_jobs,
+            companies=companies,
+            best_leads=best_leads,
+            run_metrics_summary=run_metrics_summary,
+            executive_summary=executive_summary,
+            run_analytics=run_analytics,
+        )
+        result.update(self.artifact_paths_payload())
+        return result
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -702,7 +726,7 @@ class PipelineOrchestrator:
             )
             finalize_manifest(self.ctx, "completed")
 
-            result = self.build_result_payload(
+            return self.build_completed_result(
                 status=status,
                 unique_jobs=unique_jobs,
                 companies=companies,
@@ -711,8 +735,6 @@ class PipelineOrchestrator:
                 executive_summary=executive_summary,
                 run_analytics=run_analytics,
             )
-            result.update(self.artifact_paths_payload())
-            return result
 
         except Exception as exc:
             self.ctx.metrics["pipeline_failed"] = True
