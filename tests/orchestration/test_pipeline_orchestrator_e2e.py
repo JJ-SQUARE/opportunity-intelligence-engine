@@ -107,7 +107,7 @@ def test_pipeline_orchestrator_e2e_controlled_run(tmp_path):
 
     result = orchestrator.run()
 
-    assert result["status"] == "company_pipeline_completed"
+    assert result["status"] == "completed"
     assert result["jobs_count"] == 2
     assert result["companies_count"] == 2
     assert result["leads_count"] == 2
