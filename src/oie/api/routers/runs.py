@@ -14,6 +14,100 @@ from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 router = APIRouter()
 
 
+class CreateRunRequest(BaseModel):
+    config: RunConfig = Field(default_factory=dict)
+    flags: RunFlags = Field(default_factory=dict)
+    mode: str | None = None
+
+
+class CreateRunResponse(BaseModel):
+    run_id: str
+    status: str
+    current_stage: str | None
+    manifest_path: str
+
+
+class ExecuteRunRequest(BaseModel):
+    config: RunConfig = Field(default_factory=dict)
+    flags: RunFlags = Field(default_factory=dict)
+    mode: str | None = None
+
+
+def _run_repository() -> RunRepository:
+    return RunRepository.create()
+
+
+def _stage_artifact_repository(
+    run_id: str,
+    stage_name: str,
+    not_found_detail: str,
+) -> StageArtifactRepository:
+    repository = _run_repository()
+    stage = repository.read_stage(run_id, stage_name)
+    if stage is None:
+        raise HTTPException(status_code=404, detail=not_found_detail)
+    return StageArtifactRepository(repository.ctx, run_id)
+
+
+def _ctx_for_existing_run(
+    run_id: str,
+    config: RunConfig,
+    flags: RunFlags,
+    mode: str | None,
+) -> RunContext:
+    repository_ctx = RunContext.create(config=config, flags=flags, mode=mode)
+    repository = RunRepository(repository_ctx)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    ctx = RunContext.create(
+        config=config,
+        flags=flags,
+        mode=mode or str(manifest.get("mode") or "default"),
+    )
+    ctx.run_id = run_id
+    ctx.run_date = str(manifest.get("run_date") or ctx.run_date)
+    ctx.mode = str(manifest.get("mode") or ctx.mode)
+
+    runs_base_dir = ctx.paths["runs_base_dir"]
+    run_dir = f"{runs_base_dir}/{run_id}"
+    ctx.paths["run_dir"] = run_dir
+    ctx.paths["manifest_path"] = f"{run_dir}/manifest.json"
+    ctx.paths["stage_dirs"] = {
+        stage: f"{run_dir}/{index:02d}_{stage}"
+        for index, stage in enumerate(PIPELINE_STAGES, start=1)
+    }
+    return ctx
+
+
+def _update_run_status(
+    run_id: str,
+    request: ExecuteRunRequest,
+    status: str,
+    current_stage: str | None = None,
+) -> JSONPayload:
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    repository = RunRepository(ctx)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    manifest["status"] = status
+    manifest["current_stage"] = current_stage
+    write_manifest(ctx, manifest)
+
+    updated_status = repository.read_status(run_id)
+    if updated_status is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return updated_status
+
+
 @router.post("/runs")
 def create_run(request: CreateRunRequest) -> CreateRunResponse:
     ctx = RunContext.create(
