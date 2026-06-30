@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from oie.domain.value_objects import OpportunityId
+
 JSONDict = dict[str, Any]
 
 
@@ -71,7 +73,7 @@ class DecisionHistory:
 
 @dataclass(slots=True)
 class OpportunityCandidate:
-    id: str
+    id: OpportunityId | str
     source_job: JobPosting | None = None
     company: CompanyProfile | None = None
     contacts: list[JSONDict] = field(default_factory=list)
