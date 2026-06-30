@@ -260,6 +260,23 @@ def get_run_status(run_id: str) -> JSONPayload:
     return status
 
 
+@router.get("/runs/{run_id}/configuration", summary="Get run configuration")
+def get_run_configuration(run_id: str) -> JSONPayload:
+    repository = _run_repository()
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    config_path = manifest.get("config_path")
+    if not config_path:
+        raise HTTPException(status_code=404, detail="Run configuration not found")
+
+    configuration = write_json_file.__globals__["read_json_file"](Path(config_path))
+    if configuration is None:
+        raise HTTPException(status_code=404, detail="Run configuration not found")
+    return configuration
+
+
 @router.post("/runs/{run_id}/schedule", summary="Create run schedule", response_model=RunScheduleResponse)
 def create_run_schedule(run_id: str, request: RunScheduleRequest) -> JSONPayload:
     return _write_schedule_response(run_id, request)
