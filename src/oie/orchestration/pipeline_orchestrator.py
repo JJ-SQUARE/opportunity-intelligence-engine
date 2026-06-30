@@ -586,6 +586,40 @@ class PipelineOrchestrator:
         return readiness_report, run_metrics_summary
 
 
+    def build_run_analytics(
+        self,
+        *,
+        status: str,
+        unique_jobs: List[Dict[str, Any]],
+        companies: List[Dict[str, Any]],
+        best_leads: List[Dict[str, Any]],
+        duplicate_jobs: List[Dict[str, Any]],
+        collector_metrics: List[Dict[str, Any]],
+        collector_contribution: List[Dict[str, Any]],
+        collector_roi: List[Dict[str, Any]],
+        provider_operation_metrics: List[Dict[str, Any]],
+        readiness_report: Dict[str, Any],
+        run_metrics_summary: Dict[str, Any],
+        executive_summary: Dict[str, Any] | None,
+    ) -> Dict[str, Any]:
+        run_analytics = self.run_analytics_service.build_analytics(
+            status=status,
+            jobs=unique_jobs,
+            companies=companies,
+            leads=best_leads,
+            duplicate_jobs=duplicate_jobs,
+            collector_metrics=collector_metrics,
+            collector_contribution=collector_contribution,
+            collector_roi=collector_roi,
+            provider_operation_metrics=provider_operation_metrics,
+            readiness_report=readiness_report,
+            run_metrics_summary=run_metrics_summary,
+            executive_summary=executive_summary,
+        )
+        self.run_analytics_export_service.export_json(run_analytics)
+        return run_analytics
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -643,11 +677,11 @@ class PipelineOrchestrator:
                 best_leads=best_leads,
             )
 
-            run_analytics = self.run_analytics_service.build_analytics(
+            run_analytics = self.build_run_analytics(
                 status=status,
-                jobs=unique_jobs,
+                unique_jobs=unique_jobs,
                 companies=companies,
-                leads=best_leads,
+                best_leads=best_leads,
                 duplicate_jobs=duplicate_jobs,
                 collector_metrics=collector_metrics,
                 collector_contribution=collector_contribution,
@@ -657,7 +691,6 @@ class PipelineOrchestrator:
                 run_metrics_summary=run_metrics_summary,
                 executive_summary=executive_summary,
             )
-            self.run_analytics_export_service.export_json(run_analytics)
             finalize_manifest(self.ctx, "completed")
 
             result = self.build_result_payload(
