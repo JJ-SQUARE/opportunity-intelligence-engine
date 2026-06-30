@@ -132,8 +132,9 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
         mode=request.mode,
     )
     manifest = build_initial_manifest(ctx)
-    write_manifest(ctx, manifest)
     configuration_path = Path(ctx.paths["run_dir"]) / "configuration.json"
+    manifest["config_path"] = str(configuration_path)
+    write_manifest(ctx, manifest)
     write_json_file(configuration_path, dict(request.config))
     return CreateRunResponse(
         run_id=manifest["run_id"],
