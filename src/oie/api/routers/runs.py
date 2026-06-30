@@ -14,6 +14,7 @@ from oie.api.schemas.runs import (
     RunMetricsSummaryResponse,
     StageCheckpointResponse,
     StageMetricsResponse,
+    StageArtifactSummaryResponse,
     RunStageStatusResponse,
     RunStatusResponse,
     RunSummaryResponse,
@@ -247,6 +248,12 @@ def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
     if stage is None:
         raise HTTPException(status_code=404, detail="Stage not found")
     return stage
+
+
+@router.get("/runs/{run_id}/stages/{stage_name}/summary", summary="Get stage artifact summary", response_model=StageArtifactSummaryResponse)
+def get_run_stage_artifact_summary(run_id: str, stage_name: str) -> JSONPayload:
+    repository = _stage_artifact_repository(run_id, stage_name, "Stage artifact summary not found")
+    return repository.read_summary(stage_name)
 
 
 @router.get("/runs/{run_id}/stages/{stage_name}/checkpoint", summary="Get stage checkpoint", response_model=StageCheckpointResponse)

@@ -43,3 +43,29 @@ class StageArtifactRepository:
         if checkpoint is None:
             return None
         return list(checkpoint.get("errors", []))
+
+
+    def read_summary(self, stage_name: str) -> JSONPayload:
+        paths = stage_artifact_paths(self.ctx, stage_name)
+        checkpoint = self.read_checkpoint(stage_name)
+        metrics = self.read_metrics(stage_name)
+        output = self.read_output(stage_name)
+
+        return {
+            "run_id": self.run_id,
+            "stage": stage_name,
+            "has_checkpoint": checkpoint is not None,
+            "has_metrics": metrics is not None,
+            "has_output": output is not None,
+            "status": (checkpoint or metrics or {}).get("status"),
+            "input_count": (checkpoint or metrics or {}).get("input_count", 0),
+            "processed_count": (checkpoint or metrics or {}).get("processed_count", 0),
+            "output_count": len(output) if output is not None else 0,
+            "error_count": len((checkpoint or {}).get("errors", [])),
+            "artifact_paths": {
+                "stage_dir": str(paths["stage_dir"]),
+                "checkpoint": str(paths["checkpoint"]),
+                "metrics": str(paths["metrics"]),
+                "output": str(paths["output"]),
+            },
+        }

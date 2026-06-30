@@ -99,3 +99,17 @@ class StageMetricsResponse(BaseModel):
     provider_usage: dict[str, Any]
     cost_estimate: dict[str, Any]
     processing_time_seconds: float
+
+
+class StageArtifactSummaryResponse(BaseModel):
+    run_id: str
+    stage: str
+    has_checkpoint: bool
+    has_metrics: bool
+    has_output: bool
+    status: str | None
+    input_count: int
+    processed_count: int
+    output_count: int
+    error_count: int
+    artifact_paths: dict[str, str]

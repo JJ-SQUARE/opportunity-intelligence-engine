@@ -34,6 +34,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "object"
     assert schema["paths"]["/runs/{run_id}/status"]["get"]["summary"] == "Get run status"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
+    assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/summary"]["get"]["summary"] == "Get stage artifact summary"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/execute"]["post"]["summary"] == "Execute run stage"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "array"
     assert schema["paths"]["/health"]["get"]["tags"] == ["Health"]
@@ -392,6 +393,87 @@ def test_get_run_stage_returns_404_for_missing_run(tmp_path, monkeypatch):
     assert response.status_code == 404
     assert response.json() == {"detail": "Stage not found"}
 
+
+
+def test_get_run_stage_artifact_summary_returns_existing_artifact_summary(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+    checkpoint_path = ctx.paths["stage_dirs"]["collect_jobs"] + "/checkpoint.json"
+    metrics_path = ctx.paths["stage_dirs"]["collect_jobs"] + "/metrics.json"
+    output_path = ctx.paths["stage_dirs"]["collect_jobs"] + "/output.jsonl"
+
+    from pathlib import Path
+    import json
+
+    checkpoint = {
+        "run_id": ctx.run_id,
+        "stage": "collect_jobs",
+        "status": "completed",
+        "input_count": 2,
+        "processed_count": 2,
+        "output_count": 2,
+        "rejected_count": 0,
+        "last_processed_index": 1,
+        "last_processed_id": "item_2",
+        "errors": [],
+        "provider_usage": {},
+        "cost_estimate": {},
+        "processing_time_seconds": 0.1,
+    }
+    metrics = {
+        "run_id": ctx.run_id,
+        "stage": "collect_jobs",
+        "status": "completed",
+        "input_count": 2,
+        "processed_count": 2,
+        "output_count": 2,
+        "rejected_count": 0,
+        "error_count": 0,
+        "provider_usage": {},
+        "cost_estimate": {},
+        "processing_time_seconds": 0.1,
+    }
+
+    Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(checkpoint_path).write_text(json.dumps(checkpoint), encoding="utf-8")
+    Path(metrics_path).write_text(json.dumps(metrics), encoding="utf-8")
+    Path(output_path).write_text(
+        json.dumps({"id": "item_1", "value": 10}) + "\n"
+        + json.dumps({"id": "item_2", "value": 20}) + "\n",
+        encoding="utf-8",
+    )
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/summary")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_id"] == ctx.run_id
+    assert payload["stage"] == "collect_jobs"
+    assert payload["has_checkpoint"] is True
+    assert payload["has_metrics"] is True
+    assert payload["has_output"] is True
+    assert payload["status"] == "completed"
+    assert payload["input_count"] == 2
+    assert payload["processed_count"] == 2
+    assert payload["output_count"] == 2
+    assert payload["error_count"] == 0
+    assert payload["artifact_paths"]["checkpoint"].endswith("checkpoint.json")
+    assert payload["artifact_paths"]["metrics"].endswith("metrics.json")
+    assert payload["artifact_paths"]["output"].endswith("output.jsonl")
 
 
 def test_get_run_stage_checkpoint_returns_existing_checkpoint(tmp_path, monkeypatch):
