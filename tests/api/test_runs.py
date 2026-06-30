@@ -248,6 +248,44 @@ def test_update_run_hubspot_delivery_sanitizes_bearer_token(tmp_path, monkeypatc
     assert "hubspot_bearer_token" not in hubspot_delivery
 
 
+def test_update_run_hubspot_delivery_defaults_credentials_ref_from_account_and_user(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(
+        config={
+            "runs": {"path": str(runs_path)},
+            "account": {"account_id": "tekton"},
+            "user": {"user_id": "juan"},
+        }
+    )
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.put(
+        f"/runs/{ctx.run_id}/hubspot-delivery",
+        json={
+            "hubspot_user_id": "123",
+            "hubspot_owner_id": "456",
+            "hubspot_company_id": "tekton-company-001",
+            "hubspot_bearer_token": "secret-token",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["hubspot_delivery"]["hubspot_credentials_ref"] == "hubspot/tekton/juan"
+
+
 def test_get_run_detail_returns_existing_manifest(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})

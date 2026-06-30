@@ -284,9 +284,11 @@ def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) ->
         if key != "hubspot_bearer_token"
     }
     if "hubspot_bearer_token" in request.model_fields_set and request.hubspot_bearer_token:
+        account_id = str((manifest.get("account", {}) or {}).get("account_id") or "unknown-account")
+        user_id = str((manifest.get("user", {}) or {}).get("user_id") or "unknown-user")
         hubspot_delivery["hubspot_credentials_ref"] = (
             hubspot_delivery.get("hubspot_credentials_ref")
-            or f"hubspot/{run_id}"
+            or f"hubspot/{account_id}/{user_id}"
         )
 
     manifest["hubspot_delivery"] = hubspot_delivery
