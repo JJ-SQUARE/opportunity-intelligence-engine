@@ -36,6 +36,9 @@ class RunRepository:
                     "current_stage": manifest["current_stage"],
                     "created_at": manifest["created_at"],
                     "updated_at": manifest["updated_at"],
+                    "account": dict(account),
+                    "user": dict(user),
+                    "hubspot_delivery": dict(manifest.get("hubspot_delivery", {}) or {}),
                 }
             )
         return summaries

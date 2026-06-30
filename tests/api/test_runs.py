@@ -86,6 +86,9 @@ def test_list_runs_returns_existing_run_summaries(tmp_path, monkeypatch):
             "current_stage": manifest["current_stage"],
             "created_at": manifest["created_at"],
             "updated_at": manifest["updated_at"],
+            "account": {},
+            "user": {},
+            "hubspot_delivery": {},
         }
     ]
 
@@ -135,7 +138,11 @@ def test_list_runs_filters_by_account_id_and_user_id(tmp_path, monkeypatch):
     response = client.get("/runs?account_id=tekton&user_id=juan")
 
     assert response.status_code == 200
-    assert [item["run_id"] for item in response.json()] == [ctx_1.run_id]
+    payload = response.json()
+    assert [item["run_id"] for item in payload] == [ctx_1.run_id]
+    assert payload[0]["account"] == {"account_id": "tekton"}
+    assert payload[0]["user"] == {"user_id": "juan"}
+    assert payload[0]["hubspot_delivery"] == {}
 
 
 def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path):

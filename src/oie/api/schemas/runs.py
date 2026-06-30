@@ -34,6 +34,9 @@ class RunSummaryResponse(BaseModel):
     current_stage: str | None
     created_at: str
     updated_at: str
+    account: dict[str, Any] = Field(default_factory=dict)
+    user: dict[str, Any] = Field(default_factory=dict)
+    hubspot_delivery: dict[str, Any] = Field(default_factory=dict)
 
 
 class RunStatusResponse(BaseModel):
