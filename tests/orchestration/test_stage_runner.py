@@ -238,6 +238,22 @@ class RunnerImmediatelyFailingStage(Stage):
         raise RuntimeError("immediate failure")
 
 
+def test_stage_runner_ensure_manifest_creates_missing_manifest(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    StageRunner(ctx).ensure_manifest()
+
+    manifest_path = Path(ctx.paths["manifest_path"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert manifest["run_id"] == ctx.run_id
+    assert manifest["status"] == "pending"
+    assert manifest["current_stage"] is None
+
+
 def test_stage_runner_writes_initial_checkpoint(tmp_path):
     ctx = RunContext.create(
         config={"runs": {"path": str(tmp_path / "runs")}},
