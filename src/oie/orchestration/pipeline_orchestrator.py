@@ -553,6 +553,13 @@ class PipelineOrchestrator:
         return collector_metrics, collector_contribution, collector_roi
 
 
+    def export_provider_operation_metrics(self) -> List[Dict[str, Any]]:
+        provider_operation_metrics = self.provider_operation_metrics_service.build_rows()
+        self.provider_operation_metrics_export_service.export_csv(provider_operation_metrics)
+        self.provider_operation_metrics_export_service.export_json(provider_operation_metrics)
+        return provider_operation_metrics
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -602,9 +609,7 @@ class PipelineOrchestrator:
                 duplicate_jobs=duplicate_jobs,
             )
 
-            provider_operation_metrics = self.provider_operation_metrics_service.build_rows()
-            self.provider_operation_metrics_export_service.export_csv(provider_operation_metrics)
-            self.provider_operation_metrics_export_service.export_json(provider_operation_metrics)
+            provider_operation_metrics = self.export_provider_operation_metrics()
 
             self.ctx.provider_state["run_metrics_summary_counts"] = {
                 "jobs_count": len(unique_jobs),
