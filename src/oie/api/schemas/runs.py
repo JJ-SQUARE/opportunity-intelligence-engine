@@ -24,6 +24,7 @@ class ExecuteRunRequest(BaseModel):
     config: RunConfig = Field(default_factory=dict)
     flags: RunFlags = Field(default_factory=dict)
     mode: str | None = None
+    start_stage: str | None = None
 
 
 class RunSummaryResponse(BaseModel):

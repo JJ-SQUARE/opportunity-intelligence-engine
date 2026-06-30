@@ -27,7 +27,7 @@ from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunConfig, RunContext, RunFlags
-from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
+from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, write_manifest
 from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 
@@ -134,6 +134,32 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
         flags=request.flags,
         mode=request.mode,
     )
+    if request.start_stage is not None:
+        start_index = PIPELINE_STAGES.index(request.start_stage) if request.start_stage in PIPELINE_STAGES else -1
+        if start_index < 0:
+            raise HTTPException(status_code=404, detail="Stage not found")
+        executable_stages = [
+            stage_name
+            for stage_name in PIPELINE_STAGES[start_index:]
+            if stage_name in STAGE_CLASSES
+        ]
+        if not executable_stages:
+            raise HTTPException(status_code=404, detail="Stage not executable")
+
+        last_checkpoint = None
+        runner = StageRunner(ctx)
+        for executable_stage in executable_stages:
+            last_checkpoint = runner.run_stage(STAGE_CLASSES[executable_stage])
+
+        finalize_manifest(ctx, "completed")
+        return {
+            "run_id": ctx.run_id,
+            "status": "completed",
+            "jobs_count": int((last_checkpoint or {}).get("output_count", 0)),
+            "companies_count": 0,
+            "leads_count": 0,
+        }
+
     result = PipelineOrchestrator(ctx).run()
     return dict(result)
 

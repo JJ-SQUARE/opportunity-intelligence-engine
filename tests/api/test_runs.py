@@ -978,6 +978,80 @@ def test_execute_unknown_stage_returns_404(tmp_path):
     assert response.json() == {"detail": "Stage not executable"}
 
 
+def test_execute_run_resumes_from_start_stage(tmp_path, monkeypatch):
+    from oie.orchestration.stage_base import Stage
+
+    class ResumeCompanyGateStage(Stage):
+        name = "company_gate"
+        order = 2
+
+        def load_input(self):
+            return [{"id": "company_1", "value": {"company": "Acme"}}]
+
+        def process_item(self, item):
+            return {"id": item["id"], "value": item["value"]}
+
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["stages"]["collect_jobs"] = "completed"
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+    monkeypatch.setitem(
+        __import__("oie.api.routers.runs", fromlist=["STAGE_CLASSES"]).STAGE_CLASSES,
+        "company_gate",
+        ResumeCompanyGateStage,
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        f"/runs/{ctx.run_id}/execute",
+        json={
+            "config": {"runs": {"path": str(runs_path)}},
+            "start_stage": "company_gate",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["run_id"] == ctx.run_id
+    assert response.json()["status"] == "completed"
+    assert response.json()["jobs_count"] == 1
+
+    refreshed = read_run_manifest(RunContext.create(config={"runs": {"path": str(runs_path)}}), ctx.run_id)
+    assert refreshed["status"] == "completed"
+    assert refreshed["stages"]["collect_jobs"] == "completed"
+    assert refreshed["stages"]["company_gate"] == "completed"
+
+
+def test_execute_run_from_unknown_start_stage_returns_404(tmp_path):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    client = TestClient(app)
+    response = client.post(
+        f"/runs/{ctx.run_id}/execute",
+        json={
+            "config": {"runs": {"path": str(runs_path)}},
+            "start_stage": "unknown_stage",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Stage not found"}
+
+
 def test_execute_run_runs_existing_manifest(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
