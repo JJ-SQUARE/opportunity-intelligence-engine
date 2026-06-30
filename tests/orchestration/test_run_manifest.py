@@ -1,7 +1,7 @@
 import pytest
 
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, finalize_manifest, list_run_manifests, read_manifest, read_run_manifest, update_stage_status, write_manifest
+from oie.orchestration.run_manifest import RunManifest, build_initial_manifest, finalize_manifest, list_run_manifests, read_manifest, read_run_manifest, set_run_status, update_stage_status, write_manifest
 
 
 def test_run_manifest_contract_exposes_required_fields():
@@ -120,6 +120,31 @@ def test_update_stage_status_rejects_unknown_status(tmp_path):
 
     with pytest.raises(ValueError, match="Unknown run status"):
         update_stage_status(ctx, "collect_jobs", "unknown_status")
+
+def test_set_run_status_updates_manifest_and_returns_status_payload(tmp_path):
+    ctx = RunContext.create(config={"runs": {"path": str(tmp_path / "runs")}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    result = set_run_status(
+        ctx,
+        ctx.run_id,
+        "waiting_for_user",
+        current_stage="collect_jobs",
+        error={"error_type": "RuntimeError", "error_message": "pause required"},
+    )
+
+    loaded = read_manifest(ctx)
+
+    assert result == {
+        "run_id": ctx.run_id,
+        "status": "waiting_for_user",
+        "current_stage": "collect_jobs",
+    }
+    assert loaded["status"] == "waiting_for_user"
+    assert loaded["current_stage"] == "collect_jobs"
+    assert loaded["errors"] == [{"error_type": "RuntimeError", "error_message": "pause required"}]
+
 
 def test_next_pending_stage_returns_first_non_completed_stage(tmp_path):
     ctx = RunContext.create(config={"runs": {"path": str(tmp_path / "runs")}})
