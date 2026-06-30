@@ -25,6 +25,7 @@ from oie.api.schemas.runs import (
     RunOutputsResponse,
     RunReadinessResponse,
     RunAnalyticsResponse,
+    RunExecutiveSummaryResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
     RunScheduleResponse,
@@ -703,6 +704,35 @@ def get_run_analytics(run_id: str) -> JSONPayload:
         "run_id": run_id,
         "path": str(analytics_path),
         "analytics": analytics,
+    }
+
+
+@router.get("/runs/{run_id}/executive-summary", summary="Get run executive summary", response_model=RunExecutiveSummaryResponse, tags=["Run Artifacts"])
+def get_run_executive_summary(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    artifact_paths = dict(manifest.get("artifact_paths", {}) or {})
+    summary_path_value = artifact_paths.get("executive_summary_json")
+    if not summary_path_value:
+        raise HTTPException(status_code=404, detail="Run executive summary not found")
+
+    summary_path = Path(str(summary_path_value))
+    if not summary_path.exists():
+        raise HTTPException(status_code=404, detail="Run executive summary file not found")
+
+    from oie.orchestration.stage_io import read_json_file
+
+    executive_summary = read_json_file(summary_path)
+    if executive_summary is None:
+        raise HTTPException(status_code=404, detail="Run executive summary file not found")
+
+    return {
+        "run_id": run_id,
+        "path": str(summary_path),
+        "executive_summary": executive_summary,
     }
 
 

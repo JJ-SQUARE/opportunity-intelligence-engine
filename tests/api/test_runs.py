@@ -73,6 +73,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/outputs/{output_name}"]["get"]["summary"] == "Get run output"
     assert schema["paths"]["/runs/{run_id}/readiness"]["get"]["summary"] == "Get run readiness"
     assert schema["paths"]["/runs/{run_id}/analytics"]["get"]["summary"] == "Get run analytics"
+    assert schema["paths"]["/runs/{run_id}/executive-summary"]["get"]["summary"] == "Get run executive summary"
     assert schema["paths"]["/runs/{run_id}/readiness"]["get"]["tags"] == ["Run Artifacts"]
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/summary"]["get"]["summary"] == "Get stage artifact summary"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/execute"]["post"]["summary"] == "Execute run stage"
@@ -99,6 +100,7 @@ def test_openapi_documents_run_routes():
     assert "RunOutputResponse" in schema["components"]["schemas"]
     assert "RunReadinessResponse" in schema["components"]["schemas"]
     assert "RunAnalyticsResponse" in schema["components"]["schemas"]
+    assert "RunExecutiveSummaryResponse" in schema["components"]["schemas"]
     assert "RunScheduleRequest" in schema["components"]["schemas"]
     assert "RunScheduleResponse" in schema["components"]["schemas"]
     assert "RunScheduleStatusResponse" in schema["components"]["schemas"]
@@ -3427,3 +3429,99 @@ def test_get_run_analytics_returns_404_when_file_missing(tmp_path, monkeypatch):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run analytics file not found"}
+
+
+def test_get_run_executive_summary_returns_exported_report(tmp_path, monkeypatch):
+    import json
+
+    runs_path = tmp_path / "runs"
+    output_path = tmp_path / "outputs" / "executive_summary.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    executive_summary = {
+        "headline": "2 strong opportunities found",
+        "companies_count": 2,
+        "leads_count": 4,
+    }
+    output_path.write_text(json.dumps(executive_summary), encoding="utf-8")
+
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {"executive_summary_json": str(output_path)}
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(config={"runs": {"path": str(runs_path)}}, flags=flags, mode=mode)
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/executive-summary")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "path": str(output_path),
+        "executive_summary": executive_summary,
+    }
+
+
+def test_get_run_executive_summary_returns_404_when_path_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {}
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(config={"runs": {"path": str(runs_path)}}, flags=flags, mode=mode)
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/executive-summary")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run executive summary not found"}
+
+
+def test_get_run_executive_summary_returns_404_when_file_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    missing_path = tmp_path / "outputs" / "executive_summary.json"
+
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {"executive_summary_json": str(missing_path)}
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(config={"runs": {"path": str(runs_path)}}, flags=flags, mode=mode)
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/executive-summary")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run executive summary file not found"}
+
+
+def test_get_run_executive_summary_returns_404_for_missing_run(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(config={"runs": {"path": str(runs_path)}}, flags=flags, mode=mode)
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get("/runs/missing_run/executive-summary")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run not found"}

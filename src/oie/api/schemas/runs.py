@@ -229,3 +229,9 @@ class RunAnalyticsResponse(BaseModel):
     run_id: str
     path: str
     analytics: dict[str, Any]
+
+
+class RunExecutiveSummaryResponse(BaseModel):
+    run_id: str
+    path: str
+    executive_summary: dict[str, Any]
