@@ -53,6 +53,8 @@ def test_openapi_documents_run_routes():
     assert "RunExecutionResponse" in schema["components"]["schemas"]
     assert "RunStageStatusResponse" in schema["components"]["schemas"]
     assert "RunMetricsSummaryResponse" in schema["components"]["schemas"]
+    assert "RunScheduleRequest" in schema["components"]["schemas"]
+    assert "RunScheduleResponse" in schema["components"]["schemas"]
     assert "RunScheduleStatusResponse" in schema["components"]["schemas"]
     assert "HubSpotDeliveryRequest" in schema["components"]["schemas"]
     assert "HubSpotDeliveryResponse" in schema["components"]["schemas"]
