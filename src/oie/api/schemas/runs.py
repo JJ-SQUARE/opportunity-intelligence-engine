@@ -38,6 +38,14 @@ class RunStatusResponse(BaseModel):
     current_stage: str | None
 
 
+class RunExecutionResponse(BaseModel):
+    run_id: str
+    status: str
+    jobs_count: int
+    companies_count: int
+    leads_count: int
+
+
 class RunStageStatusResponse(BaseModel):
     stage: str
     status: str

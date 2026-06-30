@@ -6,6 +6,7 @@ from oie.api.schemas.runs import (
     CreateRunRequest,
     CreateRunResponse,
     ExecuteRunRequest,
+    RunExecutionResponse,
     RunMetricsSummaryResponse,
     RunStageStatusResponse,
     RunStatusResponse,
@@ -97,7 +98,7 @@ def _update_run_status(
     return updated_status
 
 
-@router.post("/runs", summary="Create run")
+@router.post("/runs", summary="Create run", response_model=CreateRunResponse)
 def create_run(request: CreateRunRequest) -> CreateRunResponse:
     ctx = RunContext.create(
         config=request.config,
@@ -114,7 +115,7 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
     )
 
 
-@router.post("/runs/{run_id}/execute", summary="Execute run")
+@router.post("/runs/{run_id}/execute", summary="Execute run", response_model=RunExecutionResponse)
 def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     ctx = _ctx_for_existing_run(
         run_id=run_id,
@@ -126,7 +127,7 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     return dict(result)
 
 
-@router.post("/runs/{run_id}/cancel", summary="Cancel run")
+@router.post("/runs/{run_id}/cancel", summary="Cancel run", response_model=RunStatusResponse)
 def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     return _update_run_status(
         run_id=run_id,
@@ -136,7 +137,7 @@ def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     )
 
 
-@router.post("/runs/{run_id}/pause", summary="Pause run")
+@router.post("/runs/{run_id}/pause", summary="Pause run", response_model=RunStatusResponse)
 def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     return _update_run_status(
         run_id=run_id,
@@ -145,7 +146,7 @@ def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     )
 
 
-@router.post("/runs/{run_id}/resume", summary="Resume run")
+@router.post("/runs/{run_id}/resume", summary="Resume run", response_model=RunStatusResponse)
 def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     return _update_run_status(
         run_id=run_id,
