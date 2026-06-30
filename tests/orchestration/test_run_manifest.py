@@ -146,6 +146,13 @@ def test_set_run_status_updates_manifest_and_returns_status_payload(tmp_path):
     assert loaded["errors"] == [{"error_type": "RuntimeError", "error_message": "pause required"}]
 
 
+def test_set_run_status_rejects_unknown_status(tmp_path):
+    ctx = RunContext.create(config={"runs": {"path": str(tmp_path / "runs")}})
+
+    with pytest.raises(ValueError, match="Unknown run status"):
+        set_run_status(ctx, ctx.run_id, "unknown_status")
+
+
 def test_next_pending_stage_returns_first_non_completed_stage(tmp_path):
     ctx = RunContext.create(config={"runs": {"path": str(tmp_path / "runs")}})
     manifest = build_initial_manifest(ctx)
