@@ -44,6 +44,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/icp-profiles"]["put"]["summary"] == "Update run ICP profiles"
     assert schema["paths"]["/runs/{run_id}/icp-profiles"]["post"]["summary"] == "Add run ICP profile"
     assert schema["paths"]["/runs/{run_id}/icp-profiles"]["get"]["summary"] == "Get run ICP profiles"
+    assert schema["paths"]["/runs/{run_id}/icp-profiles/{profile_id}"]["delete"]["summary"] == "Delete run ICP profile"
     assert schema["paths"]["/runs/{run_id}/cancel"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunStatusResponse")
     assert schema["paths"]["/runs/{run_id}/pause"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunStatusResponse")
     assert schema["paths"]["/runs/{run_id}/resume"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunStatusResponse")
@@ -743,6 +744,67 @@ def test_add_run_icp_profile_rejects_duplicate_profile_id(tmp_path, monkeypatch)
 
     assert response.status_code == 409
     assert response.json() == {"detail": "ICP profile already exists: asd-midmarket"}
+
+def test_delete_run_icp_profile_removes_single_profile(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["icp_profiles"] = [
+        {"profile_id": "asd-midmarket", "service_line": "ASD"},
+        {"profile_id": "taas-enterprise", "service_line": "TaaS"},
+    ]
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.delete(f"/runs/{ctx.run_id}/icp-profiles/asd-midmarket")
+    get_response = client.get(f"/runs/{ctx.run_id}/icp-profiles")
+
+    expected = {
+        "run_id": ctx.run_id,
+        "icp_profiles": [
+            {"profile_id": "taas-enterprise", "service_line": "TaaS"},
+        ],
+    }
+    assert response.status_code == 200
+    assert response.json() == expected
+    assert get_response.status_code == 200
+    assert get_response.json() == expected
+
+
+def test_delete_run_icp_profile_returns_404_when_profile_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["icp_profiles"] = [{"profile_id": "asd-midmarket"}]
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.delete(f"/runs/{ctx.run_id}/icp-profiles/missing-profile")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "ICP profile not found: missing-profile"}
 
 def test_ctx_for_existing_run_inherits_manifest_icp_profiles(tmp_path):
     from oie.api.routers.runs import _ctx_for_existing_run

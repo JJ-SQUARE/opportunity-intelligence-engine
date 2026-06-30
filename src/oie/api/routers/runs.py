@@ -394,6 +394,32 @@ def get_run_icp_profiles(run_id: str) -> JSONPayload:
     }
 
 
+@router.delete("/runs/{run_id}/icp-profiles/{profile_id}", summary="Delete run ICP profile", response_model=ICPProfilesResponse)
+def delete_run_icp_profile(run_id: str, profile_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    icp_profiles = list(manifest.get("icp_profiles", []) or [])
+    remaining_profiles = [
+        profile
+        for profile in icp_profiles
+        if profile.get("profile_id") != profile_id
+    ]
+
+    if len(remaining_profiles) == len(icp_profiles):
+        raise HTTPException(status_code=404, detail=f"ICP profile not found: {profile_id}")
+
+    manifest["icp_profiles"] = remaining_profiles
+    repository.write_detail(manifest)
+
+    return {
+        "run_id": run_id,
+        "icp_profiles": remaining_profiles,
+    }
+
+
 @router.get("/runs/{run_id}/schedule/status", summary="Get run schedule status", response_model=RunScheduleStatusResponse)
 def get_run_schedule_status(run_id: str) -> JSONPayload:
     ctx = _ctx_for_existing_run(
