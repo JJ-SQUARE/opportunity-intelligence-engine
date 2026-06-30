@@ -190,10 +190,22 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     config_path = runs_path / run_id / "configuration.json"
     assert config_path.exists()
-    assert json.loads(config_path.read_text(encoding="utf-8"))["account"] == {
+    persisted_config = json.loads(config_path.read_text(encoding="utf-8"))
+    assert persisted_config["account"] == {
         "account_id": "tekton",
         "account_name": "Tekton Labs",
     }
+    assert persisted_config["user"] == {
+        "user_id": "juan",
+        "email": "juan@example.com",
+    }
+    assert persisted_config["hubspot_delivery"] == {
+        "hubspot_user_id": "123",
+        "hubspot_owner_id": "456",
+        "hubspot_company_id": "tekton-company-001",
+        "hubspot_credentials_ref": "hubspot/tekton/juan",
+    }
+    assert "hubspot_bearer_token" not in persisted_config["hubspot_delivery"]
     assert manifest["account"] == {
         "account_id": "tekton",
         "account_name": "Tekton Labs",
