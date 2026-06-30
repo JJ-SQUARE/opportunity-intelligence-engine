@@ -14,6 +14,8 @@ from oie.api.schemas.runs import (
     HTTPErrorResponse,
     HubSpotDeliveryRequest,
     HubSpotDeliveryResponse,
+    ICPProfilesRequest,
+    ICPProfilesResponse,
     RunExecutionResponse,
     RunConfigurationResponse,
     RunMetricsSummaryResponse,
@@ -331,6 +333,35 @@ def get_run_hubspot_delivery(run_id: str) -> JSONPayload:
     return {
         "run_id": run_id,
         "hubspot_delivery": detail.get("hubspot_delivery", {}),
+    }
+
+
+@router.put("/runs/{run_id}/icp-profiles", summary="Update run ICP profiles", response_model=ICPProfilesResponse)
+def update_run_icp_profiles(run_id: str, request: ICPProfilesRequest) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    manifest["icp_profiles"] = request.icp_profiles
+    repository.write_detail(manifest)
+
+    return {
+        "run_id": run_id,
+        "icp_profiles": request.icp_profiles,
+    }
+
+
+@router.get("/runs/{run_id}/icp-profiles", summary="Get run ICP profiles", response_model=ICPProfilesResponse)
+def get_run_icp_profiles(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    detail = repository.read_detail(run_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    return {
+        "run_id": run_id,
+        "icp_profiles": list(detail.get("icp_profiles", []) or []),
     }
 
 

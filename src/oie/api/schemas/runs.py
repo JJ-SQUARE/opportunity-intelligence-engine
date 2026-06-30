@@ -98,6 +98,15 @@ class HubSpotDeliveryResponse(BaseModel):
     hubspot_delivery: dict[str, Any]
 
 
+class ICPProfilesRequest(BaseModel):
+    icp_profiles: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ICPProfilesResponse(BaseModel):
+    run_id: str
+    icp_profiles: list[dict[str, Any]]
+
+
 class RunExecutionResponse(BaseModel):
     run_id: str
     status: str
