@@ -59,8 +59,8 @@ class Decision:
     stage: str
     decision: str
     confidence: float
-    id: DecisionId | str | None = None
     reason: str
+    id: DecisionId | str | None = None
     evidence: list[Evidence] = field(default_factory=list)
     timestamp: str | None = None
     metadata: JSONDict = field(default_factory=dict)
