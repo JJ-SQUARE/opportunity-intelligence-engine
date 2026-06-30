@@ -40,6 +40,7 @@ from oie.orchestration.run_manifest import build_initial_manifest, finalize_mani
 from oie.orchestration.run_schedule import read_run_schedule, run_schedule_status, write_run_schedule
 from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
+from oie.orchestration.run_storage_resolver import configure_ctx_for_run_storage
 
 router = APIRouter(tags=["Runs"], responses={404: {"model": HTTPErrorResponse}})
 
@@ -50,14 +51,7 @@ def _run_repository(run_id: str | None = None) -> RunRepository:
     if run_id is None:
         return RunRepository(RunContext.create())
 
-    ctx = RunContext.create()
-    ctx.run_id = run_id
-    ctx.paths["run_dir"] = f"{ctx.paths['runs_base_dir']}/{run_id}"
-    ctx.paths["manifest_path"] = f"{ctx.paths['run_dir']}/manifest.json"
-    ctx.paths["stage_dirs"] = {
-        stage: f"{ctx.paths['run_dir']}/{index:02d}_{stage}"
-        for index, stage in enumerate(PIPELINE_STAGES, start=1)
-    }
+    ctx = configure_ctx_for_run_storage(RunContext.create(), run_id)
     return RunRepository(ctx)
 
 
