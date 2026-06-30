@@ -2068,6 +2068,42 @@ def test_execute_run_from_unknown_start_stage_returns_404(tmp_path):
     assert response.json() == {"detail": "Stage not found"}
 
 
+def test_existing_run_context_lookup_uses_run_specific_repository(tmp_path, monkeypatch):
+    from oie.api.routers import runs as runs_router
+
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_run_repository = runs_router._run_repository
+    seen_run_ids = []
+
+    def spy_run_repository(run_id=None, config=None, flags=None, mode=None):
+        seen_run_ids.append(run_id)
+        merged_config = dict(config or {})
+        merged_config["runs"] = {"path": str(runs_path)}
+        return original_run_repository(
+            run_id=run_id,
+            config=merged_config,
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr(runs_router, "_run_repository", spy_run_repository)
+
+    resolved_ctx = runs_router._ctx_for_existing_run(
+        run_id=ctx.run_id,
+        config={"runs": {"path": str(runs_path)}},
+        flags={},
+        mode=None,
+    )
+
+    assert resolved_ctx.run_id == ctx.run_id
+    assert resolved_ctx.paths["manifest_path"] == str(runs_path / ctx.run_id / "manifest.json")
+    assert seen_run_ids[0] == ctx.run_id
+
+
 def test_execute_run_runs_existing_manifest(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
