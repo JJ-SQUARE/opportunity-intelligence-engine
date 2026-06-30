@@ -116,7 +116,7 @@ def _update_run_status(
 
     manifest["status"] = status
     manifest["current_stage"] = current_stage
-    write_manifest(ctx, manifest)
+    repository.write_detail(manifest)
 
     updated_status = repository.read_status(run_id)
     if updated_status is None:
@@ -319,7 +319,7 @@ def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) ->
         )
 
     manifest["hubspot_delivery"] = hubspot_delivery
-    write_manifest(ctx, manifest)
+    repository.write_detail(manifest)
 
     persisted = repository.read_detail(run_id)
     if persisted is None:
