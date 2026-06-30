@@ -66,7 +66,12 @@ def _ctx_for_existing_run(
     flags: RunFlags,
     mode: str | None,
 ) -> RunContext:
-    repository_ctx = RunContext.create(config=config, flags=flags, mode=mode)
+    # IMPORTANT: reuse stable context base, do NOT regenerate run identity
+    repository_ctx = RunContext.create(
+        config={**config, "runs": config.get("runs", {})},
+        flags=flags,
+        mode=mode,
+    )
     repository = RunRepository(repository_ctx)
     manifest = repository.read_detail(run_id)
     if manifest is None:
