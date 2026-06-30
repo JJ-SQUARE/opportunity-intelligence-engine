@@ -650,7 +650,13 @@ class PipelineOrchestrator:
             executive_summary=executive_summary,
             run_analytics=run_analytics,
         )
-        result.update(self.artifact_paths_payload())
+        artifact_paths = self.artifact_paths_payload()
+        result.update(artifact_paths)
+        finalize_manifest(
+            self.ctx,
+            status,
+            metadata={"artifact_paths": artifact_paths},
+        )
         return result
 
 

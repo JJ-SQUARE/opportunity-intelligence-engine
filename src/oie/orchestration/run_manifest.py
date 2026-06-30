@@ -98,7 +98,12 @@ def next_pending_stage(manifest: RunManifest) -> str | None:
     return None
 
 
-def finalize_manifest(ctx: RunContext, status: str, error: JSONPayload | None = None) -> Path:
+def finalize_manifest(
+    ctx: RunContext,
+    status: str,
+    error: JSONPayload | None = None,
+    metadata: JSONPayload | None = None,
+) -> Path:
     validate_run_status(status)
     manifest_path = Path(ctx.paths["manifest_path"])
     manifest = read_json_file(manifest_path)
@@ -109,6 +114,8 @@ def finalize_manifest(ctx: RunContext, status: str, error: JSONPayload | None = 
     manifest["updated_at"] = utc_now_iso()
     if error is not None:
         manifest.setdefault("errors", []).append(error)
+    if metadata:
+        manifest.update(metadata)
 
     return write_manifest(ctx, manifest)
 
