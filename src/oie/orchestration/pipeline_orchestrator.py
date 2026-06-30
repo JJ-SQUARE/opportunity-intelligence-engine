@@ -654,7 +654,7 @@ class PipelineOrchestrator:
         result.update(artifact_paths)
         finalize_manifest(
             self.ctx,
-            status,
+            str(result.get("status") or status),
             metadata={"artifact_paths": artifact_paths},
         )
         return result
