@@ -128,18 +128,24 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
 
 
 @router.post("/runs/{run_id}/execute", summary="Execute run", response_model=RunExecutionResponse)
+def executable_stages_from(start_stage: str) -> list[str]:
+    start_index = PIPELINE_STAGES.index(start_stage) if start_stage in PIPELINE_STAGES else -1
+    if start_index < 0:
+        raise HTTPException(status_code=404, detail="Stage not found")
+
+    executable_stages = [
+        stage_name
+        for stage_name in PIPELINE_STAGES[start_index:]
+        if stage_name in STAGE_CLASSES
+    ]
+    if not executable_stages:
+        raise HTTPException(status_code=404, detail="Stage not executable")
+    return executable_stages
+
+
 def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     if request.start_stage is not None:
-        start_index = PIPELINE_STAGES.index(request.start_stage) if request.start_stage in PIPELINE_STAGES else -1
-        if start_index < 0:
-            raise HTTPException(status_code=404, detail="Stage not found")
-        executable_stages = [
-            stage_name
-            for stage_name in PIPELINE_STAGES[start_index:]
-            if stage_name in STAGE_CLASSES
-        ]
-        if not executable_stages:
-            raise HTTPException(status_code=404, detail="Stage not executable")
+        executable_stages = executable_stages_from(request.start_stage)
 
         ctx = _ctx_for_existing_run(
             run_id=run_id,
