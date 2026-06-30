@@ -89,7 +89,7 @@ def _update_run_status(
     return updated_status
 
 
-@router.post("/runs")
+@router.post("/runs", summary="Create run")
 def create_run(request: CreateRunRequest) -> CreateRunResponse:
     ctx = RunContext.create(
         config=request.config,
@@ -106,7 +106,7 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
     )
 
 
-@router.post("/runs/{run_id}/execute")
+@router.post("/runs/{run_id}/execute", summary="Execute run")
 def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     ctx = _ctx_for_existing_run(
         run_id=run_id,
@@ -118,7 +118,7 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     return dict(result)
 
 
-@router.post("/runs/{run_id}/cancel")
+@router.post("/runs/{run_id}/cancel", summary="Cancel run")
 def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     return _update_run_status(
         run_id=run_id,
@@ -128,7 +128,7 @@ def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     )
 
 
-@router.post("/runs/{run_id}/pause")
+@router.post("/runs/{run_id}/pause", summary="Pause run")
 def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     return _update_run_status(
         run_id=run_id,
@@ -137,7 +137,7 @@ def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     )
 
 
-@router.post("/runs/{run_id}/resume")
+@router.post("/runs/{run_id}/resume", summary="Resume run")
 def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     return _update_run_status(
         run_id=run_id,
@@ -146,13 +146,13 @@ def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     )
 
 
-@router.get("/runs")
+@router.get("/runs", summary="List runs")
 def list_runs() -> list[JSONPayload]:
     repository = _run_repository()
     return repository.list_summaries()
 
 
-@router.get("/runs/{run_id}/status")
+@router.get("/runs/{run_id}/status", summary="Get run status")
 def get_run_status(run_id: str) -> JSONPayload:
     repository = _run_repository()
     status = repository.read_status(run_id)
@@ -161,7 +161,7 @@ def get_run_status(run_id: str) -> JSONPayload:
     return status
 
 
-@router.get("/runs/{run_id}/stages")
+@router.get("/runs/{run_id}/stages", summary="List run stages")
 def get_run_stages(run_id: str) -> list[JSONPayload]:
     repository = _run_repository()
     stages = repository.read_stages(run_id)
@@ -170,7 +170,7 @@ def get_run_stages(run_id: str) -> list[JSONPayload]:
     return stages
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}")
+@router.get("/runs/{run_id}/stages/{stage_name}", summary="Get stage status")
 def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
     repository = _run_repository()
     stage = repository.read_stage(run_id, stage_name)
@@ -179,7 +179,7 @@ def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
     return stage
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/checkpoint")
+@router.get("/runs/{run_id}/stages/{stage_name}/checkpoint", summary="Get stage checkpoint")
 def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
     repository = _stage_artifact_repository(run_id, stage_name, "Checkpoint not found")
     checkpoint = repository.read_checkpoint(stage_name)
@@ -188,7 +188,7 @@ def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
     return checkpoint
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/metrics")
+@router.get("/runs/{run_id}/stages/{stage_name}/metrics", summary="Get stage metrics")
 def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
     repository = _stage_artifact_repository(run_id, stage_name, "Stage metrics not found")
     metrics = repository.read_metrics(stage_name)
@@ -197,7 +197,7 @@ def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
     return metrics
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/output")
+@router.get("/runs/{run_id}/stages/{stage_name}/output", summary="Get stage output")
 def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
     repository = _stage_artifact_repository(run_id, stage_name, "Stage output not found")
     output = repository.read_output(stage_name)
@@ -206,7 +206,7 @@ def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
     return output
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/errors")
+@router.get("/runs/{run_id}/stages/{stage_name}/errors", summary="Get stage errors")
 def get_run_stage_errors(run_id: str, stage_name: str) -> list[JSONPayload]:
     repository = _stage_artifact_repository(run_id, stage_name, "Stage errors not found")
     errors = repository.read_errors(stage_name)
@@ -215,7 +215,7 @@ def get_run_stage_errors(run_id: str, stage_name: str) -> list[JSONPayload]:
     return errors
 
 
-@router.get("/runs/{run_id}/errors")
+@router.get("/runs/{run_id}/errors", summary="Get run errors")
 def get_run_errors(run_id: str) -> list[JSONPayload]:
     repository = _run_repository()
     errors = repository.read_errors(run_id)
@@ -224,7 +224,7 @@ def get_run_errors(run_id: str) -> list[JSONPayload]:
     return errors
 
 
-@router.get("/runs/{run_id}/metrics")
+@router.get("/runs/{run_id}/metrics", summary="Get run metrics summary")
 def get_run_metrics(run_id: str) -> JSONPayload:
     repository = _run_repository()
     metrics = repository.read_metrics_summary(run_id)
@@ -233,7 +233,7 @@ def get_run_metrics(run_id: str) -> JSONPayload:
     return metrics
 
 
-@router.get("/runs/{run_id}")
+@router.get("/runs/{run_id}", summary="Get run detail")
 def get_run_detail(run_id: str) -> JSONPayload:
     repository = _run_repository()
     detail = repository.read_detail(run_id)
