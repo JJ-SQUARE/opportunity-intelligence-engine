@@ -133,12 +133,14 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
     )
     manifest = build_initial_manifest(ctx)
     write_manifest(ctx, manifest)
-    write_json_file(Path(ctx.paths["run_dir"]) / "configuration.json", dict(request.config))
+    configuration_path = Path(ctx.paths["run_dir"]) / "configuration.json"
+    write_json_file(configuration_path, dict(request.config))
     return CreateRunResponse(
         run_id=manifest["run_id"],
         status=manifest["status"],
         current_stage=manifest["current_stage"],
         manifest_path=ctx.paths["manifest_path"],
+        configuration_path=str(configuration_path),
     )
 
 

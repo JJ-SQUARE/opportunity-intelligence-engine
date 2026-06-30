@@ -18,6 +18,7 @@ class CreateRunResponse(BaseModel):
     status: str
     current_stage: str | None
     manifest_path: str
+    configuration_path: str
 
 
 class ExecuteRunRequest(BaseModel):

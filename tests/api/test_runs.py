@@ -184,6 +184,7 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
     assert response.status_code == 200
     run_id = response.json()["run_id"]
     manifest_path = runs_path / run_id / "manifest.json"
+    assert response.json()["configuration_path"] == str(runs_path / run_id / "configuration.json")
 
     import json
 
