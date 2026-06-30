@@ -49,6 +49,12 @@ def test_run_config_contract_exposes_typed_sections():
         "user": UserConfig,
         "hubspot_delivery": HubSpotDeliveryConfig,
     }
+    assert set(HubSpotDeliveryConfig.__annotations__) == {
+        "hubspot_user_id",
+        "hubspot_owner_id",
+        "hubspot_company_id",
+        "hubspot_credentials_ref",
+    }
 
 
 def test_run_context_add_provider_event_derives_status_code_from_metadata():

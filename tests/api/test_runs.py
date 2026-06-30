@@ -111,7 +111,9 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
                 "hubspot_delivery": {
                     "hubspot_user_id": "123",
                     "hubspot_owner_id": "456",
+                    "hubspot_company_id": "tekton-company-001",
                     "hubspot_credentials_ref": "hubspot/tekton/juan",
+                    "hubspot_bearer_token": "secret-token",
                 },
             },
             "flags": {"dry_run": True},
@@ -136,8 +138,10 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
     assert manifest["hubspot_delivery"] == {
         "hubspot_user_id": "123",
         "hubspot_owner_id": "456",
+        "hubspot_company_id": "tekton-company-001",
         "hubspot_credentials_ref": "hubspot/tekton/juan",
     }
+    assert "hubspot_bearer_token" not in manifest["hubspot_delivery"]
 
 
 def test_get_run_detail_returns_existing_manifest(tmp_path, monkeypatch):

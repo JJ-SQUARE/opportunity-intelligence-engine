@@ -42,7 +42,11 @@ def build_initial_manifest(ctx: RunContext) -> RunManifest:
         "config_path": ctx.flags.get("config_path"),
         "account": dict(ctx.config.get("account", {}) or {}),
         "user": dict(ctx.config.get("user", {}) or {}),
-        "hubspot_delivery": dict(ctx.config.get("hubspot_delivery", {}) or {}),
+        "hubspot_delivery": {
+            key: value
+            for key, value in dict(ctx.config.get("hubspot_delivery", {}) or {}).items()
+            if key != "hubspot_bearer_token"
+        },
         "stages": {stage: "pending" for stage in PIPELINE_STAGES},
         "errors": [],
     }

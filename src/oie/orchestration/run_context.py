@@ -32,8 +32,8 @@ class UserConfig(TypedDict, total=False):
 class HubSpotDeliveryConfig(TypedDict, total=False):
     hubspot_user_id: str
     hubspot_owner_id: str
+    hubspot_company_id: str
     hubspot_credentials_ref: str
-    hubspot_bearer_token: str
 
 
 class RunConfig(TypedDict, total=False):
