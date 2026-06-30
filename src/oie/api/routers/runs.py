@@ -108,13 +108,7 @@ def _update_run_status(
     status: str,
     current_stage: str | None = None,
 ) -> JSONPayload:
-    ctx = _ctx_for_existing_run(
-        run_id=run_id,
-        config=request.config,
-        flags=request.flags,
-        mode=request.mode,
-    )
-    repository = RunRepository(ctx)
+    repository = _run_repository()
     manifest = repository.read_detail(run_id)
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
