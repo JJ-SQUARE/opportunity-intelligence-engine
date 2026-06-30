@@ -739,73 +739,65 @@ def get_run_executive_summary(run_id: str) -> JSONPayload:
     }
 
 
-@router.get("/runs/{run_id}/commercial-report", summary="Get run commercial report", response_model=RunCommercialReportResponse, tags=["Run Artifacts"])
-def get_run_commercial_report(run_id: str) -> JSONPayload:
+def _read_named_run_text_artifact(
+    run_id: str,
+    artifact_key: str,
+    response_key: str,
+    missing_detail: str,
+    missing_file_detail: str,
+) -> JSONPayload:
     repository = _run_repository(run_id)
     manifest = repository.read_detail(run_id)
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
     artifact_paths = dict(manifest.get("artifact_paths", {}) or {})
-    report_path_value = artifact_paths.get("commercial_report_md")
-    if not report_path_value:
-        raise HTTPException(status_code=404, detail="Run commercial report not found")
+    path_value = artifact_paths.get(artifact_key)
+    if not path_value:
+        raise HTTPException(status_code=404, detail=missing_detail)
 
-    report_path = Path(str(report_path_value))
-    if not report_path.exists():
-        raise HTTPException(status_code=404, detail="Run commercial report file not found")
+    artifact_path = Path(str(path_value))
+    if not artifact_path.exists():
+        raise HTTPException(status_code=404, detail=missing_file_detail)
 
     return {
         "run_id": run_id,
-        "path": str(report_path),
-        "commercial_report": report_path.read_text(encoding="utf-8"),
+        "path": str(artifact_path),
+        response_key: artifact_path.read_text(encoding="utf-8"),
     }
+
+
+@router.get("/runs/{run_id}/commercial-report", summary="Get run commercial report", response_model=RunCommercialReportResponse, tags=["Run Artifacts"])
+def get_run_commercial_report(run_id: str) -> JSONPayload:
+    return _read_named_run_text_artifact(
+        run_id=run_id,
+        artifact_key="commercial_report_md",
+        response_key="commercial_report",
+        missing_detail="Run commercial report not found",
+        missing_file_detail="Run commercial report file not found",
+    )
 
 
 @router.get("/runs/{run_id}/commercial-pipeline", summary="Get run commercial pipeline", response_model=RunCommercialPipelineResponse, tags=["Run Artifacts"])
 def get_run_commercial_pipeline(run_id: str) -> JSONPayload:
-    repository = _run_repository(run_id)
-    manifest = repository.read_detail(run_id)
-    if manifest is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-
-    artifact_paths = dict(manifest.get("artifact_paths", {}) or {})
-    pipeline_path_value = artifact_paths.get("commercial_pipeline_csv")
-    if not pipeline_path_value:
-        raise HTTPException(status_code=404, detail="Run commercial pipeline not found")
-
-    pipeline_path = Path(str(pipeline_path_value))
-    if not pipeline_path.exists():
-        raise HTTPException(status_code=404, detail="Run commercial pipeline file not found")
-
-    return {
-        "run_id": run_id,
-        "path": str(pipeline_path),
-        "commercial_pipeline": pipeline_path.read_text(encoding="utf-8"),
-    }
+    return _read_named_run_text_artifact(
+        run_id=run_id,
+        artifact_key="commercial_pipeline_csv",
+        response_key="commercial_pipeline",
+        missing_detail="Run commercial pipeline not found",
+        missing_file_detail="Run commercial pipeline file not found",
+    )
 
 
 @router.get("/runs/{run_id}/top-opportunities", summary="Get run top opportunities", response_model=RunTopOpportunitiesResponse, tags=["Run Artifacts"])
 def get_run_top_opportunities(run_id: str) -> JSONPayload:
-    repository = _run_repository(run_id)
-    manifest = repository.read_detail(run_id)
-    if manifest is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-
-    artifact_paths = dict(manifest.get("artifact_paths", {}) or {})
-    top_opportunities_path_value = artifact_paths.get("top_opportunities_csv")
-    if not top_opportunities_path_value:
-        raise HTTPException(status_code=404, detail="Run top opportunities not found")
-
-    top_opportunities_path = Path(str(top_opportunities_path_value))
-    if not top_opportunities_path.exists():
-        raise HTTPException(status_code=404, detail="Run top opportunities file not found")
-
-    return {
-        "run_id": run_id,
-        "path": str(top_opportunities_path),
-        "top_opportunities": top_opportunities_path.read_text(encoding="utf-8"),
-    }
+    return _read_named_run_text_artifact(
+        run_id=run_id,
+        artifact_key="top_opportunities_csv",
+        response_key="top_opportunities",
+        missing_detail="Run top opportunities not found",
+        missing_file_detail="Run top opportunities file not found",
+    )
 
 
 @router.get("/runs/{run_id}/stages/{stage_name}", summary="Get stage status", response_model=RunStageStatusResponse, tags=["Run Artifacts"])
