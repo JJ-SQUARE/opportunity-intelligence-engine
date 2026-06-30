@@ -917,6 +917,17 @@ def test_execute_collect_jobs_stage_writes_checkpoint_and_output(tmp_path, monke
     manifest = build_initial_manifest(ctx)
     write_manifest(ctx, manifest)
 
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
     monkeypatch.setattr(
         "oie.orchestration.collect_jobs_stage.CollectionService.collect",
         lambda self: [
