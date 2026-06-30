@@ -9,6 +9,19 @@ from oie.orchestration.stage_io import read_json_file, write_json_file
 
 
 class RunRepository:
+
+    def update_detail_patch(self, run_id: str, patch: dict) -> Path:
+        manifest = self._read_manifest(run_id)
+        if manifest is None:
+            raise ValueError(f"Run not found: {run_id}")
+
+        updated = dict(manifest)
+
+        for key, value in patch.items():
+            updated[key] = value
+
+        return write_manifest(self.ctx, updated)
+
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
 
