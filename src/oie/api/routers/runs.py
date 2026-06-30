@@ -19,7 +19,9 @@ from oie.api.schemas.runs import (
     RunSummaryResponse,
 )
 from oie.orchestration.json_payload import JSONPayload
+from oie.orchestration.collect_jobs_stage import CollectJobsStage
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
+from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunConfig, RunContext, RunFlags
 from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
@@ -131,6 +133,18 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     )
     result = PipelineOrchestrator(ctx).run()
     return dict(result)
+
+
+@router.post("/runs/{run_id}/stages/collect_jobs/execute", summary="Execute collect jobs stage", response_model=StageCheckpointResponse)
+def execute_collect_jobs_stage(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    checkpoint = StageRunner(ctx).run_stage(CollectJobsStage)
+    return dict(checkpoint)
 
 
 @router.post("/runs/{run_id}/cancel", summary="Cancel run", response_model=RunStatusResponse)

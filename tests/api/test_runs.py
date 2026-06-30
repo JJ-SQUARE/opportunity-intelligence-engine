@@ -911,6 +911,45 @@ def test_create_run_writes_initial_manifest(tmp_path):
     assert manifest_path.exists()
 
 
+def test_execute_collect_jobs_stage_writes_checkpoint_and_output(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    monkeypatch.setattr(
+        "oie.orchestration.collect_jobs_stage.CollectionService.collect",
+        lambda self: [
+            {
+                "job_id": "job_1",
+                "title": "Backend Engineer",
+                "company": "Acme",
+                "source": "test",
+                "job_url": "https://example.com/jobs/1",
+            }
+        ],
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        f"/runs/{ctx.run_id}/stages/collect_jobs/execute",
+        json={"config": {"runs": {"path": str(runs_path)}}},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_id"] == ctx.run_id
+    assert payload["stage"] == "collect_jobs"
+    assert payload["status"] == "completed"
+    assert payload["input_count"] == 1
+    assert payload["output_count"] == 1
+
+    output_response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/output")
+    assert output_response.status_code == 200
+    assert output_response.json()[0]["id"] == "job_1"
+    assert output_response.json()[0]["value"]["company"] == "Acme"
+
+
 def test_execute_run_runs_existing_manifest(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
