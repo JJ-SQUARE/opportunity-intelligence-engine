@@ -50,6 +50,8 @@ def test_openapi_documents_run_routes():
     assert "RunSummaryResponse" in schema["components"]["schemas"]
     assert "RunStatusResponse" in schema["components"]["schemas"]
     assert "CreateRunResponse" in schema["components"]["schemas"]
+    assert "configuration_path" in schema["components"]["schemas"]["CreateRunResponse"]["properties"]
+    assert schema["components"]["schemas"]["CreateRunResponse"]["properties"]["configuration_path"]["type"] == "string"
     assert "RunExecutionResponse" in schema["components"]["schemas"]
     assert "RunStageStatusResponse" in schema["components"]["schemas"]
     assert "RunMetricsSummaryResponse" in schema["components"]["schemas"]
