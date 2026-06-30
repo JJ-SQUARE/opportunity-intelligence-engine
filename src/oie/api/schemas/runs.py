@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from oie.orchestration.run_context import RunConfig, RunFlags
@@ -56,3 +58,38 @@ class RunMetricsSummaryResponse(BaseModel):
     stage_count: int
     error_count: int
     status_counts: dict[str, int]
+
+
+class ErrorResponse(BaseModel):
+    error_type: str
+    error_message: str
+
+
+class StageCheckpointResponse(BaseModel):
+    run_id: str
+    stage: str
+    status: str
+    input_count: int
+    processed_count: int
+    output_count: int
+    rejected_count: int
+    last_processed_index: int | None
+    last_processed_id: str | None
+    errors: list[ErrorResponse]
+    provider_usage: dict[str, Any]
+    cost_estimate: dict[str, Any]
+    processing_time_seconds: float
+
+
+class StageMetricsResponse(BaseModel):
+    run_id: str
+    stage: str
+    status: str
+    input_count: int
+    processed_count: int
+    output_count: int
+    rejected_count: int
+    error_count: int
+    provider_usage: dict[str, Any]
+    cost_estimate: dict[str, Any]
+    processing_time_seconds: float

@@ -5,9 +5,12 @@ from fastapi import APIRouter, HTTPException
 from oie.api.schemas.runs import (
     CreateRunRequest,
     CreateRunResponse,
+    ErrorResponse,
     ExecuteRunRequest,
     RunExecutionResponse,
     RunMetricsSummaryResponse,
+    StageCheckpointResponse,
+    StageMetricsResponse,
     RunStageStatusResponse,
     RunStatusResponse,
     RunSummaryResponse,
@@ -188,7 +191,7 @@ def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
     return stage
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/checkpoint", summary="Get stage checkpoint")
+@router.get("/runs/{run_id}/stages/{stage_name}/checkpoint", summary="Get stage checkpoint", response_model=StageCheckpointResponse)
 def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
     repository = _stage_artifact_repository(run_id, stage_name, "Checkpoint not found")
     checkpoint = repository.read_checkpoint(stage_name)
@@ -197,7 +200,7 @@ def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
     return checkpoint
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/metrics", summary="Get stage metrics")
+@router.get("/runs/{run_id}/stages/{stage_name}/metrics", summary="Get stage metrics", response_model=StageMetricsResponse)
 def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
     repository = _stage_artifact_repository(run_id, stage_name, "Stage metrics not found")
     metrics = repository.read_metrics(stage_name)
@@ -215,7 +218,7 @@ def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
     return output
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/errors", summary="Get stage errors")
+@router.get("/runs/{run_id}/stages/{stage_name}/errors", summary="Get stage errors", response_model=list[ErrorResponse])
 def get_run_stage_errors(run_id: str, stage_name: str) -> list[JSONPayload]:
     repository = _stage_artifact_repository(run_id, stage_name, "Stage errors not found")
     errors = repository.read_errors(stage_name)
@@ -224,7 +227,7 @@ def get_run_stage_errors(run_id: str, stage_name: str) -> list[JSONPayload]:
     return errors
 
 
-@router.get("/runs/{run_id}/errors", summary="Get run errors")
+@router.get("/runs/{run_id}/errors", summary="Get run errors", response_model=list[ErrorResponse])
 def get_run_errors(run_id: str) -> list[JSONPayload]:
     repository = _run_repository()
     errors = repository.read_errors(run_id)

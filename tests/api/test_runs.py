@@ -25,6 +25,9 @@ def test_openapi_documents_run_routes():
     assert "RunExecutionResponse" in schema["components"]["schemas"]
     assert "RunStageStatusResponse" in schema["components"]["schemas"]
     assert "RunMetricsSummaryResponse" in schema["components"]["schemas"]
+    assert "ErrorResponse" in schema["components"]["schemas"]
+    assert "StageCheckpointResponse" in schema["components"]["schemas"]
+    assert "StageMetricsResponse" in schema["components"]["schemas"]
 
 
 def test_list_runs_returns_existing_run_summaries(tmp_path, monkeypatch):
