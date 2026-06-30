@@ -69,3 +69,13 @@ class StageArtifactRepository:
                 "output": str(paths["output"]),
             },
         }
+
+
+    def read_catalog(self) -> JSONPayload:
+        return {
+            "run_id": self.run_id,
+            "artifacts": [
+                self.read_summary(stage_name)
+                for stage_name in PIPELINE_STAGES
+            ],
+        }

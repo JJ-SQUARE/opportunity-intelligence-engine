@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from oie.api.schemas.runs import (
+    ArtifactCatalogResponse,
     CreateRunRequest,
     CreateRunResponse,
     ErrorResponse,
@@ -239,6 +240,15 @@ def get_run_stages(run_id: str) -> list[JSONPayload]:
     if stages is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return stages
+
+
+@router.get("/runs/{run_id}/artifacts", summary="Get artifact catalog", response_model=ArtifactCatalogResponse)
+def get_run_artifact_catalog(run_id: str) -> JSONPayload:
+    repository = _run_repository()
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return StageArtifactRepository(repository.ctx, run_id).read_catalog()
 
 
 @router.get("/runs/{run_id}/stages/{stage_name}", summary="Get stage status", response_model=RunStageStatusResponse)

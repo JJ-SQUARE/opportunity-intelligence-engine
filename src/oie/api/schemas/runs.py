@@ -113,3 +113,8 @@ class StageArtifactSummaryResponse(BaseModel):
     output_count: int
     error_count: int
     artifact_paths: dict[str, str]
+
+
+class ArtifactCatalogResponse(BaseModel):
+    run_id: str
+    artifacts: list[StageArtifactSummaryResponse]

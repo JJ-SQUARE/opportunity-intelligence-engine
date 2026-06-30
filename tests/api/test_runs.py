@@ -33,6 +33,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs"]["get"]["summary"] == "List runs"
     assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "object"
     assert schema["paths"]["/runs/{run_id}/status"]["get"]["summary"] == "Get run status"
+    assert schema["paths"]["/runs/{run_id}/artifacts"]["get"]["summary"] == "Get artifact catalog"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/summary"]["get"]["summary"] == "Get stage artifact summary"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/execute"]["post"]["summary"] == "Execute run stage"
@@ -393,6 +394,58 @@ def test_get_run_stage_returns_404_for_missing_run(tmp_path, monkeypatch):
     assert response.status_code == 404
     assert response.json() == {"detail": "Stage not found"}
 
+
+
+def test_get_run_artifact_catalog_returns_stage_artifact_summaries(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+    checkpoint_path = ctx.paths["stage_dirs"]["collect_jobs"] + "/checkpoint.json"
+
+    from pathlib import Path
+    import json
+
+    checkpoint = {
+        "run_id": ctx.run_id,
+        "stage": "collect_jobs",
+        "status": "completed",
+        "input_count": 1,
+        "processed_count": 1,
+        "output_count": 1,
+        "rejected_count": 0,
+        "last_processed_index": 0,
+        "last_processed_id": "item_1",
+        "errors": [],
+        "provider_usage": {},
+        "cost_estimate": {},
+        "processing_time_seconds": 0.1,
+    }
+
+    Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(checkpoint_path).write_text(json.dumps(checkpoint), encoding="utf-8")
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/artifacts")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_id"] == ctx.run_id
+    assert payload["artifacts"][0]["stage"] == "collect_jobs"
+    assert payload["artifacts"][0]["has_checkpoint"] is True
+    assert payload["artifacts"][0]["status"] == "completed"
+    assert payload["artifacts"][-1]["stage"] == "outbound_export"
 
 
 def test_get_run_stage_artifact_summary_returns_existing_artifact_summary(tmp_path, monkeypatch):
