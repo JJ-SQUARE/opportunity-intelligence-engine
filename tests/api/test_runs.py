@@ -245,6 +245,30 @@ def test_run_repository_returns_none_when_configuration_missing(tmp_path):
     assert repository.read_configuration(ctx.run_id) is None
 
 
+def test_run_repository_writes_configuration_snapshot(tmp_path):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    repository = RunRepository(ctx)
+    config_path = runs_path / ctx.run_id / "configuration.json"
+
+    repository.write_configuration(
+        config_path,
+        {
+            "runs": {"path": str(runs_path)},
+            "mode": "dry-run",
+            "flags": {"dry_run": True},
+        },
+    )
+
+    import json
+
+    assert json.loads(config_path.read_text(encoding="utf-8")) == {
+        "runs": {"path": str(runs_path)},
+        "mode": "dry-run",
+        "flags": {"dry_run": True},
+    }
+
+
 def test_run_repository_reads_configuration_snapshot(tmp_path):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
