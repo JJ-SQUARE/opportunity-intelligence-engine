@@ -34,6 +34,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "object"
     assert schema["paths"]["/runs/{run_id}/status"]["get"]["summary"] == "Get run status"
     assert schema["paths"]["/runs/{run_id}/schedule"]["post"]["summary"] == "Create run schedule"
+    assert schema["paths"]["/runs/{run_id}/schedule"]["put"]["summary"] == "Update run schedule"
     assert schema["paths"]["/runs/{run_id}/schedule"]["get"]["summary"] == "Get run schedule"
     assert schema["paths"]["/runs/{run_id}/artifacts"]["get"]["summary"] == "Get artifact catalog"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
@@ -273,6 +274,50 @@ def test_create_run_schedule_rejects_invalid_frequency_time_and_day(tmp_path, mo
     assert invalid_time.json() == {"detail": "Invalid scheduled time: 25:00"}
     assert invalid_day.status_code == 422
     assert invalid_day.json() == {"detail": "Invalid scheduled day: funday"}
+
+
+def test_update_run_schedule_replaces_existing_schedule(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    create_payload = {
+        "frequency": "weekly",
+        "duration": "permanent",
+        "scheduled_times": ["09:00"],
+        "scheduled_days": ["monday"],
+        "enabled": True,
+    }
+    update_payload = {
+        "frequency": "daily",
+        "duration": "2 weeks",
+        "scheduled_times": ["15:00"],
+        "scheduled_days": [],
+        "enabled": False,
+    }
+
+    create_response = client.post(f"/runs/{ctx.run_id}/schedule", json=create_payload)
+    update_response = client.put(f"/runs/{ctx.run_id}/schedule", json=update_payload)
+    get_response = client.get(f"/runs/{ctx.run_id}/schedule")
+
+    assert create_response.status_code == 200
+    assert update_response.status_code == 200
+    assert update_response.json() == {"run_id": ctx.run_id, **update_payload}
+    assert get_response.status_code == 200
+    assert get_response.json() == {"run_id": ctx.run_id, **update_payload}
 
 
 def test_get_run_schedule_returns_404_when_missing(tmp_path, monkeypatch):

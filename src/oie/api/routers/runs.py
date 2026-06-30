@@ -238,6 +238,15 @@ def get_run_status(run_id: str) -> JSONPayload:
 
 @router.post("/runs/{run_id}/schedule", summary="Create run schedule", response_model=RunScheduleResponse)
 def create_run_schedule(run_id: str, request: RunScheduleRequest) -> JSONPayload:
+    return _write_schedule_response(run_id, request)
+
+
+@router.put("/runs/{run_id}/schedule", summary="Update run schedule", response_model=RunScheduleResponse)
+def update_run_schedule(run_id: str, request: RunScheduleRequest) -> JSONPayload:
+    return _write_schedule_response(run_id, request)
+
+
+def _write_schedule_response(run_id: str, request: RunScheduleRequest) -> JSONPayload:
     ctx = _ctx_for_existing_run(
         run_id=run_id,
         config={},
