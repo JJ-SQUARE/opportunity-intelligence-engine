@@ -217,3 +217,9 @@ class RunOutputResponse(BaseModel):
     path: str
     format: str
     content: Any
+
+
+class RunReadinessResponse(BaseModel):
+    run_id: str
+    path: str
+    readiness: dict[str, Any]
