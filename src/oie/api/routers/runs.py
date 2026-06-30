@@ -20,6 +20,7 @@ from oie.api.schemas.runs import (
     RunExecutionResponse,
     RunConfigurationResponse,
     RunDeleteResponse,
+    RunArtifactPathsResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
     RunScheduleResponse,
@@ -502,6 +503,19 @@ def get_run_artifact_catalog(run_id: str) -> JSONPayload:
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return StageArtifactRepository(repository.ctx, run_id).read_catalog()
+
+
+@router.get("/runs/{run_id}/artifact-paths", summary="Get run artifact paths", response_model=RunArtifactPathsResponse, tags=["Run Artifacts"])
+def get_run_artifact_paths(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    return {
+        "run_id": run_id,
+        "artifact_paths": dict(manifest.get("artifact_paths", {}) or {}),
+    }
 
 
 @router.get("/runs/{run_id}/stages/{stage_name}", summary="Get stage status", response_model=RunStageStatusResponse, tags=["Run Artifacts"])

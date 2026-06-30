@@ -192,3 +192,8 @@ class StageArtifactSummaryResponse(BaseModel):
 class ArtifactCatalogResponse(BaseModel):
     run_id: str
     artifacts: list[StageArtifactSummaryResponse]
+
+
+class RunArtifactPathsResponse(BaseModel):
+    run_id: str
+    artifact_paths: dict[str, Any]

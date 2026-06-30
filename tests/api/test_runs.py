@@ -66,6 +66,8 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/pause"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunStatusResponse")
     assert schema["paths"]["/runs/{run_id}/resume"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunStatusResponse")
     assert schema["paths"]["/runs/{run_id}/artifacts"]["get"]["summary"] == "Get artifact catalog"
+    assert schema["paths"]["/runs/{run_id}/artifact-paths"]["get"]["summary"] == "Get run artifact paths"
+    assert schema["paths"]["/runs/{run_id}/artifact-paths"]["get"]["tags"] == ["Run Artifacts"]
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/summary"]["get"]["summary"] == "Get stage artifact summary"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/execute"]["post"]["summary"] == "Execute run stage"
@@ -99,6 +101,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["content"]["application/json"]["schema"]["$ref"].endswith("/HTTPErrorResponse")
     assert "StageCheckpointResponse" in schema["components"]["schemas"]
     assert "StageMetricsResponse" in schema["components"]["schemas"]
+    assert "RunArtifactPathsResponse" in schema["components"]["schemas"]
 
 
 def test_list_runs_returns_existing_run_summaries(tmp_path, monkeypatch):
@@ -2799,6 +2802,84 @@ def test_delete_run_returns_404_for_missing_run(tmp_path, monkeypatch):
 
     client = TestClient(app)
     response = client.delete("/runs/missing_run")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run not found"}
+
+
+def test_get_run_artifact_paths_returns_persisted_manifest_paths(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {
+        "commercial_pipeline_csv": str(runs_path / ctx.run_id / "commercial_pipeline.csv"),
+        "run_analytics_json": str(runs_path / ctx.run_id / "run_analytics.json"),
+    }
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/artifact-paths")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "artifact_paths": manifest["artifact_paths"],
+    }
+
+
+def test_get_run_artifact_paths_returns_empty_object_when_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/artifact-paths")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "artifact_paths": {},
+    }
+
+
+def test_get_run_artifact_paths_returns_404_for_missing_run(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get("/runs/missing_run/artifact-paths")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run not found"}
