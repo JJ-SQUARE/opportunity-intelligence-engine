@@ -21,6 +21,15 @@ class StageRunner:
         if read_manifest(self.ctx) is None:
             write_manifest(self.ctx, build_initial_manifest(self.ctx))
 
+    def persist_stage_state(
+        self,
+        checkpoint_manager: StageCheckpointManager,
+        checkpoint: StageState,
+    ) -> None:
+        checkpoint_manager.write_checkpoint(checkpoint)
+        checkpoint_manager.write_metrics(checkpoint)
+        update_stage_status(self.ctx, checkpoint["stage"], checkpoint["status"])
+
     def run_stage(self, stage_cls: StageClass, *, reset: bool = False) -> StageState:
         stage = stage_cls(self.ctx)
         checkpoint_manager = StageCheckpointManager(stage)
@@ -41,14 +50,10 @@ class StageRunner:
                 checkpoint_manager.record_processed_item(checkpoint, index, output_item)
                 checkpoint_manager.write_checkpoint(checkpoint)
         except Exception as exc:
-            failure_status = checkpoint_manager.record_stage_failure(checkpoint, exc, start_time)
-            checkpoint_manager.write_checkpoint(checkpoint)
-            checkpoint_manager.write_metrics(checkpoint)
-            update_stage_status(self.ctx, stage.name, failure_status)
+            checkpoint_manager.record_stage_failure(checkpoint, exc, start_time)
+            self.persist_stage_state(checkpoint_manager, checkpoint)
             raise
 
         checkpoint_manager.record_stage_completion(checkpoint, start_time)
-        checkpoint_manager.write_checkpoint(checkpoint)
-        checkpoint_manager.write_metrics(checkpoint)
-        update_stage_status(self.ctx, stage.name, checkpoint["status"])
+        self.persist_stage_state(checkpoint_manager, checkpoint)
         return checkpoint
