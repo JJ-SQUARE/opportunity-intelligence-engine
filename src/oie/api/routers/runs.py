@@ -33,7 +33,7 @@ from oie.orchestration.normalize_jobs_stage import NormalizeJobsStage
 from oie.orchestration.company_gate_stage import CompanyGateStage
 from oie.orchestration.job_intelligence_stage import JobIntelligenceStage
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
-from oie.orchestration.stage_io import read_json_file, write_json_file
+from oie.orchestration.stage_io import write_json_file
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunConfig, RunContext, RunFlags
@@ -264,15 +264,10 @@ def get_run_status(run_id: str) -> JSONPayload:
 @router.get("/runs/{run_id}/configuration", summary="Get run configuration", response_model=RunConfigurationResponse)
 def get_run_configuration(run_id: str) -> JSONPayload:
     repository = _run_repository()
-    manifest = repository.read_detail(run_id)
-    if manifest is None:
+    if repository.read_detail(run_id) is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    config_path = manifest.get("config_path")
-    if not config_path:
-        raise HTTPException(status_code=404, detail="Run configuration not found")
-
-    configuration = read_json_file(Path(config_path))
+    configuration = repository.read_configuration(run_id)
     if configuration is None:
         raise HTTPException(status_code=404, detail="Run configuration not found")
     return configuration

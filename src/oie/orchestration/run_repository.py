@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import list_run_manifests, read_run_manifest
+from oie.orchestration.stage_io import read_json_file
 
 
 class RunRepository:
@@ -97,3 +100,12 @@ class RunRepository:
         if manifest is None:
             return None
         return dict(manifest)
+
+    def read_configuration(self, run_id: str) -> JSONPayload | None:
+        manifest = self._read_manifest(run_id)
+        if manifest is None:
+            return None
+        config_path = manifest.get("config_path")
+        if not config_path:
+            return None
+        return read_json_file(Path(config_path))
