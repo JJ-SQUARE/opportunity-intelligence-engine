@@ -18,10 +18,7 @@ class StageRunner:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
 
-    def run_stage(self, stage_cls: StageClass, *, reset: bool = False) -> StageState:
-        stage = stage_cls(self.ctx)
-        checkpoint_manager = StageCheckpointManager(stage)
-        stage.ensure_stage_dir()
+    def ensure_manifest(self) -> None:
         manifest_path = Path(self.ctx.paths["manifest_path"])
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -29,6 +26,12 @@ class StageRunner:
         if manifest is None:
             manifest = build_initial_manifest(self.ctx)
             write_manifest(self.ctx, manifest)
+
+    def run_stage(self, stage_cls: StageClass, *, reset: bool = False) -> StageState:
+        stage = stage_cls(self.ctx)
+        checkpoint_manager = StageCheckpointManager(stage)
+        stage.ensure_stage_dir()
+        self.ensure_manifest()
 
         if reset:
             checkpoint_manager.reset_artifacts()
