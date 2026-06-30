@@ -76,8 +76,8 @@ def _ctx_for_existing_run(
     flags: RunFlags,
     mode: str | None,
 ) -> RunContext:
-    # IMPORTANT: reuse stable context base, do NOT regenerate run identity
     repository = _run_repository(
+        run_id=run_id,
         config={**config, "runs": config.get("runs", {})},
         flags=flags,
         mode=mode,
