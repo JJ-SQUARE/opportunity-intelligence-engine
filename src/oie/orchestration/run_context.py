@@ -19,9 +19,29 @@ class RunsConfig(TypedDict, total=False):
     path: str
 
 
+class AccountConfig(TypedDict, total=False):
+    account_id: str
+    account_name: str
+
+
+class UserConfig(TypedDict, total=False):
+    user_id: str
+    email: str
+
+
+class HubSpotDeliveryConfig(TypedDict, total=False):
+    hubspot_user_id: str
+    hubspot_owner_id: str
+    hubspot_credentials_ref: str
+    hubspot_bearer_token: str
+
+
 class RunConfig(TypedDict, total=False):
     database: DatabaseConfig
     runs: RunsConfig
+    account: AccountConfig
+    user: UserConfig
+    hubspot_delivery: HubSpotDeliveryConfig
 
 
 class RunFlags(TypedDict, total=False):

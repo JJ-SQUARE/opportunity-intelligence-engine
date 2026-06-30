@@ -91,6 +91,55 @@ def test_list_runs_returns_existing_run_summaries(tmp_path, monkeypatch):
 
 
 
+def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path):
+    runs_path = tmp_path / "runs"
+    client = TestClient(app)
+
+    response = client.post(
+        "/runs",
+        json={
+            "config": {
+                "runs": {"path": str(runs_path)},
+                "account": {
+                    "account_id": "tekton",
+                    "account_name": "Tekton Labs",
+                },
+                "user": {
+                    "user_id": "juan",
+                    "email": "juan@example.com",
+                },
+                "hubspot_delivery": {
+                    "hubspot_user_id": "123",
+                    "hubspot_owner_id": "456",
+                    "hubspot_credentials_ref": "hubspot/tekton/juan",
+                },
+            },
+            "flags": {"dry_run": True},
+        },
+    )
+
+    assert response.status_code == 200
+    run_id = response.json()["run_id"]
+    manifest_path = runs_path / run_id / "manifest.json"
+
+    import json
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["account"] == {
+        "account_id": "tekton",
+        "account_name": "Tekton Labs",
+    }
+    assert manifest["user"] == {
+        "user_id": "juan",
+        "email": "juan@example.com",
+    }
+    assert manifest["hubspot_delivery"] == {
+        "hubspot_user_id": "123",
+        "hubspot_owner_id": "456",
+        "hubspot_credentials_ref": "hubspot/tekton/juan",
+    }
+
+
 def test_get_run_detail_returns_existing_manifest(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})

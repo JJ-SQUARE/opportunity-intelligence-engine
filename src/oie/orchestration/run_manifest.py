@@ -19,6 +19,9 @@ class RunManifest(TypedDict):
     updated_at: str
     mode: str
     config_path: str | None
+    account: JSONPayload
+    user: JSONPayload
+    hubspot_delivery: JSONPayload
     stages: dict[str, str]
     errors: list[JSONPayload]
 
@@ -37,6 +40,9 @@ def build_initial_manifest(ctx: RunContext) -> RunManifest:
         "updated_at": utc_now_iso(),
         "mode": ctx.mode,
         "config_path": ctx.flags.get("config_path"),
+        "account": dict(ctx.config.get("account", {}) or {}),
+        "user": dict(ctx.config.get("user", {}) or {}),
+        "hubspot_delivery": dict(ctx.config.get("hubspot_delivery", {}) or {}),
         "stages": {stage: "pending" for stage in PIPELINE_STAGES},
         "errors": [],
     }
