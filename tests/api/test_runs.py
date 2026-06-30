@@ -674,6 +674,10 @@ def test_get_run_schedule_status_returns_due_payload(tmp_path, monkeypatch):
     assert payload["enabled"] is True
     assert payload["due"] is True
     assert payload["frequency"] == "daily"
+    assert payload["duration"] == "permanent"
+    assert payload["scheduled_times"] == []
+    assert payload["scheduled_days"] == []
+    assert "checked_at" in payload
 
 
 def test_get_run_schedule_returns_404_when_missing(tmp_path, monkeypatch):
