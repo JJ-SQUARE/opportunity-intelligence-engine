@@ -75,6 +75,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/analytics"]["get"]["summary"] == "Get run analytics"
     assert schema["paths"]["/runs/{run_id}/executive-summary"]["get"]["summary"] == "Get run executive summary"
     assert schema["paths"]["/runs/{run_id}/commercial-report"]["get"]["summary"] == "Get run commercial report"
+    assert schema["paths"]["/runs/{run_id}/commercial-pipeline"]["get"]["summary"] == "Get run commercial pipeline"
     assert schema["paths"]["/runs/{run_id}/readiness"]["get"]["tags"] == ["Run Artifacts"]
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/summary"]["get"]["summary"] == "Get stage artifact summary"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/execute"]["post"]["summary"] == "Execute run stage"
@@ -103,6 +104,7 @@ def test_openapi_documents_run_routes():
     assert "RunAnalyticsResponse" in schema["components"]["schemas"]
     assert "RunExecutiveSummaryResponse" in schema["components"]["schemas"]
     assert "RunCommercialReportResponse" in schema["components"]["schemas"]
+    assert "RunCommercialPipelineResponse" in schema["components"]["schemas"]
     assert "RunScheduleRequest" in schema["components"]["schemas"]
     assert "RunScheduleResponse" in schema["components"]["schemas"]
     assert "RunScheduleStatusResponse" in schema["components"]["schemas"]
@@ -3615,6 +3617,98 @@ def test_get_run_commercial_report_returns_404_for_missing_run(tmp_path, monkeyp
 
     client = TestClient(app)
     response = client.get("/runs/missing_run/commercial-report")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run not found"}
+
+
+
+def test_get_run_commercial_pipeline_returns_exported_csv(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    output_path = tmp_path / "outputs" / "commercial_pipeline.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    commercial_pipeline = "company,score\nAcme,95\n"
+    output_path.write_text(commercial_pipeline, encoding="utf-8")
+
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {"commercial_pipeline_csv": str(output_path)}
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(config={"runs": {"path": str(runs_path)}}, flags=flags, mode=mode)
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/commercial-pipeline")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "path": str(output_path),
+        "commercial_pipeline": commercial_pipeline,
+    }
+
+
+def test_get_run_commercial_pipeline_returns_404_when_path_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {}
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(config={"runs": {"path": str(runs_path)}}, flags=flags, mode=mode)
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/commercial-pipeline")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run commercial pipeline not found"}
+
+
+def test_get_run_commercial_pipeline_returns_404_when_file_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    missing_path = tmp_path / "outputs" / "commercial_pipeline.csv"
+
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {"commercial_pipeline_csv": str(missing_path)}
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(config={"runs": {"path": str(runs_path)}}, flags=flags, mode=mode)
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/commercial-pipeline")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run commercial pipeline file not found"}
+
+
+def test_get_run_commercial_pipeline_returns_404_for_missing_run(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(config={"runs": {"path": str(runs_path)}}, flags=flags, mode=mode)
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get("/runs/missing_run/commercial-pipeline")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run not found"}

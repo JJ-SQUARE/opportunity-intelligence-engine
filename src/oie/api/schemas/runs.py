@@ -241,3 +241,9 @@ class RunCommercialReportResponse(BaseModel):
     run_id: str
     path: str
     commercial_report: str
+
+
+class RunCommercialPipelineResponse(BaseModel):
+    run_id: str
+    path: str
+    commercial_pipeline: str

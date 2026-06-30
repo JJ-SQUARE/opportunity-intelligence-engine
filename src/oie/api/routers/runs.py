@@ -27,6 +27,7 @@ from oie.api.schemas.runs import (
     RunAnalyticsResponse,
     RunExecutiveSummaryResponse,
     RunCommercialReportResponse,
+    RunCommercialPipelineResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
     RunScheduleResponse,
@@ -757,6 +758,29 @@ def get_run_commercial_report(run_id: str) -> JSONPayload:
         "run_id": run_id,
         "path": str(report_path),
         "commercial_report": report_path.read_text(encoding="utf-8"),
+    }
+
+
+@router.get("/runs/{run_id}/commercial-pipeline", summary="Get run commercial pipeline", response_model=RunCommercialPipelineResponse, tags=["Run Artifacts"])
+def get_run_commercial_pipeline(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    artifact_paths = dict(manifest.get("artifact_paths", {}) or {})
+    pipeline_path_value = artifact_paths.get("commercial_pipeline_csv")
+    if not pipeline_path_value:
+        raise HTTPException(status_code=404, detail="Run commercial pipeline not found")
+
+    pipeline_path = Path(str(pipeline_path_value))
+    if not pipeline_path.exists():
+        raise HTTPException(status_code=404, detail="Run commercial pipeline file not found")
+
+    return {
+        "run_id": run_id,
+        "path": str(pipeline_path),
+        "commercial_pipeline": pipeline_path.read_text(encoding="utf-8"),
     }
 
 
