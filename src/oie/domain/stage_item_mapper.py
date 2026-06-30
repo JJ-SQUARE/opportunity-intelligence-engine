@@ -13,6 +13,7 @@ from oie.domain.entities import (
     OpportunityScore,
 )
 from oie.domain.serialization import to_primitive
+from oie.domain.value_objects import JobId, OpportunityId
 from oie.orchestration.stage_item import StageItem
 
 
@@ -99,3 +100,45 @@ def _decision_history_from_payload(payload: Any) -> DecisionHistory:
         decisions.append(Decision(**decision_payload))
 
     return DecisionHistory(decisions=decisions)
+
+
+def job_dict_to_candidate(job: dict[str, Any], fallback_id: str) -> OpportunityCandidate:
+    job_id = _first_non_empty(job, ("job_id", "id", "job_url", "apply_url"), fallback_id)
+    candidate_id = f"opp_{job_id}"
+
+    return OpportunityCandidate(
+        id=OpportunityId(candidate_id),
+        source_job=JobPosting(
+            id=JobId(f"job_{job_id}"),
+            title=str(job.get("title") or ""),
+            company=str(job.get("company") or ""),
+            location=job.get("location"),
+            job_url=job.get("job_url"),
+            apply_url=job.get("apply_url"),
+            description=job.get("description"),
+            source=job.get("source"),
+            detected_at=job.get("detected_at"),
+        ),
+        metadata={
+            "raw_job": dict(job),
+        },
+    )
+
+
+def _first_non_empty(
+    payload: dict[str, Any],
+    keys: tuple[str, ...],
+    fallback: str,
+) -> str:
+    for key in keys:
+        value = str(payload.get(key) or "").strip()
+        if value:
+            return _stable_token(value)
+    return _stable_token(fallback)
+
+
+def _stable_token(value: str) -> str:
+    return "".join(
+        character if character.isalnum() else "_"
+        for character in value.strip().lower()
+    ).strip("_")
