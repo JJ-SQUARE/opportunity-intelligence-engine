@@ -484,6 +484,18 @@ class PipelineOrchestrator:
         self.db_export_service.export_all()
 
 
+    def export_opportunity_outputs(self) -> None:
+        dataset = self.opportunity_dataset_service.build_dataset()
+        top_dataset = self.opportunity_dataset_service.build_top_opportunities(limit=25)
+        self.opportunity_dataset_export_service.export_dataset(dataset)
+        self.opportunity_dataset_export_service.export_top_dataset(top_dataset)
+        self.outbound_export_service.export_all()
+        hubspot_push_result = self.outbound_export_service.push_hubspot_payloads(
+            self.provider_execution_service
+        )
+        self.ctx.provider_state["hubspot_push_result"] = hubspot_push_result
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -517,15 +529,7 @@ class PipelineOrchestrator:
                 duplicate_leads=duplicate_leads,
             )
 
-            dataset = self.opportunity_dataset_service.build_dataset()
-            top_dataset = self.opportunity_dataset_service.build_top_opportunities(limit=25)
-            self.opportunity_dataset_export_service.export_dataset(dataset)
-            self.opportunity_dataset_export_service.export_top_dataset(top_dataset)
-            self.outbound_export_service.export_all()
-            hubspot_push_result = self.outbound_export_service.push_hubspot_payloads(
-                self.provider_execution_service
-            )
-            self.ctx.provider_state["hubspot_push_result"] = hubspot_push_result
+            self.export_opportunity_outputs()
 
             executive_summary = self.executive_summary_service.build_summary(companies, best_leads)
             self.executive_summary_service.write_summary(executive_summary)
