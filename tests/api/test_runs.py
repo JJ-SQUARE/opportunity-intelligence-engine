@@ -5,6 +5,21 @@ from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, read_run_manifest, write_manifest
 
 
+def test_cors_allows_local_ui_origin():
+    client = TestClient(app)
+
+    response = client.options(
+        "/runs",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
 def test_openapi_documents_run_routes():
     client = TestClient(app)
 
