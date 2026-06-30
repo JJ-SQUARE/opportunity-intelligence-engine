@@ -5,6 +5,22 @@ from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, read_run_manifest, write_manifest
 
 
+def test_openapi_documents_run_routes():
+    client = TestClient(app)
+
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    schema = response.json()
+    assert schema["info"]["title"] == "Opportunity Intelligence Engine API"
+    assert schema["info"]["version"] == "0.1.0"
+    assert schema["paths"]["/runs"]["post"]["summary"] == "Create run"
+    assert schema["paths"]["/runs"]["get"]["summary"] == "List runs"
+    assert schema["paths"]["/runs/{run_id}/status"]["get"]["summary"] == "Get run status"
+    assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
+    assert schema["paths"]["/health"]["get"]["tags"] == ["Health"]
+
+
 def test_list_runs_returns_existing_run_summaries(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
