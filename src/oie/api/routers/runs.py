@@ -233,7 +233,7 @@ def list_runs(
 
 @router.get("/runs/{run_id}/status", summary="Get run status", response_model=RunStatusResponse)
 def get_run_status(run_id: str) -> JSONPayload:
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     status = repository.read_status(run_id)
     if status is None:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -242,7 +242,7 @@ def get_run_status(run_id: str) -> JSONPayload:
 
 @router.get("/runs/{run_id}/configuration", summary="Get run configuration", response_model=RunConfigurationResponse)
 def get_run_configuration(run_id: str) -> JSONPayload:
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     if repository.read_detail(run_id) is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
@@ -320,7 +320,7 @@ def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) ->
     response_model=HubSpotDeliveryResponse,
 )
 def get_run_hubspot_delivery(run_id: str) -> JSONPayload:
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     detail = repository.read_detail(run_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -358,7 +358,7 @@ def get_run_schedule(run_id: str) -> JSONPayload:
 
 @router.get("/runs/{run_id}/stages", summary="List run stages", response_model=list[RunStageStatusResponse])
 def get_run_stages(run_id: str) -> list[JSONPayload]:
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     stages = repository.read_stages(run_id)
     if stages is None:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -376,7 +376,7 @@ def get_run_artifact_catalog(run_id: str) -> JSONPayload:
 
 @router.get("/runs/{run_id}/stages/{stage_name}", summary="Get stage status", response_model=RunStageStatusResponse)
 def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     stage = repository.read_stage(run_id, stage_name)
     if stage is None:
         raise HTTPException(status_code=404, detail="Stage not found")
@@ -427,7 +427,7 @@ def get_run_stage_errors(run_id: str, stage_name: str) -> list[JSONPayload]:
 
 @router.get("/runs/{run_id}/errors", summary="Get run errors", response_model=list[ErrorResponse])
 def get_run_errors(run_id: str) -> list[JSONPayload]:
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     errors = repository.read_errors(run_id)
     if errors is None:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -436,7 +436,7 @@ def get_run_errors(run_id: str) -> list[JSONPayload]:
 
 @router.get("/runs/{run_id}/metrics", summary="Get run metrics summary", response_model=RunMetricsSummaryResponse)
 def get_run_metrics(run_id: str) -> JSONPayload:
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     metrics = repository.read_metrics_summary(run_id)
     if metrics is None:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -445,7 +445,7 @@ def get_run_metrics(run_id: str) -> JSONPayload:
 
 @router.get("/runs/{run_id}", summary="Get run detail", response_model=dict[str, Any])
 def get_run_detail(run_id: str) -> JSONPayload:
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     detail = repository.read_detail(run_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Run not found")
