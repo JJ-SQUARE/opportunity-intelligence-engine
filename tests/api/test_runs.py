@@ -2883,3 +2883,81 @@ def test_get_run_artifact_paths_returns_404_for_missing_run(tmp_path, monkeypatc
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run not found"}
+
+
+def test_get_run_artifact_paths_returns_manifest_artifact_paths(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {
+        "commercial_pipeline_csv": str(runs_path / ctx.run_id / "outputs" / "commercial_pipeline.csv"),
+        "hubspot_sync_results_json": str(runs_path / ctx.run_id / "outputs" / "hubspot_sync_results.json"),
+    }
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/artifact-paths")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "artifact_paths": manifest["artifact_paths"],
+    }
+
+
+def test_get_run_artifact_paths_returns_empty_payload_when_no_artifacts_persisted(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/artifact-paths")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "artifact_paths": {},
+    }
+
+
+def test_get_run_artifact_paths_returns_404_for_missing_run(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get("/runs/missing_run/artifact-paths")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run not found"}
