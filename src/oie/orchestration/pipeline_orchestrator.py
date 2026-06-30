@@ -474,9 +474,6 @@ class PipelineOrchestrator:
                 "leads_count": len(best_leads),
             }
 
-            run_metrics_summary = self.run_metrics_summary_service.build_summary()
-            self.run_metrics_summary_export_service.export_json(run_metrics_summary)
-
             readiness_report = self.run_readiness_service.build_report(
                 jobs=unique_jobs,
                 companies=companies,
