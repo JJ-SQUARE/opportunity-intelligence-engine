@@ -23,7 +23,7 @@ from oie.domain.entities import (
     OpportunityScore,
 )
 from oie.domain.serialization import to_primitive
-from oie.domain.stage_item_mapper import candidate_to_stage_item
+from oie.domain.stage_item_mapper import candidate_to_stage_item, stage_item_to_candidate
 from oie.domain.value_objects import (
     CompanyId,
     DecisionId,
@@ -55,5 +55,6 @@ __all__ = [
     "StableId",
     "UserConfiguration",
     "candidate_to_stage_item",
+    "stage_item_to_candidate",
     "to_primitive",
 ]
