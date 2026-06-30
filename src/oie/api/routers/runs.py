@@ -244,7 +244,10 @@ def create_run_schedule(run_id: str, request: RunScheduleRequest) -> JSONPayload
         flags={},
         mode=None,
     )
-    return write_run_schedule(ctx, request.model_dump())
+    try:
+        return write_run_schedule(ctx, request.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/runs/{run_id}/schedule", summary="Get run schedule", response_model=RunScheduleResponse)

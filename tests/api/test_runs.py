@@ -220,6 +220,61 @@ def test_create_and_get_run_schedule_persists_frequency_duration_and_programming
     assert get_response.json() == {"run_id": ctx.run_id, **schedule_payload}
 
 
+def test_create_run_schedule_rejects_invalid_frequency_time_and_day(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+
+    invalid_frequency = client.post(
+        f"/runs/{ctx.run_id}/schedule",
+        json={
+            "frequency": "hourly",
+            "duration": "2026-07-01/2026-09-30",
+            "scheduled_times": ["09:00"],
+            "scheduled_days": ["monday"],
+        },
+    )
+    invalid_time = client.post(
+        f"/runs/{ctx.run_id}/schedule",
+        json={
+            "frequency": "weekly",
+            "duration": "2026-07-01/2026-09-30",
+            "scheduled_times": ["25:00"],
+            "scheduled_days": ["monday"],
+        },
+    )
+    invalid_day = client.post(
+        f"/runs/{ctx.run_id}/schedule",
+        json={
+            "frequency": "weekly",
+            "duration": "2026-07-01/2026-09-30",
+            "scheduled_times": ["09:00"],
+            "scheduled_days": ["funday"],
+        },
+    )
+
+    assert invalid_frequency.status_code == 422
+    assert invalid_frequency.json() == {"detail": "Invalid schedule frequency: hourly"}
+    assert invalid_time.status_code == 422
+    assert invalid_time.json() == {"detail": "Invalid scheduled time: 25:00"}
+    assert invalid_day.status_code == 422
+    assert invalid_day.json() == {"detail": "Invalid scheduled day: funday"}
+
+
 def test_get_run_schedule_returns_404_when_missing(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
