@@ -202,7 +202,7 @@ def test_create_and_get_run_schedule_persists_frequency_duration_and_programming
     client = TestClient(app)
     schedule_payload = {
         "frequency": "weekly",
-        "duration": "2026-07-01/2026-09-30",
+        "duration": "permanent",
         "scheduled_times": ["09:00", "15:00"],
         "scheduled_days": ["monday", "wednesday"],
         "enabled": True,
@@ -243,7 +243,7 @@ def test_create_run_schedule_rejects_invalid_frequency_time_and_day(tmp_path, mo
         f"/runs/{ctx.run_id}/schedule",
         json={
             "frequency": "hourly",
-            "duration": "2026-07-01/2026-09-30",
+            "duration": "1 month",
             "scheduled_times": ["09:00"],
             "scheduled_days": ["monday"],
         },
@@ -252,7 +252,7 @@ def test_create_run_schedule_rejects_invalid_frequency_time_and_day(tmp_path, mo
         f"/runs/{ctx.run_id}/schedule",
         json={
             "frequency": "weekly",
-            "duration": "2026-07-01/2026-09-30",
+            "duration": "1 month",
             "scheduled_times": ["25:00"],
             "scheduled_days": ["monday"],
         },
@@ -261,7 +261,7 @@ def test_create_run_schedule_rejects_invalid_frequency_time_and_day(tmp_path, mo
         f"/runs/{ctx.run_id}/schedule",
         json={
             "frequency": "weekly",
-            "duration": "2026-07-01/2026-09-30",
+            "duration": "1 month",
             "scheduled_times": ["09:00"],
             "scheduled_days": ["funday"],
         },
