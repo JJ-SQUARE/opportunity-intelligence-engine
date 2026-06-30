@@ -59,6 +59,18 @@ class RunScheduleResponse(BaseModel):
     enabled: bool
 
 
+class RunScheduleStatusResponse(BaseModel):
+    run_id: str
+    scheduled: bool
+    enabled: bool
+    due: bool
+    frequency: str | None = None
+    duration: str | None = None
+    scheduled_times: list[str] = Field(default_factory=list)
+    scheduled_days: list[str] = Field(default_factory=list)
+    checked_at: str | None = None
+
+
 class RunExecutionResponse(BaseModel):
     run_id: str
     status: str
