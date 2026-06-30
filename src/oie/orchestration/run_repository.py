@@ -16,10 +16,6 @@ class RunRepository:
     def _read_manifest(self, run_id: str):
         return read_run_manifest(self.ctx, run_id)
 
-    @classmethod
-    def create(cls) -> "RunRepository":
-        return cls(RunContext.create())
-
     def list_summaries(
         self,
         account_id: str | None = None,
