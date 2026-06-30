@@ -477,11 +477,23 @@ def test_create_and_get_run_schedule_persists_frequency_duration_and_programming
         json=schedule_payload,
     )
     get_response = client.get(f"/runs/{ctx.run_id}/schedule")
+    status_response = client.get(f"/runs/{ctx.run_id}/schedule/status")
 
     assert create_response.status_code == 200
     assert create_response.json() == {"run_id": ctx.run_id, **schedule_payload}
     assert get_response.status_code == 200
     assert get_response.json() == {"run_id": ctx.run_id, **schedule_payload}
+
+    assert status_response.status_code == 200
+    status_payload = status_response.json()
+    assert status_payload["run_id"] == ctx.run_id
+    assert status_payload["scheduled"] is True
+    assert status_payload["enabled"] is True
+    assert status_payload["frequency"] == "weekly"
+    assert status_payload["duration"] == "permanent"
+    assert status_payload["scheduled_times"] == ["09:00", "15:00"]
+    assert status_payload["scheduled_days"] == ["monday", "wednesday"]
+    assert "checked_at" in status_payload
 
 
 def test_create_run_schedule_rejects_invalid_frequency_time_and_day(tmp_path, monkeypatch):
