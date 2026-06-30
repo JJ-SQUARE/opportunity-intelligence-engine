@@ -127,7 +127,6 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
     )
 
 
-@router.post("/runs/{run_id}/execute", summary="Execute run", response_model=RunExecutionResponse)
 def executable_stages_from(start_stage: str) -> list[str]:
     start_index = PIPELINE_STAGES.index(start_stage) if start_stage in PIPELINE_STAGES else -1
     if start_index < 0:
@@ -143,6 +142,7 @@ def executable_stages_from(start_stage: str) -> list[str]:
     return executable_stages
 
 
+@router.post("/runs/{run_id}/execute", summary="Execute run", response_model=RunExecutionResponse)
 def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     if request.start_stage is not None:
         executable_stages = executable_stages_from(request.start_stage)
