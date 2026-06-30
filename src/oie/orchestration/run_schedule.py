@@ -11,7 +11,7 @@ from oie.orchestration.stage_io import read_json_file, write_json_file
 VALID_FREQUENCIES = {"daily", "weekly", "monthly"}
 VALID_DAYS = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
 TIME_PATTERN = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
-DURATION_PATTERN = re.compile(r"^permanent$|^[1-9]\\d*\\s+(day|days|week|weeks|month|months)$")
+DURATION_PATTERN = re.compile(r"^permanent$|^[1-9]\d*\s+(day|days|week|weeks|month|months)$")
 
 
 def schedule_path(ctx: RunContext) -> Path:
