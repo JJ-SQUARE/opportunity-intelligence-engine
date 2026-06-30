@@ -2015,6 +2015,8 @@ def test_execute_stage_with_rerun_resets_previous_output(tmp_path, monkeypatch):
 
     assert first_response.status_code == 200
     assert rerun_response.status_code == 200
+    assert first_response.json()["last_processed_index"] == 0
+    assert rerun_response.json()["last_processed_index"] == 0
     assert rerun_response.json()["processed_count"] == 1
     assert rerun_response.json()["output_count"] == 1
 
