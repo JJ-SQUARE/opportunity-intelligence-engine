@@ -42,6 +42,9 @@ def test_run_config_contract_exposes_typed_sections():
     assert get_type_hints(RunConfig) == {
         "database": DatabaseConfig,
         "runs": RunsConfig,
+        "account": AccountConfig,
+        "user": UserConfig,
+        "hubspot_delivery": HubSpotDeliveryConfig,
     }
 
 

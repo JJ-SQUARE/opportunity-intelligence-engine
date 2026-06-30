@@ -16,6 +16,9 @@ def test_run_manifest_contract_exposes_required_fields():
         "updated_at",
         "mode",
         "config_path",
+        "account",
+        "user",
+        "hubspot_delivery",
         "stages",
         "errors",
     }
