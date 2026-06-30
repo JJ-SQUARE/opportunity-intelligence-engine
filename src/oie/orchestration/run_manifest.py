@@ -22,6 +22,7 @@ class RunManifest(TypedDict):
     account: JSONPayload
     user: JSONPayload
     hubspot_delivery: JSONPayload
+    icp_profiles: list[JSONPayload]
     stages: dict[str, str]
     errors: list[JSONPayload]
 
@@ -47,6 +48,7 @@ def build_initial_manifest(ctx: RunContext) -> RunManifest:
             for key, value in dict(ctx.config.get("hubspot_delivery", {}) or {}).items()
             if key != "hubspot_bearer_token"
         },
+        "icp_profiles": list(ctx.config.get("icp_profiles", []) or []),
         "stages": {stage: "pending" for stage in PIPELINE_STAGES},
         "errors": [],
     }

@@ -19,6 +19,7 @@ def test_run_manifest_contract_exposes_required_fields():
         "account",
         "user",
         "hubspot_delivery",
+        "icp_profiles",
         "stages",
         "errors",
     }
@@ -35,6 +36,33 @@ def test_read_manifest_returns_existing_manifest(tmp_path):
     loaded = read_manifest(ctx)
 
     assert loaded == manifest
+
+def test_build_initial_manifest_persists_icp_profiles(tmp_path):
+    ctx = RunContext.create(
+        config={
+            "runs": {"path": str(tmp_path / "runs")},
+            "icp_profiles": [
+                {
+                    "profile_id": "asd-midmarket",
+                    "service_line": "ASD",
+                    "name": "ASD Midmarket",
+                    "enabled": True,
+                }
+            ],
+        },
+        flags={},
+    )
+
+    manifest = build_initial_manifest(ctx)
+
+    assert manifest["icp_profiles"] == [
+        {
+            "profile_id": "asd-midmarket",
+            "service_line": "ASD",
+            "name": "ASD Midmarket",
+            "enabled": True,
+        }
+    ]
 
 
 def test_read_manifest_returns_none_when_missing(tmp_path):
