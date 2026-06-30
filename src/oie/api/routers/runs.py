@@ -45,13 +45,15 @@ from oie.orchestration.run_storage_resolver import configure_ctx_for_run_storage
 router = APIRouter(tags=["Runs"], responses={404: {"model": HTTPErrorResponse}})
 
 
-def _run_repository(run_id: str | None = None) -> RunRepository:
-    # FIX: repository must not create a new RunContext for reads
-    # RunContext.create() generates a NEW run_id which breaks identity resolution
-    if run_id is None:
-        return RunRepository(RunContext.create())
-
-    ctx = configure_ctx_for_run_storage(RunContext.create(), run_id)
+def _run_repository(
+    run_id: str | None = None,
+    config: RunConfig | None = None,
+    flags: RunFlags | None = None,
+    mode: str | None = None,
+) -> RunRepository:
+    ctx = RunContext.create(config=config, flags=flags, mode=mode)
+    if run_id is not None:
+        configure_ctx_for_run_storage(ctx, run_id)
     return RunRepository(ctx)
 
 
@@ -75,12 +77,11 @@ def _ctx_for_existing_run(
     mode: str | None,
 ) -> RunContext:
     # IMPORTANT: reuse stable context base, do NOT regenerate run identity
-    repository_ctx = RunContext.create(
+    repository = _run_repository(
         config={**config, "runs": config.get("runs", {})},
         flags=flags,
         mode=mode,
     )
-    repository = RunRepository(repository_ctx)
     manifest = repository.read_detail(run_id)
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
