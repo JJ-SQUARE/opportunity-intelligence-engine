@@ -33,7 +33,6 @@ from oie.orchestration.normalize_jobs_stage import NormalizeJobsStage
 from oie.orchestration.company_gate_stage import CompanyGateStage
 from oie.orchestration.job_intelligence_stage import JobIntelligenceStage
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
-from oie.orchestration.stage_io import write_json_file
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunConfig, RunContext, RunFlags
@@ -136,7 +135,7 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
     configuration_path = Path(ctx.paths["run_dir"]) / "configuration.json"
     manifest["config_path"] = str(configuration_path)
     write_manifest(ctx, manifest)
-    write_json_file(
+    RunRepository(ctx).write_configuration(
         configuration_path,
         {
             **dict(request.config),
