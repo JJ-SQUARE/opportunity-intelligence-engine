@@ -540,6 +540,7 @@ class PipelineOrchestrator:
                 run_analytics=run_analytics,
             )
             result.update({
+                "db_path": self.ctx.paths.get("db_path"),
                 "suspected_duplicates_report": self.ctx.paths.get("suspected_duplicates_report"),
                 "domain_review_queue_csv": self.ctx.paths.get("domain_review_queue_csv"),
                 "companies_export": self.ctx.paths.get("companies_export"),
