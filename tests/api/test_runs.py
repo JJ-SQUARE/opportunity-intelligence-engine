@@ -69,6 +69,8 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/artifact-paths"]["get"]["summary"] == "Get run artifact paths"
     assert schema["paths"]["/runs/{run_id}/artifact-paths"]["get"]["tags"] == ["Run Artifacts"]
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
+    assert schema["paths"]["/runs/{run_id}/outputs"]["get"]["summary"] == "List run outputs"
+    assert schema["paths"]["/runs/{run_id}/outputs/{output_name}"]["get"]["summary"] == "Get run output"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/summary"]["get"]["summary"] == "Get stage artifact summary"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/execute"]["post"]["summary"] == "Execute run stage"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "array"
@@ -88,6 +90,8 @@ def test_openapi_documents_run_routes():
     assert "RunExecutionResponse" in schema["components"]["schemas"]
     assert "RunStageStatusResponse" in schema["components"]["schemas"]
     assert "RunMetricsSummaryResponse" in schema["components"]["schemas"]
+    assert "RunOutputsResponse" in schema["components"]["schemas"]
+    assert "RunOutputResponse" in schema["components"]["schemas"]
     assert "RunScheduleRequest" in schema["components"]["schemas"]
     assert "RunScheduleResponse" in schema["components"]["schemas"]
     assert "RunScheduleStatusResponse" in schema["components"]["schemas"]
@@ -2961,3 +2965,165 @@ def test_get_run_artifact_paths_returns_404_for_missing_run(tmp_path, monkeypatc
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run not found"}
+
+
+def test_get_run_outputs_lists_manifest_artifact_paths(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    output_path = tmp_path / "outputs" / "commercial_pipeline.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("company,score\nAcme,90\n", encoding="utf-8")
+
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {
+        "commercial_pipeline_csv": str(output_path),
+        "missing_report_json": str(tmp_path / "outputs" / "missing.json"),
+    }
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/outputs")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "outputs": [
+            {
+                "name": "commercial_pipeline_csv",
+                "path": str(output_path),
+                "exists": True,
+                "format": "csv",
+            },
+            {
+                "name": "missing_report_json",
+                "path": str(tmp_path / "outputs" / "missing.json"),
+                "exists": False,
+                "format": "json",
+            },
+        ],
+    }
+
+
+def test_get_run_output_reads_csv_json_jsonl_and_text(tmp_path, monkeypatch):
+    import json
+
+    runs_path = tmp_path / "runs"
+    output_dir = tmp_path / "outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    csv_path = output_dir / "commercial_pipeline.csv"
+    json_path = output_dir / "summary.json"
+    jsonl_path = output_dir / "records.jsonl"
+    md_path = output_dir / "report.md"
+
+    csv_path.write_text("company,score\nAcme,90\n", encoding="utf-8")
+    json_path.write_text(json.dumps({"ready": True}), encoding="utf-8")
+    jsonl_path.write_text(json.dumps({"id": 1}) + "\n" + json.dumps({"id": 2}) + "\n", encoding="utf-8")
+    md_path.write_text("# Report\nReady", encoding="utf-8")
+
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {
+        "commercial_pipeline_csv": str(csv_path),
+        "summary_json": str(json_path),
+        "records_jsonl": str(jsonl_path),
+        "commercial_report_md": str(md_path),
+    }
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+
+    csv_response = client.get(f"/runs/{ctx.run_id}/outputs/commercial_pipeline_csv")
+    json_response = client.get(f"/runs/{ctx.run_id}/outputs/summary_json")
+    jsonl_response = client.get(f"/runs/{ctx.run_id}/outputs/records_jsonl")
+    md_response = client.get(f"/runs/{ctx.run_id}/outputs/commercial_report_md")
+
+    assert csv_response.status_code == 200
+    assert csv_response.json()["format"] == "csv"
+    assert csv_response.json()["content"] == "company,score\nAcme,90\n"
+
+    assert json_response.status_code == 200
+    assert json_response.json()["format"] == "json"
+    assert json_response.json()["content"] == {"ready": True}
+
+    assert jsonl_response.status_code == 200
+    assert jsonl_response.json()["format"] == "jsonl"
+    assert jsonl_response.json()["content"] == [{"id": 1}, {"id": 2}]
+
+    assert md_response.status_code == 200
+    assert md_response.json()["format"] == "text"
+    assert md_response.json()["content"] == "# Report\nReady"
+
+
+def test_get_run_output_returns_404_when_output_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {}
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/outputs/missing_output")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run output not found: missing_output"}
+
+
+def test_get_run_output_returns_404_when_output_file_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    missing_path = tmp_path / "outputs" / "missing.csv"
+
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["artifact_paths"] = {"commercial_pipeline_csv": str(missing_path)}
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/outputs/commercial_pipeline_csv")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run output file not found: commercial_pipeline_csv"}

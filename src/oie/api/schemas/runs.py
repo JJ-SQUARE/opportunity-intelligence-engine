@@ -197,3 +197,23 @@ class ArtifactCatalogResponse(BaseModel):
 class RunArtifactPathsResponse(BaseModel):
     run_id: str
     artifact_paths: dict[str, Any]
+
+
+class RunOutputSummaryResponse(BaseModel):
+    name: str
+    path: str
+    exists: bool
+    format: str | None = None
+
+
+class RunOutputsResponse(BaseModel):
+    run_id: str
+    outputs: list[RunOutputSummaryResponse]
+
+
+class RunOutputResponse(BaseModel):
+    run_id: str
+    name: str
+    path: str
+    format: str
+    content: Any

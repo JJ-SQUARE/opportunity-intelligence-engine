@@ -21,6 +21,8 @@ from oie.api.schemas.runs import (
     RunConfigurationResponse,
     RunDeleteResponse,
     RunArtifactPathsResponse,
+    RunOutputResponse,
+    RunOutputsResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
     RunScheduleResponse,
@@ -515,6 +517,93 @@ def get_run_artifact_paths(run_id: str) -> JSONPayload:
     return {
         "run_id": run_id,
         "artifact_paths": dict(manifest.get("artifact_paths", {}) or {}),
+    }
+
+
+def _artifact_format(path: str) -> str | None:
+    suffix = Path(path).suffix.lower()
+    if suffix == ".json":
+        return "json"
+    if suffix == ".jsonl":
+        return "jsonl"
+    if suffix == ".csv":
+        return "csv"
+    if suffix in {".md", ".txt"}:
+        return "text"
+    return None
+
+
+def _safe_output_paths(manifest: JSONPayload) -> dict[str, str]:
+    artifact_paths = dict(manifest.get("artifact_paths", {}) or {})
+    return {
+        str(name): str(path)
+        for name, path in artifact_paths.items()
+        if path
+    }
+
+
+def _read_output_content(path: Path, output_format: str) -> Any:
+    if output_format == "json":
+        from oie.orchestration.stage_io import read_json_file
+        return read_json_file(path)
+    if output_format == "jsonl":
+        from oie.orchestration.stage_io import read_jsonl_file
+        return read_jsonl_file(path)
+    if output_format in {"csv", "text"}:
+        return path.read_text(encoding="utf-8")
+    raise HTTPException(status_code=415, detail=f"Unsupported artifact format: {path.suffix}")
+
+
+@router.get("/runs/{run_id}/outputs", summary="List run outputs", response_model=RunOutputsResponse, tags=["Run Artifacts"])
+def get_run_outputs(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    outputs = []
+    for name, path_value in sorted(_safe_output_paths(manifest).items()):
+        path = Path(path_value)
+        outputs.append(
+            {
+                "name": name,
+                "path": path_value,
+                "exists": path.exists(),
+                "format": _artifact_format(path_value),
+            }
+        )
+
+    return {
+        "run_id": run_id,
+        "outputs": outputs,
+    }
+
+
+@router.get("/runs/{run_id}/outputs/{output_name}", summary="Get run output", response_model=RunOutputResponse, tags=["Run Artifacts"])
+def get_run_output(run_id: str, output_name: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    outputs = _safe_output_paths(manifest)
+    if output_name not in outputs:
+        raise HTTPException(status_code=404, detail=f"Run output not found: {output_name}")
+
+    path = Path(outputs[output_name])
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Run output file not found: {output_name}")
+
+    output_format = _artifact_format(str(path))
+    if output_format is None:
+        raise HTTPException(status_code=415, detail=f"Unsupported artifact format: {path.suffix}")
+
+    return {
+        "run_id": run_id,
+        "name": output_name,
+        "path": str(path),
+        "format": output_format,
+        "content": _read_output_content(path, output_format),
     }
 
 
