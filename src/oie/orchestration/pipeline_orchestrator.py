@@ -496,6 +496,14 @@ class PipelineOrchestrator:
         self.ctx.provider_state["hubspot_push_result"] = hubspot_push_result
 
 
+    def export_historical_outputs(self) -> None:
+        historical_rows = self.historical_intelligence_service.build_company_hiring_history()
+        growth_rows = self.historical_intelligence_service.build_company_growth_summary()
+        self.historical_export_service.export_company_history(historical_rows)
+        self.historical_export_service.export_growth_summary(growth_rows)
+        self.historical_export_service.export_summary_json(growth_rows)
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -534,11 +542,7 @@ class PipelineOrchestrator:
             executive_summary = self.executive_summary_service.build_summary(companies, best_leads)
             self.executive_summary_service.write_summary(executive_summary)
 
-            historical_rows = self.historical_intelligence_service.build_company_hiring_history()
-            growth_rows = self.historical_intelligence_service.build_company_growth_summary()
-            self.historical_export_service.export_company_history(historical_rows)
-            self.historical_export_service.export_growth_summary(growth_rows)
-            self.historical_export_service.export_summary_json(growth_rows)
+            self.export_historical_outputs()
 
             source_trends = self.market_trends_service.build_source_trends()
             country_trends = self.market_trends_service.build_country_trends()
