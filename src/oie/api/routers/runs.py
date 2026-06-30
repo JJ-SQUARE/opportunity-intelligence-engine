@@ -150,7 +150,10 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
         last_checkpoint = None
         runner = StageRunner(ctx)
         for executable_stage in executable_stages:
-            last_checkpoint = runner.run_stage(STAGE_CLASSES[executable_stage])
+            last_checkpoint = runner.run_stage(
+                STAGE_CLASSES[executable_stage],
+                reset=request.rerun,
+            )
 
         finalize_manifest(ctx, "completed")
         return {
