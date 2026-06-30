@@ -426,6 +426,28 @@ class PipelineOrchestrator:
         }
 
 
+    def select_best_leads(
+        self,
+        companies: List[Dict[str, Any]],
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        leads = self.lead_generation_service.generate_leads(self._companies_for_lead_generation(companies))
+        ranked_leads = self.lead_ranking_service.rank_leads(leads)
+
+        lead_cfg = self.ctx.config.get("lead_generation", {}) or {}
+        max_selected_leads_per_company = int(
+            lead_cfg.get("max_selected_leads_per_company", 3) or 3
+        )
+        max_selected_leads_per_company = max(1, max_selected_leads_per_company)
+
+        best_leads = self.lead_ranking_service.select_top_leads_per_company(
+            ranked_leads,
+            max_leads_per_company=max_selected_leads_per_company,
+        )
+        self.ctx.metrics["pipeline_selected_leads_per_company"] = max_selected_leads_per_company
+
+        return self.master_dedup_service.dedupe_leads_against_master(best_leads)
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -442,22 +464,7 @@ class PipelineOrchestrator:
             self.provider_control_service.sync_budget_metrics()
 
             unique_jobs, companies, duplicate_jobs = self.run_company_pipeline()
-            leads = self.lead_generation_service.generate_leads(self._companies_for_lead_generation(companies))
-            ranked_leads = self.lead_ranking_service.rank_leads(leads)
-
-            lead_cfg = self.ctx.config.get("lead_generation", {}) or {}
-            max_selected_leads_per_company = int(
-                lead_cfg.get("max_selected_leads_per_company", 3) or 3
-            )
-            max_selected_leads_per_company = max(1, max_selected_leads_per_company)
-
-            best_leads = self.lead_ranking_service.select_top_leads_per_company(
-                ranked_leads,
-                max_leads_per_company=max_selected_leads_per_company,
-            )
-            self.ctx.metrics["pipeline_selected_leads_per_company"] = max_selected_leads_per_company
-
-            best_leads, duplicate_leads = self.master_dedup_service.dedupe_leads_against_master(best_leads)
+            best_leads, duplicate_leads = self.select_best_leads(companies)
 
             status = "company_pipeline_completed"
 
