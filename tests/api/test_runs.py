@@ -30,6 +30,14 @@ def test_openapi_documents_run_routes():
     schema = response.json()
     assert schema["info"]["title"] == "Opportunity Intelligence Engine API"
     assert schema["info"]["version"] == "0.1.0"
+    assert [tag["name"] for tag in schema["tags"]] == [
+        "Run Management",
+        "Run Scheduling",
+        "CRM Delivery",
+        "ICP Configuration",
+        "Run Artifacts",
+        "Health",
+    ]
     assert schema["paths"]["/runs"]["post"]["summary"] == "Create run"
     assert schema["paths"]["/runs"]["get"]["summary"] == "List runs"
     assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "object"

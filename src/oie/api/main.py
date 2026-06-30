@@ -16,8 +16,24 @@ app = FastAPI(
     version="0.1.0",
     openapi_tags=[
         {
-            "name": "Runs",
-            "description": "Run lifecycle, status, stages, metrics, outputs, and errors.",
+            "name": "Run Management",
+            "description": "Run lifecycle, execution, configuration, status, and detail.",
+        },
+        {
+            "name": "Run Scheduling",
+            "description": "Run scheduling and schedule readiness status.",
+        },
+        {
+            "name": "CRM Delivery",
+            "description": "HubSpot delivery configuration for run outputs.",
+        },
+        {
+            "name": "ICP Configuration",
+            "description": "ICP profiles available to score and segment opportunities.",
+        },
+        {
+            "name": "Run Artifacts",
+            "description": "Stage status, checkpoints, metrics, outputs, artifacts, and errors.",
         },
         {
             "name": "Health",
