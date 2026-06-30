@@ -21,6 +21,17 @@ class StageRunner:
         stage = stage_cls(self.ctx)
         checkpoint_manager = StageCheckpointManager(stage)
         stage.ensure_stage_dir()
+        # FIX: ensure manifest exists before any stage execution (required by tests)
+        from oie.orchestration.run_manifest import read_manifest, build_initial_manifest, write_manifest
+
+        manifest_path = Path(self.ctx.paths["manifest_path"])
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+
+        manifest = read_manifest(self.ctx)
+        if manifest is None:
+            manifest = build_initial_manifest(self.ctx)
+            write_manifest(self.ctx, manifest)
+
         if reset:
             checkpoint_manager.reset_artifacts()
         update_stage_status(self.ctx, stage.name, "running")
