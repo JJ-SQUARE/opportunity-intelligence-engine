@@ -26,6 +26,7 @@ from oie.api.schemas.runs import (
     RunReadinessResponse,
     RunAnalyticsResponse,
     RunExecutiveSummaryResponse,
+    RunCommercialReportResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
     RunScheduleResponse,
@@ -733,6 +734,29 @@ def get_run_executive_summary(run_id: str) -> JSONPayload:
         "run_id": run_id,
         "path": str(summary_path),
         "executive_summary": executive_summary,
+    }
+
+
+@router.get("/runs/{run_id}/commercial-report", summary="Get run commercial report", response_model=RunCommercialReportResponse, tags=["Run Artifacts"])
+def get_run_commercial_report(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    artifact_paths = dict(manifest.get("artifact_paths", {}) or {})
+    report_path_value = artifact_paths.get("commercial_report_md")
+    if not report_path_value:
+        raise HTTPException(status_code=404, detail="Run commercial report not found")
+
+    report_path = Path(str(report_path_value))
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="Run commercial report file not found")
+
+    return {
+        "run_id": run_id,
+        "path": str(report_path),
+        "commercial_report": report_path.read_text(encoding="utf-8"),
     }
 
 

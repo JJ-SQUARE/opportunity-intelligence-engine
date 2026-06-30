@@ -235,3 +235,9 @@ class RunExecutiveSummaryResponse(BaseModel):
     run_id: str
     path: str
     executive_summary: dict[str, Any]
+
+
+class RunCommercialReportResponse(BaseModel):
+    run_id: str
+    path: str
+    commercial_report: str
