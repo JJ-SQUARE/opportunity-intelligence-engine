@@ -383,6 +383,49 @@ class PipelineOrchestrator:
         }
 
 
+    def artifact_paths_payload(self) -> Dict[str, Any]:
+        return {
+            "db_path": self.ctx.paths.get("db_path"),
+            "suspected_duplicates_report": self.ctx.paths.get("suspected_duplicates_report"),
+            "domain_review_queue_csv": self.ctx.paths.get("domain_review_queue_csv"),
+            "companies_export": self.ctx.paths.get("companies_export"),
+            "jobs_export": self.ctx.paths.get("jobs_export"),
+            "leads_export": self.ctx.paths.get("leads_export"),
+            "opportunities_export": self.ctx.paths.get("opportunities_export"),
+            "top_opportunities_export": self.ctx.paths.get("top_opportunities_export"),
+            "commercial_pipeline_csv": self.ctx.paths.get("commercial_pipeline_csv"),
+            "commercial_report_md": self.ctx.paths.get("commercial_report_md"),
+            "apollo_import_csv": self.ctx.paths.get("apollo_import_csv"),
+            "hubspot_companies_json": self.ctx.paths.get("hubspot_companies_json"),
+            "hubspot_contacts_json": self.ctx.paths.get("hubspot_contacts_json"),
+            "hubspot_tasks_json": self.ctx.paths.get("hubspot_tasks_json"),
+            "hubspot_notes_json": self.ctx.paths.get("hubspot_notes_json"),
+            "hubspot_sync_results_json": self.ctx.paths.get("hubspot_sync_results_json"),
+            "top_opportunities_csv": self.ctx.paths.get("top_opportunities_csv"),
+            "executive_summary_json": self.ctx.paths.get("executive_summary_json"),
+            "run_readiness_report_json": self.ctx.paths.get("run_readiness_report_json"),
+            "run_metrics_summary_json": self.ctx.paths.get("run_metrics_summary_json"),
+            "run_analytics_json": self.ctx.paths.get("run_analytics_json"),
+            "historical_company_hiring_csv": self.ctx.paths.get("historical_company_hiring_csv"),
+            "historical_growth_summary_csv": self.ctx.paths.get("historical_growth_summary_csv"),
+            "historical_summary_json": self.ctx.paths.get("historical_summary_json"),
+            "market_trends_by_source_csv": self.ctx.paths.get("market_trends_by_source_csv"),
+            "market_trends_by_location_csv": self.ctx.paths.get("market_trends_by_location_csv"),
+            "market_new_companies_by_source_csv": self.ctx.paths.get("market_new_companies_by_source_csv"),
+            "market_trends_summary_json": self.ctx.paths.get("market_trends_summary_json"),
+            "market_segmented_companies_csv": self.ctx.paths.get("market_segmented_companies_csv"),
+            "market_segment_summary_csv": self.ctx.paths.get("market_segment_summary_csv"),
+            "market_segment_summary_json": self.ctx.paths.get("market_segment_summary_json"),
+            "collector_metrics_json": self.ctx.paths.get("collector_metrics_json"),
+            "collector_contribution_metrics_csv": self.ctx.paths.get("collector_contribution_metrics_csv"),
+            "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
+            "collector_roi_metrics_csv": self.ctx.paths.get("collector_roi_metrics_csv"),
+            "collector_roi_metrics_json": self.ctx.paths.get("collector_roi_metrics_json"),
+            "provider_operation_metrics_csv": self.ctx.paths.get("provider_operation_metrics_csv"),
+            "provider_operation_metrics_json": self.ctx.paths.get("provider_operation_metrics_json"),
+        }
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -538,46 +581,7 @@ class PipelineOrchestrator:
                 executive_summary=executive_summary,
                 run_analytics=run_analytics,
             )
-            result.update({
-                "db_path": self.ctx.paths.get("db_path"),
-                "suspected_duplicates_report": self.ctx.paths.get("suspected_duplicates_report"),
-                "domain_review_queue_csv": self.ctx.paths.get("domain_review_queue_csv"),
-                "companies_export": self.ctx.paths.get("companies_export"),
-                "jobs_export": self.ctx.paths.get("jobs_export"),
-                "leads_export": self.ctx.paths.get("leads_export"),
-                "opportunities_export": self.ctx.paths.get("opportunities_export"),
-                "top_opportunities_export": self.ctx.paths.get("top_opportunities_export"),
-                "commercial_pipeline_csv": self.ctx.paths.get("commercial_pipeline_csv"),
-                "commercial_report_md": self.ctx.paths.get("commercial_report_md"),
-                "apollo_import_csv": self.ctx.paths.get("apollo_import_csv"),
-                "hubspot_companies_json": self.ctx.paths.get("hubspot_companies_json"),
-                "hubspot_contacts_json": self.ctx.paths.get("hubspot_contacts_json"),
-                "hubspot_tasks_json": self.ctx.paths.get("hubspot_tasks_json"),
-                "hubspot_notes_json": self.ctx.paths.get("hubspot_notes_json"),
-                "hubspot_sync_results_json": self.ctx.paths.get("hubspot_sync_results_json"),
-                "top_opportunities_csv": self.ctx.paths.get("top_opportunities_csv"),
-                "executive_summary_json": self.ctx.paths.get("executive_summary_json"),
-                "run_readiness_report_json": self.ctx.paths.get("run_readiness_report_json"),
-                "run_metrics_summary_json": self.ctx.paths.get("run_metrics_summary_json"),
-                "run_analytics_json": self.ctx.paths.get("run_analytics_json"),
-                "historical_company_hiring_csv": self.ctx.paths.get("historical_company_hiring_csv"),
-                "historical_growth_summary_csv": self.ctx.paths.get("historical_growth_summary_csv"),
-                "historical_summary_json": self.ctx.paths.get("historical_summary_json"),
-                "market_trends_by_source_csv": self.ctx.paths.get("market_trends_by_source_csv"),
-                "market_trends_by_location_csv": self.ctx.paths.get("market_trends_by_location_csv"),
-                "market_new_companies_by_source_csv": self.ctx.paths.get("market_new_companies_by_source_csv"),
-                "market_trends_summary_json": self.ctx.paths.get("market_trends_summary_json"),
-                "market_segmented_companies_csv": self.ctx.paths.get("market_segmented_companies_csv"),
-                "market_segment_summary_csv": self.ctx.paths.get("market_segment_summary_csv"),
-                "market_segment_summary_json": self.ctx.paths.get("market_segment_summary_json"),
-                "collector_metrics_json": self.ctx.paths.get("collector_metrics_json"),
-                "collector_contribution_metrics_csv": self.ctx.paths.get("collector_contribution_metrics_csv"),
-                "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
-                "collector_roi_metrics_csv": self.ctx.paths.get("collector_roi_metrics_csv"),
-                "collector_roi_metrics_json": self.ctx.paths.get("collector_roi_metrics_json"),
-                "provider_operation_metrics_csv": self.ctx.paths.get("provider_operation_metrics_csv"),
-                "provider_operation_metrics_json": self.ctx.paths.get("provider_operation_metrics_json"),
-            })
+            result.update(self.artifact_paths_payload())
             return result
 
         except Exception as exc:
