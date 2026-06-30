@@ -75,7 +75,6 @@ class PersistenceService:
         self.company_alias_repository.replace_aliases(companies)
         self.domain_repository.replace_domains(companies)
         self.company_score_repository.replace_company_scores(self.ctx.run_id, companies)
-        self.company_profile_repository.replace_company_profiles(self.ctx.run_id, companies)
 
         merge_candidates = self.ctx.provider_state.get("company_merge_candidates", []) or []
         self.company_merge_candidate_repository.replace_merge_candidates(
@@ -166,6 +165,12 @@ class PersistenceService:
 
         if companies is not None:
             self._safe_persist_step("companies", self.persist_companies, companies)
+            self._safe_persist_step(
+                "company_profiles",
+                self.company_profile_repository.replace_company_profiles,
+                self.ctx.run_id,
+                companies,
+            )
         if jobs is not None:
             self._safe_persist_step("jobs", self.persist_jobs, jobs)
         if leads is not None:
