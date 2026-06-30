@@ -654,6 +654,56 @@ class PipelineOrchestrator:
         return result
 
 
+    def handle_pipeline_failure(
+        self,
+        *,
+        exc: Exception,
+        status: str,
+        unique_jobs: List[Dict[str, Any]],
+        companies: List[Dict[str, Any]],
+        best_leads: List[Dict[str, Any]],
+    ) -> None:
+        self.ctx.metrics["pipeline_failed"] = True
+        self.ctx.metrics["pipeline_error_type"] = exc.__class__.__name__
+        self.ctx.metrics["pipeline_error_message"] = str(exc)
+        self.ctx.provider_state["pipeline_error"] = {
+            "error_type": exc.__class__.__name__,
+            "error_message": str(exc),
+            "traceback": traceback.format_exc(),
+        }
+
+        self.ctx.add_provider_event(
+            provider="pipeline",
+            event_type="run_failed",
+            message=str(exc),
+            metadata={
+                "error_type": exc.__class__.__name__,
+            },
+        )
+
+        try:
+            finalize_manifest(
+                self.ctx,
+                "failed",
+                {
+                    "error_type": exc.__class__.__name__,
+                    "error_message": str(exc),
+                },
+            )
+        except Exception:
+            self.ctx.metrics["pipeline_failure_finalize_manifest_failed"] = True
+
+        try:
+            self.persistence_service.persist_run_snapshot(
+                status=status,
+                companies=companies,
+                jobs=unique_jobs,
+                leads=best_leads,
+            )
+        except Exception:
+            self.ctx.metrics["pipeline_failure_persist_snapshot_failed"] = True
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -737,44 +787,11 @@ class PipelineOrchestrator:
             )
 
         except Exception as exc:
-            self.ctx.metrics["pipeline_failed"] = True
-            self.ctx.metrics["pipeline_error_type"] = exc.__class__.__name__
-            self.ctx.metrics["pipeline_error_message"] = str(exc)
-            self.ctx.provider_state["pipeline_error"] = {
-                "error_type": exc.__class__.__name__,
-                "error_message": str(exc),
-                "traceback": traceback.format_exc(),
-            }
-
-            self.ctx.add_provider_event(
-                provider="pipeline",
-                event_type="run_failed",
-                message=str(exc),
-                metadata={
-                    "error_type": exc.__class__.__name__,
-                },
+            self.handle_pipeline_failure(
+                exc=exc,
+                status=status,
+                unique_jobs=unique_jobs,
+                companies=companies,
+                best_leads=best_leads,
             )
-
-            try:
-                finalize_manifest(
-                    self.ctx,
-                    "failed",
-                    {
-                        "error_type": exc.__class__.__name__,
-                        "error_message": str(exc),
-                    },
-                )
-            except Exception:
-                self.ctx.metrics["pipeline_failure_finalize_manifest_failed"] = True
-
-            try:
-                self.persistence_service.persist_run_snapshot(
-                    status=status,
-                    companies=companies,
-                    jobs=unique_jobs,
-                    leads=best_leads,
-                )
-            except Exception:
-                self.ctx.metrics["pipeline_failure_persist_snapshot_failed"] = True
-
             raise
