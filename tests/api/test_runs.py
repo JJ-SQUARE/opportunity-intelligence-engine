@@ -212,6 +212,7 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
     assert persisted_config["mode"] == "dry-run"
     assert "hubspot_bearer_token" not in persisted_config["hubspot_delivery"]
     assert manifest["config_path"] == str(config_path)
+    assert persisted_config["runs"] == {"path": str(runs_path)}
     assert manifest["account"] == {
         "account_id": "tekton",
         "account_name": "Tekton Labs",
