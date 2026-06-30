@@ -522,6 +522,37 @@ class PipelineOrchestrator:
         self.market_segmentation_export_service.export_segment_summary_json(market_segment_summary)
 
 
+    def export_collector_outputs(
+        self,
+        *,
+        unique_jobs: List[Dict[str, Any]],
+        companies: List[Dict[str, Any]],
+        best_leads: List[Dict[str, Any]],
+        duplicate_jobs: List[Dict[str, Any]],
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+        collector_metrics = self.collector_metrics_service.build_metrics(unique_jobs, companies)
+        self.collector_metrics_export_service.export_json(collector_metrics)
+
+        collector_contribution = self.collector_contribution_service.build_contribution_metrics(
+            unique_jobs,
+            companies,
+            best_leads,
+        )
+        self.collector_contribution_export_service.export_csv(collector_contribution)
+        self.collector_contribution_export_service.export_json(collector_contribution)
+
+        collector_roi = self.collector_roi_service.build_roi_metrics(
+            unique_jobs=unique_jobs,
+            duplicate_jobs=duplicate_jobs,
+            companies=companies,
+            leads=best_leads,
+        )
+        self.collector_roi_export_service.export_csv(collector_roi)
+        self.collector_roi_export_service.export_json(collector_roi)
+
+        return collector_metrics, collector_contribution, collector_roi
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -564,25 +595,12 @@ class PipelineOrchestrator:
 
             self.export_market_outputs(companies)
 
-            collector_metrics = self.collector_metrics_service.build_metrics(unique_jobs, companies)
-            self.collector_metrics_export_service.export_json(collector_metrics)
-
-            collector_contribution = self.collector_contribution_service.build_contribution_metrics(
-                unique_jobs,
-                companies,
-                best_leads,
-            )
-            self.collector_contribution_export_service.export_csv(collector_contribution)
-            self.collector_contribution_export_service.export_json(collector_contribution)
-
-            collector_roi = self.collector_roi_service.build_roi_metrics(
+            collector_metrics, collector_contribution, collector_roi = self.export_collector_outputs(
                 unique_jobs=unique_jobs,
-                duplicate_jobs=duplicate_jobs,
                 companies=companies,
-                leads=best_leads,
+                best_leads=best_leads,
+                duplicate_jobs=duplicate_jobs,
             )
-            self.collector_roi_export_service.export_csv(collector_roi)
-            self.collector_roi_export_service.export_json(collector_roi)
 
             provider_operation_metrics = self.provider_operation_metrics_service.build_rows()
             self.provider_operation_metrics_export_service.export_csv(provider_operation_metrics)
