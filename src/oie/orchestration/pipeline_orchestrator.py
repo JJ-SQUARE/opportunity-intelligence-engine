@@ -468,6 +468,22 @@ class PipelineOrchestrator:
         self.master_data_service.append_leads(best_leads)
 
 
+    def export_core_reports(
+        self,
+        *,
+        companies: List[Dict[str, Any]],
+        duplicate_jobs: List[Dict[str, Any]],
+        duplicate_leads: List[Dict[str, Any]],
+    ) -> None:
+        duplicate_report_rows = self.master_dedup_service.build_suspected_duplicates_report(
+            jobs_duplicates=duplicate_jobs,
+            leads_duplicates=duplicate_leads,
+        )
+        self.duplicate_report_service.write_suspected_duplicates_report(duplicate_report_rows)
+        self.domain_review_queue_service.export_csv(companies)
+        self.db_export_service.export_all()
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -495,13 +511,11 @@ class PipelineOrchestrator:
                 best_leads=best_leads,
             )
 
-            duplicate_report_rows = self.master_dedup_service.build_suspected_duplicates_report(
-                jobs_duplicates=duplicate_jobs,
-                leads_duplicates=duplicate_leads,
+            self.export_core_reports(
+                companies=companies,
+                duplicate_jobs=duplicate_jobs,
+                duplicate_leads=duplicate_leads,
             )
-            self.duplicate_report_service.write_suspected_duplicates_report(duplicate_report_rows)
-            self.domain_review_queue_service.export_csv(companies)
-            self.db_export_service.export_all()
 
             dataset = self.opportunity_dataset_service.build_dataset()
             top_dataset = self.opportunity_dataset_service.build_top_opportunities(limit=25)
