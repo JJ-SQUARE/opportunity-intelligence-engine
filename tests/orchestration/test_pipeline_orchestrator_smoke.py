@@ -177,8 +177,18 @@ def test_orchestrator_uses_top_multiple_leads_per_company_config():
     orchestrator.run_readiness_service.build_report = lambda **kwargs: {}
     orchestrator.run_readiness_export_service.export_json = lambda report: None
 
-    orchestrator.run_metrics_summary_service.build_summary = lambda: {}
-    orchestrator.run_metrics_summary_export_service.export_json = lambda summary: None
+    calls["run_metrics_summary_build_count"] = 0
+    calls["run_metrics_summary_export_count"] = 0
+
+    def fake_build_run_metrics_summary():
+        calls["run_metrics_summary_build_count"] += 1
+        return {}
+
+    def fake_export_run_metrics_summary(summary):
+        calls["run_metrics_summary_export_count"] += 1
+
+    orchestrator.run_metrics_summary_service.build_summary = fake_build_run_metrics_summary
+    orchestrator.run_metrics_summary_export_service.export_json = fake_export_run_metrics_summary
 
     orchestrator.run_analytics_service.build_analytics = lambda **kwargs: {}
     orchestrator.run_analytics_export_service.export_json = lambda analytics: None
@@ -190,6 +200,8 @@ def test_orchestrator_uses_top_multiple_leads_per_company_config():
     assert calls["max_leads_per_company"] == 2
     assert ctx.metrics["pipeline_selected_leads_per_company"] == 2
     assert result["leads_count"] == 2
+    assert calls["run_metrics_summary_build_count"] == 1
+    assert calls["run_metrics_summary_export_count"] == 1
     assert manifest["status"] == "completed"
 
 def test_orchestrator_enriches_before_classification_and_scoring():
