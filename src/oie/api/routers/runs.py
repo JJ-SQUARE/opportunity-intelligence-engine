@@ -283,6 +283,12 @@ def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) ->
         for key, value in request.model_dump(exclude_none=True).items()
         if key != "hubspot_bearer_token"
     }
+    if "hubspot_bearer_token" in request.model_fields_set and request.hubspot_bearer_token:
+        hubspot_delivery["hubspot_credentials_ref"] = (
+            hubspot_delivery.get("hubspot_credentials_ref")
+            or f"hubspot/{run_id}"
+        )
+
     manifest["hubspot_delivery"] = hubspot_delivery
     write_manifest(ctx, manifest)
     return {"run_id": run_id, "hubspot_delivery": hubspot_delivery}
