@@ -684,6 +684,40 @@ def test_get_run_schedule_status_returns_due_payload(tmp_path, monkeypatch):
     assert "checked_at" in payload
 
 
+def test_get_run_schedule_status_returns_unscheduled_payload_when_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/schedule/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "scheduled": False,
+        "enabled": False,
+        "due": False,
+        "frequency": None,
+        "duration": None,
+        "scheduled_times": [],
+        "scheduled_days": [],
+        "checked_at": None,
+    }
+
+
 def test_get_run_schedule_returns_404_when_missing(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
