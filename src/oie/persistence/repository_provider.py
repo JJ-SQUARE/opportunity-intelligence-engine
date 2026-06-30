@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from oie.persistence.company_alias_repository import CompanyAliasRepository
 from oie.persistence.company_merge_candidate_repository import CompanyMergeCandidateRepository
+from oie.persistence.company_profile_repository import CompanyProfileRepository
 from oie.persistence.company_repository import CompanyRepository
 from oie.persistence.company_score_repository import CompanyScoreRepository
 from oie.persistence.context import PersistenceContext
@@ -29,6 +30,7 @@ class RepositoryProvider:
     job_repository: JobRepository
     lead_repository: LeadRepository
     company_score_repository: CompanyScoreRepository
+    company_profile_repository: CompanyProfileRepository
 
     @classmethod
     def from_persistence(
@@ -47,4 +49,5 @@ class RepositoryProvider:
             job_repository=JobRepository(persistence=persistence),
             lead_repository=LeadRepository(persistence=persistence),
             company_score_repository=CompanyScoreRepository(persistence=persistence),
+            company_profile_repository=CompanyProfileRepository(persistence=persistence),
         )
