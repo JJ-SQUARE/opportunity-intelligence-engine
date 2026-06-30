@@ -174,15 +174,6 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
 
 @router.post("/runs/{run_id}/execute", summary="Execute run", response_model=RunExecutionResponse)
 def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
-    # FIX: artifact endpoint must be read-only, no request context
-    repository = _run_repository()
-    manifest = repository.read_detail(run_id)
-    if manifest is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    
-    # FIX: reuse repository context to preserve run identity + filesystem mapping
-    repository = _run_repository(run_id)
-    ctx = repository.ctx
     if request.start_stage is not None:
         start_index = PIPELINE_STAGES.index(request.start_stage) if request.start_stage in PIPELINE_STAGES else -1
         if start_index < 0:
@@ -195,6 +186,12 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
         if not executable_stages:
             raise HTTPException(status_code=404, detail="Stage not executable")
 
+        ctx = _ctx_for_existing_run(
+            run_id=run_id,
+            config=request.config,
+            flags=request.flags,
+            mode=request.mode,
+        )
         last_checkpoint = None
         runner = StageRunner(ctx)
         for executable_stage in executable_stages:
@@ -209,6 +206,12 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
             "leads_count": 0,
         }
 
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
     result = PipelineOrchestrator(ctx).run()
     return dict(result)
 
@@ -227,23 +230,20 @@ def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) 
     if stage_cls is None:
         raise HTTPException(status_code=404, detail="Stage not executable")
 
-    # FIX: artifact endpoint must be read-only, no request context
-    repository = _run_repository()
-    manifest = repository.read_detail(run_id)
-    if manifest is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    
-    # FIX: reuse repository context to preserve run identity + filesystem mapping
-    repository = _run_repository(run_id)
-    ctx = repository.ctx
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
     checkpoint = StageRunner(ctx).run_stage(stage_cls)
     return dict(checkpoint)
 
 
 
 @router.post("/runs/{run_id}/cancel")
-def cancel_run(run_id: str, request):
-    ctx = _run_repository().ctx
+def cancel_run(run_id: str, request: ExecuteRunRequest):
+    ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
     from oie.orchestration.run_manifest import set_run_status
     return set_run_status(ctx, run_id, "cancelled")
 
@@ -251,8 +251,8 @@ def cancel_run(run_id: str, request):
 
 
 @router.post("/runs/{run_id}/pause")
-def pause_run(run_id: str, request):
-    ctx = _run_repository().ctx
+def pause_run(run_id: str, request: ExecuteRunRequest):
+    ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
     from oie.orchestration.run_manifest import set_run_status
     return set_run_status(ctx, run_id, "waiting_for_user")
 
@@ -260,8 +260,8 @@ def pause_run(run_id: str, request):
 
 
 @router.post("/runs/{run_id}/resume")
-def resume_run(run_id: str, request):
-    ctx = _run_repository().ctx
+def resume_run(run_id: str, request: ExecuteRunRequest):
+    ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
     from oie.orchestration.run_manifest import set_run_status
     return set_run_status(ctx, run_id, "pending")
 
