@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from oie.domain.value_objects import OpportunityId
+from oie.domain.value_objects import CompanyId, OpportunityId
 
 JSONDict = dict[str, Any]
 
@@ -24,6 +24,7 @@ class JobPosting:
 class CompanyProfile:
     company_display: str
     company_normalized: str
+    id: CompanyId | str | None = None
     resolved_domain: str | None = None
     metadata: JSONDict = field(default_factory=dict)
 
