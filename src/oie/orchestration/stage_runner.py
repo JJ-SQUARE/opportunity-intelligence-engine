@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TypeAlias
 
 from oie.orchestration.run_context import RunContext
@@ -8,7 +9,6 @@ from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
 from oie.orchestration.stage_timing import start_timer
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_state import StageState
-from pathlib import Path
 
 
 StageClass: TypeAlias = type[Stage]
