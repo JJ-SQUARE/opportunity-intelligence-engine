@@ -108,11 +108,16 @@ def _update_run_status(
     status: str,
     current_stage: str | None = None,
 ) -> JSONPayload:
-    ctx = _ctx_for_existing_run(
-        run_id=run_id,
-        config=request.config,
-        flags=request.flags,
-        mode=request.mode,
+    # FIX: artifact endpoint must be read-only, no request context
+    repository = _run_repository()
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    ctx = RunContext.create(
+        config={"runs": {"path": manifest.get("config_path", "data/runs")}},
+        flags={},
+        mode=manifest.get("mode"),
     )
     repository = RunRepository(ctx)
     manifest = repository.read_detail(run_id)
@@ -157,11 +162,16 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
 
 @router.post("/runs/{run_id}/execute", summary="Execute run", response_model=RunExecutionResponse)
 def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
-    ctx = _ctx_for_existing_run(
-        run_id=run_id,
-        config=request.config,
-        flags=request.flags,
-        mode=request.mode,
+    # FIX: artifact endpoint must be read-only, no request context
+    repository = _run_repository()
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    ctx = RunContext.create(
+        config={"runs": {"path": manifest.get("config_path", "data/runs")}},
+        flags={},
+        mode=manifest.get("mode"),
     )
     if request.start_stage is not None:
         start_index = PIPELINE_STAGES.index(request.start_stage) if request.start_stage in PIPELINE_STAGES else -1
@@ -207,11 +217,16 @@ def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) 
     if stage_cls is None:
         raise HTTPException(status_code=404, detail="Stage not executable")
 
-    ctx = _ctx_for_existing_run(
-        run_id=run_id,
-        config=request.config,
-        flags=request.flags,
-        mode=request.mode,
+    # FIX: artifact endpoint must be read-only, no request context
+    repository = _run_repository()
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    ctx = RunContext.create(
+        config={"runs": {"path": manifest.get("config_path", "data/runs")}},
+        flags={},
+        mode=manifest.get("mode"),
     )
     checkpoint = StageRunner(ctx).run_stage(stage_cls)
     return dict(checkpoint)
@@ -390,11 +405,16 @@ def get_run_stages(run_id: str) -> list[JSONPayload]:
 
 @router.get("/runs/{run_id}/artifacts", summary="Get artifact catalog", response_model=ArtifactCatalogResponse)
 def get_run_artifact_catalog(run_id: str) -> JSONPayload:
-    ctx = _ctx_for_existing_run(
-        run_id=run_id,
-        config=request.config,
-        flags=request.flags,
-        mode=request.mode,
+    # FIX: artifact endpoint must be read-only, no request context
+    repository = _run_repository()
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    ctx = RunContext.create(
+        config={"runs": {"path": manifest.get("config_path", "data/runs")}},
+        flags={},
+        mode=manifest.get("mode"),
     )
     repository = RunRepository(ctx)
     manifest = repository.read_detail(run_id)
