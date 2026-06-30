@@ -51,6 +51,7 @@ class RunConfigurationResponse(BaseModel):
     account: dict[str, Any] = Field(default_factory=dict)
     user: dict[str, Any] = Field(default_factory=dict)
     hubspot_delivery: dict[str, Any] = Field(default_factory=dict)
+    icp_profiles: list[dict[str, Any]] = Field(default_factory=list)
     flags: dict[str, Any] = Field(default_factory=dict)
     mode: str
 

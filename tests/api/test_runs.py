@@ -59,6 +59,8 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/configuration"]["get"]["summary"] == "Get run configuration"
     assert schema["paths"]["/runs/{run_id}/configuration"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunConfigurationResponse")
     assert "RunConfigurationResponse" in schema["components"]["schemas"]
+    assert "icp_profiles" in schema["components"]["schemas"]["RunConfigurationResponse"]["properties"]
+    assert schema["components"]["schemas"]["RunConfigurationResponse"]["properties"]["icp_profiles"]["type"] == "array"
     assert "RunExecutionResponse" in schema["components"]["schemas"]
     assert "RunStageStatusResponse" in schema["components"]["schemas"]
     assert "RunMetricsSummaryResponse" in schema["components"]["schemas"]
@@ -382,6 +384,14 @@ def test_get_run_configuration_returns_sanitized_snapshot(tmp_path, monkeypatch)
                     "hubspot_user_id": "123",
                     "hubspot_bearer_token": "secret-token",
                 },
+                "icp_profiles": [
+                    {
+                        "profile_id": "asd-midmarket",
+                        "service_line": "ASD",
+                        "name": "ASD Midmarket",
+                        "enabled": True,
+                    }
+                ],
             },
             "flags": {"dry_run": True},
         },
@@ -410,6 +420,14 @@ def test_get_run_configuration_returns_sanitized_snapshot(tmp_path, monkeypatch)
     assert payload["hubspot_delivery"] == {
         "hubspot_user_id": "123",
     }
+    assert payload["icp_profiles"] == [
+        {
+            "profile_id": "asd-midmarket",
+            "service_line": "ASD",
+            "name": "ASD Midmarket",
+            "enabled": True,
+        }
+    ]
     assert "hubspot_bearer_token" not in payload["hubspot_delivery"]
 
 

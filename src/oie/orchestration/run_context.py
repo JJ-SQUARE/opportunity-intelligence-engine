@@ -42,6 +42,7 @@ class RunConfig(TypedDict, total=False):
     account: AccountConfig
     user: UserConfig
     hubspot_delivery: HubSpotDeliveryConfig
+    icp_profiles: list[JSONPayload]
 
 
 class RunFlags(TypedDict, total=False):
@@ -56,6 +57,7 @@ class RunConfiguration(TypedDict, total=False):
     account: AccountConfig
     user: UserConfig
     hubspot_delivery: HubSpotDeliveryConfig
+    icp_profiles: list[JSONPayload]
     flags: RunFlags
     mode: str
 
