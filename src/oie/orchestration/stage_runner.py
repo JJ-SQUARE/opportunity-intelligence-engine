@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TypeAlias
 
 from oie.orchestration.run_context import RunContext
@@ -19,9 +18,6 @@ class StageRunner:
         self.ctx = ctx
 
     def ensure_manifest(self) -> None:
-        manifest_path = Path(self.ctx.paths["manifest_path"])
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-
         if read_manifest(self.ctx) is None:
             write_manifest(self.ctx, build_initial_manifest(self.ctx))
 
