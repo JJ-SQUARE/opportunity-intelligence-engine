@@ -23,6 +23,7 @@ from oie.api.schemas.runs import (
     RunArtifactPathsResponse,
     RunOutputResponse,
     RunOutputsResponse,
+    RunReadinessResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
     RunScheduleResponse,
@@ -643,6 +644,35 @@ def get_run_output(run_id: str, output_name: str) -> JSONPayload:
         "path": str(path),
         "format": output_format,
         "content": _read_output_content(path, output_format),
+    }
+
+
+@router.get("/runs/{run_id}/readiness", summary="Get run readiness", response_model=RunReadinessResponse, tags=["Run Artifacts"])
+def get_run_readiness(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    artifact_paths = dict(manifest.get("artifact_paths", {}) or {})
+    readiness_path_value = artifact_paths.get("run_readiness_report_json")
+    if not readiness_path_value:
+        raise HTTPException(status_code=404, detail="Run readiness report not found")
+
+    readiness_path = Path(str(readiness_path_value))
+    if not readiness_path.exists():
+        raise HTTPException(status_code=404, detail="Run readiness report file not found")
+
+    from oie.orchestration.stage_io import read_json_file
+
+    readiness = read_json_file(readiness_path)
+    if readiness is None:
+        raise HTTPException(status_code=404, detail="Run readiness report file not found")
+
+    return {
+        "run_id": run_id,
+        "path": str(readiness_path),
+        "readiness": readiness,
     }
 
 
