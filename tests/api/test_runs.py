@@ -19,6 +19,10 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/status"]["get"]["summary"] == "Get run status"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
     assert schema["paths"]["/health"]["get"]["tags"] == ["Health"]
+    assert "RunSummaryResponse" in schema["components"]["schemas"]
+    assert "RunStatusResponse" in schema["components"]["schemas"]
+    assert "RunStageStatusResponse" in schema["components"]["schemas"]
+    assert "RunMetricsSummaryResponse" in schema["components"]["schemas"]
 
 
 def test_list_runs_returns_existing_run_summaries(tmp_path, monkeypatch):

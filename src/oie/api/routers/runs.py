@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from oie.api.schemas.runs import CreateRunRequest, CreateRunResponse, ExecuteRunRequest
+from oie.api.schemas.runs import (
+    CreateRunRequest,
+    CreateRunResponse,
+    ExecuteRunRequest,
+    RunMetricsSummaryResponse,
+    RunStageStatusResponse,
+    RunStatusResponse,
+    RunSummaryResponse,
+)
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
@@ -146,13 +154,13 @@ def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     )
 
 
-@router.get("/runs", summary="List runs")
+@router.get("/runs", summary="List runs", response_model=list[RunSummaryResponse])
 def list_runs() -> list[JSONPayload]:
     repository = _run_repository()
     return repository.list_summaries()
 
 
-@router.get("/runs/{run_id}/status", summary="Get run status")
+@router.get("/runs/{run_id}/status", summary="Get run status", response_model=RunStatusResponse)
 def get_run_status(run_id: str) -> JSONPayload:
     repository = _run_repository()
     status = repository.read_status(run_id)
@@ -161,7 +169,7 @@ def get_run_status(run_id: str) -> JSONPayload:
     return status
 
 
-@router.get("/runs/{run_id}/stages", summary="List run stages")
+@router.get("/runs/{run_id}/stages", summary="List run stages", response_model=list[RunStageStatusResponse])
 def get_run_stages(run_id: str) -> list[JSONPayload]:
     repository = _run_repository()
     stages = repository.read_stages(run_id)
@@ -170,7 +178,7 @@ def get_run_stages(run_id: str) -> list[JSONPayload]:
     return stages
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}", summary="Get stage status")
+@router.get("/runs/{run_id}/stages/{stage_name}", summary="Get stage status", response_model=RunStageStatusResponse)
 def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
     repository = _run_repository()
     stage = repository.read_stage(run_id, stage_name)
@@ -224,7 +232,7 @@ def get_run_errors(run_id: str) -> list[JSONPayload]:
     return errors
 
 
-@router.get("/runs/{run_id}/metrics", summary="Get run metrics summary")
+@router.get("/runs/{run_id}/metrics", summary="Get run metrics summary", response_model=RunMetricsSummaryResponse)
 def get_run_metrics(run_id: str) -> JSONPayload:
     repository = _run_repository()
     metrics = repository.read_metrics_summary(run_id)
