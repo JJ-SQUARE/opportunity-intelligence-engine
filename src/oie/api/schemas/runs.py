@@ -223,3 +223,9 @@ class RunReadinessResponse(BaseModel):
     run_id: str
     path: str
     readiness: dict[str, Any]
+
+
+class RunAnalyticsResponse(BaseModel):
+    run_id: str
+    path: str
+    analytics: dict[str, Any]
