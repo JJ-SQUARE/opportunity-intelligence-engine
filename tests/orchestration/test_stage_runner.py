@@ -311,6 +311,10 @@ def test_stage_runner_persists_output_jsonl_and_updates_checkpoint(tmp_path):
     assert checkpoint["input_count"] == 2
     assert checkpoint["processed_count"] == 2
     assert checkpoint["output_count"] == 2
+
+    manifest = json.loads((paths["stage_dir"].parent / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["stages"]["company_gate"] == checkpoint["status"]
+
     metrics = json.loads(paths["metrics"].read_text(encoding="utf-8"))
 
     assert checkpoint["last_processed_index"] == 1
