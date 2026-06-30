@@ -560,6 +560,32 @@ class PipelineOrchestrator:
         return provider_operation_metrics
 
 
+    def build_readiness_and_metrics(
+        self,
+        *,
+        unique_jobs: List[Dict[str, Any]],
+        companies: List[Dict[str, Any]],
+        best_leads: List[Dict[str, Any]],
+    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        self.ctx.provider_state["run_metrics_summary_counts"] = {
+            "jobs_count": len(unique_jobs),
+            "companies_count": len(companies),
+            "leads_count": len(best_leads),
+        }
+
+        readiness_report = self.run_readiness_service.build_report(
+            jobs=unique_jobs,
+            companies=companies,
+            leads=best_leads,
+        )
+        self.run_readiness_export_service.export_json(readiness_report)
+
+        run_metrics_summary = self.run_metrics_summary_service.build_summary()
+        self.run_metrics_summary_export_service.export_json(run_metrics_summary)
+
+        return readiness_report, run_metrics_summary
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -611,21 +637,11 @@ class PipelineOrchestrator:
 
             provider_operation_metrics = self.export_provider_operation_metrics()
 
-            self.ctx.provider_state["run_metrics_summary_counts"] = {
-                "jobs_count": len(unique_jobs),
-                "companies_count": len(companies),
-                "leads_count": len(best_leads),
-            }
-
-            readiness_report = self.run_readiness_service.build_report(
-                jobs=unique_jobs,
+            readiness_report, run_metrics_summary = self.build_readiness_and_metrics(
+                unique_jobs=unique_jobs,
                 companies=companies,
-                leads=best_leads,
+                best_leads=best_leads,
             )
-            self.run_readiness_export_service.export_json(readiness_report)
-
-            run_metrics_summary = self.run_metrics_summary_service.build_summary()
-            self.run_metrics_summary_export_service.export_json(run_metrics_summary)
 
             run_analytics = self.run_analytics_service.build_analytics(
                 status=status,
