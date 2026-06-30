@@ -7,6 +7,8 @@ from oie.domain.entities import (
     OpportunityCandidate,
     OpportunityScore,
 )
+
+
 def test_opportunity_candidate_accepts_core_domain_entities():
     job = JobPosting(
         title="Senior Python Engineer",
@@ -28,6 +30,7 @@ def test_opportunity_candidate_accepts_core_domain_entities():
         reason="Real hiring company",
         evidence=[evidence],
     )
+
     candidate = OpportunityCandidate(
         id="opp_1",
         source_job=job,
@@ -36,12 +39,15 @@ def test_opportunity_candidate_accepts_core_domain_entities():
         scores=[score],
     )
     candidate.decision_history.add(decision)
+
     assert candidate.id == "opp_1"
     assert candidate.source_job is job
     assert candidate.company is company
     assert candidate.evidence == [evidence]
     assert candidate.scores == [score]
     assert candidate.decision_history.decisions == [decision]
+
+
 def test_decision_history_starts_empty_and_accumulates_decisions():
     history = DecisionHistory()
     decision = Decision(
@@ -50,5 +56,7 @@ def test_decision_history_starts_empty_and_accumulates_decisions():
         confidence=0.7,
         reason="Job posting appears stale",
     )
+
     history.add(decision)
+
     assert history.decisions == [decision]
