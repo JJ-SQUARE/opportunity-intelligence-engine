@@ -42,6 +42,23 @@ class RunStatusResponse(BaseModel):
     current_stage: str | None
 
 
+class RunScheduleRequest(BaseModel):
+    frequency: str
+    duration: str
+    scheduled_times: list[str] = Field(default_factory=list)
+    scheduled_days: list[str] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class RunScheduleResponse(BaseModel):
+    run_id: str
+    frequency: str
+    duration: str
+    scheduled_times: list[str]
+    scheduled_days: list[str]
+    enabled: bool
+
+
 class RunExecutionResponse(BaseModel):
     run_id: str
     status: str

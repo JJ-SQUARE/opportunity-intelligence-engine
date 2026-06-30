@@ -33,6 +33,8 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs"]["get"]["summary"] == "List runs"
     assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "object"
     assert schema["paths"]["/runs/{run_id}/status"]["get"]["summary"] == "Get run status"
+    assert schema["paths"]["/runs/{run_id}/schedule"]["post"]["summary"] == "Create run schedule"
+    assert schema["paths"]["/runs/{run_id}/schedule"]["get"]["summary"] == "Get run schedule"
     assert schema["paths"]["/runs/{run_id}/artifacts"]["get"]["summary"] == "Get artifact catalog"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/summary"]["get"]["summary"] == "Get stage artifact summary"
@@ -178,6 +180,68 @@ def test_get_run_status_returns_404_for_missing_run(tmp_path, monkeypatch):
     assert response.status_code == 404
     assert response.json() == {"detail": "Run not found"}
 
+
+
+def test_create_and_get_run_schedule_persists_frequency_duration_and_programming(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    schedule_payload = {
+        "frequency": "weekly",
+        "duration": "2026-07-01/2026-09-30",
+        "scheduled_times": ["09:00", "15:00"],
+        "scheduled_days": ["monday", "wednesday"],
+        "enabled": True,
+    }
+
+    create_response = client.post(
+        f"/runs/{ctx.run_id}/schedule",
+        json=schedule_payload,
+    )
+    get_response = client.get(f"/runs/{ctx.run_id}/schedule")
+
+    assert create_response.status_code == 200
+    assert create_response.json() == {"run_id": ctx.run_id, **schedule_payload}
+    assert get_response.status_code == 200
+    assert get_response.json() == {"run_id": ctx.run_id, **schedule_payload}
+
+
+def test_get_run_schedule_returns_404_when_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/schedule")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run schedule not found"}
 
 
 def test_get_run_stages_returns_existing_stage_statuses(tmp_path, monkeypatch):

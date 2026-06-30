@@ -13,6 +13,8 @@ from oie.api.schemas.runs import (
     HTTPErrorResponse,
     RunExecutionResponse,
     RunMetricsSummaryResponse,
+    RunScheduleRequest,
+    RunScheduleResponse,
     StageCheckpointResponse,
     StageMetricsResponse,
     StageArtifactSummaryResponse,
@@ -30,6 +32,7 @@ from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunConfig, RunContext, RunFlags
 from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, write_manifest
+from oie.orchestration.run_schedule import read_run_schedule, write_run_schedule
 from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 
@@ -231,6 +234,31 @@ def get_run_status(run_id: str) -> JSONPayload:
     if status is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return status
+
+
+@router.post("/runs/{run_id}/schedule", summary="Create run schedule", response_model=RunScheduleResponse)
+def create_run_schedule(run_id: str, request: RunScheduleRequest) -> JSONPayload:
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config={},
+        flags={},
+        mode=None,
+    )
+    return write_run_schedule(ctx, request.model_dump())
+
+
+@router.get("/runs/{run_id}/schedule", summary="Get run schedule", response_model=RunScheduleResponse)
+def get_run_schedule(run_id: str) -> JSONPayload:
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config={},
+        flags={},
+        mode=None,
+    )
+    schedule = read_run_schedule(ctx)
+    if schedule is None:
+        raise HTTPException(status_code=404, detail="Run schedule not found")
+    return schedule
 
 
 @router.get("/runs/{run_id}/stages", summary="List run stages", response_model=list[RunStageStatusResponse])
