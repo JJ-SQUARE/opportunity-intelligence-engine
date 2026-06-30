@@ -377,7 +377,6 @@ class PipelineOrchestrator:
             "metrics": self.ctx.metrics,
             "budgets": self.ctx.budgets,
             "provider_events_count": len(self.ctx.provider_events),
-            "db_path": self.ctx.paths.get("db_path"),
             "run_metrics_summary": run_metrics_summary,
             "executive_summary": executive_summary,
             "run_analytics": run_analytics,
