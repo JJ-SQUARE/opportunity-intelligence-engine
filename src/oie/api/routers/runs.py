@@ -114,9 +114,10 @@ def _update_run_status(
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    manifest["status"] = status
-    manifest["current_stage"] = current_stage
-    repository.write_detail(manifest)
+        repository.update_detail_patch(run_id, {
+            "status": status,
+            "current_stage": current_stage,
+        })
 
     updated_status = repository.read_status(run_id)
     if updated_status is None:
