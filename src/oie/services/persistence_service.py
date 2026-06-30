@@ -28,6 +28,7 @@ class PersistenceService:
         self.job_repository = self.repositories.job_repository
         self.lead_repository = self.repositories.lead_repository
         self.company_score_repository = self.repositories.company_score_repository
+        self.company_profile_repository = self.repositories.company_profile_repository
 
     def initialize(self) -> None:
         if self.persistence.backend == "sqlite":
@@ -74,6 +75,7 @@ class PersistenceService:
         self.company_alias_repository.replace_aliases(companies)
         self.domain_repository.replace_domains(companies)
         self.company_score_repository.replace_company_scores(self.ctx.run_id, companies)
+        self.company_profile_repository.replace_company_profiles(self.ctx.run_id, companies)
 
         merge_candidates = self.ctx.provider_state.get("company_merge_candidates", []) or []
         self.company_merge_candidate_repository.replace_merge_candidates(
