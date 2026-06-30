@@ -60,7 +60,17 @@ def read_run_schedule(ctx: RunContext) -> JSONPayload | None:
 def run_schedule_status(ctx: RunContext, now: datetime | None = None) -> JSONPayload:
     schedule = read_run_schedule(ctx)
     if schedule is None:
-        return {"run_id": ctx.run_id, "scheduled": False, "enabled": False, "due": False}
+        return {
+            "run_id": ctx.run_id,
+            "scheduled": False,
+            "enabled": False,
+            "due": False,
+            "frequency": None,
+            "duration": None,
+            "scheduled_times": [],
+            "scheduled_days": [],
+            "checked_at": None,
+        }
 
     current_time = now or datetime.now(UTC)
     scheduled_times = list(schedule.get("scheduled_times", []))
