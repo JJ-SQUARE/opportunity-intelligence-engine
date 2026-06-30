@@ -196,24 +196,24 @@ def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) 
 
 
 
-@router.post("/runs/{run_id}/cancel")
-def cancel_run(run_id: str, request: ExecuteRunRequest):
+@router.post("/runs/{run_id}/cancel", response_model=RunStatusResponse)
+def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
     return set_run_status(ctx, run_id, "cancelled")
 
 
 
 
-@router.post("/runs/{run_id}/pause")
-def pause_run(run_id: str, request: ExecuteRunRequest):
+@router.post("/runs/{run_id}/pause", response_model=RunStatusResponse)
+def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
     return set_run_status(ctx, run_id, "waiting_for_user")
 
 
 
 
-@router.post("/runs/{run_id}/resume")
-def resume_run(run_id: str, request: ExecuteRunRequest):
+@router.post("/runs/{run_id}/resume", response_model=RunStatusResponse)
+def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
     return set_run_status(ctx, run_id, "pending")
 
