@@ -108,7 +108,13 @@ def _update_run_status(
     status: str,
     current_stage: str | None = None,
 ) -> JSONPayload:
-    repository = _run_repository()
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    repository = RunRepository(ctx)
     manifest = repository.read_detail(run_id)
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -384,7 +390,13 @@ def get_run_stages(run_id: str) -> list[JSONPayload]:
 
 @router.get("/runs/{run_id}/artifacts", summary="Get artifact catalog", response_model=ArtifactCatalogResponse)
 def get_run_artifact_catalog(run_id: str) -> JSONPayload:
-    repository = _run_repository()
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    repository = RunRepository(ctx)
     manifest = repository.read_detail(run_id)
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
