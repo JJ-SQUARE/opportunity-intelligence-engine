@@ -504,6 +504,24 @@ class PipelineOrchestrator:
         self.historical_export_service.export_summary_json(growth_rows)
 
 
+    def export_market_outputs(self, companies: List[Dict[str, Any]]) -> None:
+        source_trends = self.market_trends_service.build_source_trends()
+        country_trends = self.market_trends_service.build_country_trends()
+        new_companies_trends = self.market_trends_service.build_new_companies_by_source()
+        market_summary = self.market_trends_service.build_summary()
+
+        self.market_trends_export_service.export_source_trends(source_trends)
+        self.market_trends_export_service.export_country_trends(country_trends)
+        self.market_trends_export_service.export_new_companies_by_source(new_companies_trends)
+        self.market_trends_export_service.export_summary_json(market_summary)
+
+        segmented_companies = self.market_segmentation_service.segment_companies(companies)
+        market_segment_summary = self.market_segmentation_service.build_segment_summary(companies)
+        self.market_segmentation_export_service.export_segmented_companies(segmented_companies)
+        self.market_segmentation_export_service.export_segment_summary(market_segment_summary)
+        self.market_segmentation_export_service.export_segment_summary_json(market_segment_summary)
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -544,21 +562,7 @@ class PipelineOrchestrator:
 
             self.export_historical_outputs()
 
-            source_trends = self.market_trends_service.build_source_trends()
-            country_trends = self.market_trends_service.build_country_trends()
-            new_companies_trends = self.market_trends_service.build_new_companies_by_source()
-            market_summary = self.market_trends_service.build_summary()
-
-            self.market_trends_export_service.export_source_trends(source_trends)
-            self.market_trends_export_service.export_country_trends(country_trends)
-            self.market_trends_export_service.export_new_companies_by_source(new_companies_trends)
-            self.market_trends_export_service.export_summary_json(market_summary)
-
-            segmented_companies = self.market_segmentation_service.segment_companies(companies)
-            market_segment_summary = self.market_segmentation_service.build_segment_summary(companies)
-            self.market_segmentation_export_service.export_segmented_companies(segmented_companies)
-            self.market_segmentation_export_service.export_segment_summary(market_segment_summary)
-            self.market_segmentation_export_service.export_segment_summary_json(market_segment_summary)
+            self.export_market_outputs(companies)
 
             collector_metrics = self.collector_metrics_service.build_metrics(unique_jobs, companies)
             self.collector_metrics_export_service.export_json(collector_metrics)
