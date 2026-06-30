@@ -231,6 +231,33 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
     assert "hubspot_bearer_token" not in manifest["hubspot_delivery"]
 
 
+def test_get_run_configuration_returns_404_when_snapshot_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["config_path"] = str(runs_path / ctx.run_id / "missing-configuration.json")
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get(f"/runs/{ctx.run_id}/configuration")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Run configuration not found",
+    }
+
+
 def test_get_run_configuration_returns_404_for_missing_run():
     client = TestClient(app)
 
