@@ -254,6 +254,25 @@ def test_stage_runner_ensure_manifest_creates_missing_manifest(tmp_path):
     assert manifest["current_stage"] is None
 
 
+def test_stage_runner_ensure_manifest_preserves_existing_manifest(tmp_path):
+    from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
+
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+    manifest = build_initial_manifest(ctx)
+    manifest["status"] = "waiting_for_user"
+    write_manifest(ctx, manifest)
+
+    StageRunner(ctx).ensure_manifest()
+
+    loaded = json.loads(Path(ctx.paths["manifest_path"]).read_text(encoding="utf-8"))
+
+    assert loaded["run_id"] == ctx.run_id
+    assert loaded["status"] == "waiting_for_user"
+
+
 def test_stage_runner_writes_initial_checkpoint(tmp_path):
     ctx = RunContext.create(
         config={"runs": {"path": str(tmp_path / "runs")}},
