@@ -460,6 +460,48 @@ def test_update_run_hubspot_delivery_sanitizes_bearer_token(tmp_path, monkeypatc
     assert "hubspot_bearer_token" not in hubspot_delivery
 
 
+def test_update_run_hubspot_delivery_uses_run_specific_repository(tmp_path, monkeypatch):
+    from oie.api.routers import runs as runs_router
+
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_run_repository = runs_router._run_repository
+    seen_run_ids = []
+
+    def spy_run_repository(run_id=None, config=None, flags=None, mode=None):
+        seen_run_ids.append(run_id)
+        merged_config = dict(config or {})
+        merged_config["runs"] = {"path": str(runs_path)}
+        return original_run_repository(
+            run_id=run_id,
+            config=merged_config,
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr(runs_router, "_run_repository", spy_run_repository)
+
+    client = TestClient(app)
+    response = client.put(
+        f"/runs/{ctx.run_id}/hubspot-delivery",
+        json={
+            "hubspot_user_id": "123",
+            "hubspot_owner_id": "456",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["run_id"] == ctx.run_id
+    assert response.json()["hubspot_delivery"] == {
+        "hubspot_user_id": "123",
+        "hubspot_owner_id": "456",
+    }
+    assert seen_run_ids == [ctx.run_id]
+
+
 def test_update_run_hubspot_delivery_defaults_credentials_ref_from_account_and_user(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(
