@@ -247,7 +247,7 @@ def get_run_metrics(run_id: str) -> JSONPayload:
     return metrics
 
 
-@router.get("/runs/{run_id}", summary="Get run detail")
+@router.get("/runs/{run_id}", summary="Get run detail", response_model=dict[str, Any])
 def get_run_detail(run_id: str) -> JSONPayload:
     repository = _run_repository()
     detail = repository.read_detail(run_id)

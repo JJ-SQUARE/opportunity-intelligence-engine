@@ -16,6 +16,7 @@ def test_openapi_documents_run_routes():
     assert schema["info"]["version"] == "0.1.0"
     assert schema["paths"]["/runs"]["post"]["summary"] == "Create run"
     assert schema["paths"]["/runs"]["get"]["summary"] == "List runs"
+    assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "object"
     assert schema["paths"]["/runs/{run_id}/status"]["get"]["summary"] == "Get run status"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "array"
