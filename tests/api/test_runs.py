@@ -231,7 +231,9 @@ def test_update_run_hubspot_delivery_sanitizes_bearer_token(tmp_path, monkeypatc
     )
 
     assert response.status_code == 200
-    assert response.json() == {
+    payload = response.json()
+
+    assert payload == {
         "run_id": ctx.run_id,
         "hubspot_delivery": {
             "hubspot_user_id": "123",
@@ -240,6 +242,8 @@ def test_update_run_hubspot_delivery_sanitizes_bearer_token(tmp_path, monkeypatc
             "hubspot_credentials_ref": "hubspot/tekton/juan",
         },
     }
+
+    assert payload["hubspot_delivery"] == detail_response.json()["hubspot_delivery"]
 
     detail_response = client.get(f"/runs/{ctx.run_id}")
     assert detail_response.status_code == 200

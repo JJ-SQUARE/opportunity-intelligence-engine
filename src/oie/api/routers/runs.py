@@ -293,7 +293,15 @@ def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) ->
 
     manifest["hubspot_delivery"] = hubspot_delivery
     write_manifest(ctx, manifest)
-    return {"run_id": run_id, "hubspot_delivery": hubspot_delivery}
+
+    persisted = repository.read_detail(run_id)
+    if persisted is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    return {
+        "run_id": run_id,
+        "hubspot_delivery": persisted.get("hubspot_delivery", {}),
+    }
 
 
 @router.get("/runs/{run_id}/schedule/status", summary="Get run schedule status", response_model=RunScheduleStatusResponse)
