@@ -530,20 +530,16 @@ class PipelineOrchestrator:
             self.run_analytics_export_service.export_json(run_analytics)
             finalize_manifest(self.ctx, "completed")
 
-            return {
-                "run_id": self.ctx.run_id,
-                "run_date": self.ctx.run_date,
-                "status": status,
-                "jobs_count": len(unique_jobs),
-                "companies_count": len(companies),
-                "leads_count": len(best_leads),
-                "top_companies": companies[:5],
-                "metrics": self.ctx.metrics,
-                "budgets": self.ctx.budgets,
-                "provider_events_count": len(self.ctx.provider_events),
-
-                "db_path": self.ctx.paths.get("db_path"),
-
+            result = self.build_result_payload(
+                status=status,
+                unique_jobs=unique_jobs,
+                companies=companies,
+                best_leads=best_leads,
+                run_metrics_summary=run_metrics_summary,
+                executive_summary=executive_summary,
+                run_analytics=run_analytics,
+            )
+            result.update({
                 "suspected_duplicates_report": self.ctx.paths.get("suspected_duplicates_report"),
                 "domain_review_queue_csv": self.ctx.paths.get("domain_review_queue_csv"),
                 "companies_export": self.ctx.paths.get("companies_export"),
@@ -560,38 +556,29 @@ class PipelineOrchestrator:
                 "hubspot_notes_json": self.ctx.paths.get("hubspot_notes_json"),
                 "hubspot_sync_results_json": self.ctx.paths.get("hubspot_sync_results_json"),
                 "top_opportunities_csv": self.ctx.paths.get("top_opportunities_csv"),
-
                 "executive_summary_json": self.ctx.paths.get("executive_summary_json"),
                 "run_readiness_report_json": self.ctx.paths.get("run_readiness_report_json"),
                 "run_metrics_summary_json": self.ctx.paths.get("run_metrics_summary_json"),
                 "run_analytics_json": self.ctx.paths.get("run_analytics_json"),
-
                 "historical_company_hiring_csv": self.ctx.paths.get("historical_company_hiring_csv"),
                 "historical_growth_summary_csv": self.ctx.paths.get("historical_growth_summary_csv"),
                 "historical_summary_json": self.ctx.paths.get("historical_summary_json"),
-
                 "market_trends_by_source_csv": self.ctx.paths.get("market_trends_by_source_csv"),
                 "market_trends_by_location_csv": self.ctx.paths.get("market_trends_by_location_csv"),
                 "market_new_companies_by_source_csv": self.ctx.paths.get("market_new_companies_by_source_csv"),
                 "market_trends_summary_json": self.ctx.paths.get("market_trends_summary_json"),
-
                 "market_segmented_companies_csv": self.ctx.paths.get("market_segmented_companies_csv"),
                 "market_segment_summary_csv": self.ctx.paths.get("market_segment_summary_csv"),
                 "market_segment_summary_json": self.ctx.paths.get("market_segment_summary_json"),
-
                 "collector_metrics_json": self.ctx.paths.get("collector_metrics_json"),
                 "collector_contribution_metrics_csv": self.ctx.paths.get("collector_contribution_metrics_csv"),
                 "collector_contribution_metrics_json": self.ctx.paths.get("collector_contribution_metrics_json"),
                 "collector_roi_metrics_csv": self.ctx.paths.get("collector_roi_metrics_csv"),
                 "collector_roi_metrics_json": self.ctx.paths.get("collector_roi_metrics_json"),
-
                 "provider_operation_metrics_csv": self.ctx.paths.get("provider_operation_metrics_csv"),
                 "provider_operation_metrics_json": self.ctx.paths.get("provider_operation_metrics_json"),
-
-                "run_metrics_summary": run_metrics_summary,
-                "executive_summary": executive_summary,
-                "run_analytics": run_analytics,
-            }
+            })
+            return result
 
         except Exception as exc:
             self.ctx.metrics["pipeline_failed"] = True
