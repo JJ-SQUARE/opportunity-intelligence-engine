@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from oie.domain.entities import OpportunityCandidate
+from typing import Any
+
+from oie.domain.entities import (
+    CRMProfile,
+    CompanyProfile,
+    Decision,
+    DecisionHistory,
+    Evidence,
+    JobPosting,
+    OpportunityCandidate,
+    OpportunityScore,
+)
 from oie.domain.serialization import to_primitive
 from oie.orchestration.stage_item import StageItem
 
@@ -14,3 +25,77 @@ def candidate_to_stage_item(candidate: OpportunityCandidate) -> StageItem:
             "domain_type": "OpportunityCandidate",
         },
     }
+
+
+def stage_item_to_candidate(item: StageItem) -> OpportunityCandidate:
+    value = item.get("value")
+    if not isinstance(value, dict):
+        raise TypeError("StageItem value must be an OpportunityCandidate payload.")
+
+    return OpportunityCandidate(
+        id=str(value["id"]),
+        source_job=_job_posting_from_payload(value.get("source_job")),
+        company=_company_profile_from_payload(value.get("company")),
+        contacts=list(value.get("contacts") or []),
+        crm_profile=_crm_profile_from_payload(value.get("crm_profile")),
+        decision_history=_decision_history_from_payload(value.get("decision_history")),
+        scores=_opportunity_scores_from_payload(value.get("scores")),
+        evidence=_evidence_list_from_payload(value.get("evidence")),
+        metadata=dict(value.get("metadata") or {}),
+        artifacts=dict(value.get("artifacts") or {}),
+    )
+
+
+def _job_posting_from_payload(payload: Any) -> JobPosting | None:
+    if not isinstance(payload, dict):
+        return None
+    return JobPosting(**payload)
+
+
+def _company_profile_from_payload(payload: Any) -> CompanyProfile | None:
+    if not isinstance(payload, dict):
+        return None
+    return CompanyProfile(**payload)
+
+
+def _crm_profile_from_payload(payload: Any) -> CRMProfile | None:
+    if not isinstance(payload, dict):
+        return None
+    return CRMProfile(**payload)
+
+
+def _evidence_list_from_payload(payload: Any) -> list[Evidence]:
+    if not isinstance(payload, list):
+        return []
+    return [
+        Evidence(**item)
+        for item in payload
+        if isinstance(item, dict)
+    ]
+
+
+def _opportunity_scores_from_payload(payload: Any) -> list[OpportunityScore]:
+    if not isinstance(payload, list):
+        return []
+    return [
+        OpportunityScore(**item)
+        for item in payload
+        if isinstance(item, dict)
+    ]
+
+
+def _decision_history_from_payload(payload: Any) -> DecisionHistory:
+    if not isinstance(payload, dict):
+        return DecisionHistory()
+
+    decisions = []
+    for item in payload.get("decisions") or []:
+        if not isinstance(item, dict):
+            continue
+        decision_payload = dict(item)
+        decision_payload["evidence"] = _evidence_list_from_payload(
+            decision_payload.get("evidence")
+        )
+        decisions.append(Decision(**decision_payload))
+
+    return DecisionHistory(decisions=decisions)
