@@ -24,6 +24,7 @@ from oie.api.schemas.runs import (
     RunOutputResponse,
     RunOutputsResponse,
     RunReadinessResponse,
+    RunAnalyticsResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
     RunScheduleResponse,
@@ -673,6 +674,35 @@ def get_run_readiness(run_id: str) -> JSONPayload:
         "run_id": run_id,
         "path": str(readiness_path),
         "readiness": readiness,
+    }
+
+
+@router.get("/runs/{run_id}/analytics", summary="Get run analytics", response_model=RunAnalyticsResponse, tags=["Run Artifacts"])
+def get_run_analytics(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    artifact_paths = dict(manifest.get("artifact_paths", {}) or {})
+    analytics_path_value = artifact_paths.get("run_analytics_json")
+    if not analytics_path_value:
+        raise HTTPException(status_code=404, detail="Run analytics not found")
+
+    analytics_path = Path(str(analytics_path_value))
+    if not analytics_path.exists():
+        raise HTTPException(status_code=404, detail="Run analytics file not found")
+
+    from oie.orchestration.stage_io import read_json_file
+
+    analytics = read_json_file(analytics_path)
+    if analytics is None:
+        raise HTTPException(status_code=404, detail="Run analytics file not found")
+
+    return {
+        "run_id": run_id,
+        "path": str(analytics_path),
+        "analytics": analytics,
     }
 
 
