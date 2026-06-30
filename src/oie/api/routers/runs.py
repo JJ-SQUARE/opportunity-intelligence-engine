@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
+from oie.api.schemas.runs import CreateRunRequest, CreateRunResponse, ExecuteRunRequest
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
@@ -12,25 +12,6 @@ from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 
 router = APIRouter()
-
-
-class CreateRunRequest(BaseModel):
-    config: RunConfig = Field(default_factory=dict)
-    flags: RunFlags = Field(default_factory=dict)
-    mode: str | None = None
-
-
-class CreateRunResponse(BaseModel):
-    run_id: str
-    status: str
-    current_stage: str | None
-    manifest_path: str
-
-
-class ExecuteRunRequest(BaseModel):
-    config: RunConfig = Field(default_factory=dict)
-    flags: RunFlags = Field(default_factory=dict)
-    mode: str | None = None
 
 
 def _run_repository() -> RunRepository:
