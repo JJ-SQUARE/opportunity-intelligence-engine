@@ -101,37 +101,6 @@ def _ctx_for_existing_run(
     return ctx
 
 
-def _update_run_status(
-    run_id: str,
-    request: ExecuteRunRequest,
-    status: str,
-    current_stage: str | None = None,
-) -> JSONPayload:
-    # FIX: artifact endpoint must be read-only, no request context
-    repository = _run_repository()
-    manifest = repository.read_detail(run_id)
-    if manifest is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    
-    # FIX: reuse repository context to preserve run identity + filesystem mapping
-    repository = _run_repository(run_id)
-    ctx = repository.ctx
-    repository = RunRepository(ctx)
-    manifest = repository.read_detail(run_id)
-    if manifest is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-
-        repository.update_detail_patch(run_id, {
-            "status": status,
-            "current_stage": current_stage,
-        })
-
-    updated_status = repository.read_status(run_id)
-    if updated_status is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return updated_status
-
-
 @router.post("/runs", summary="Create run", response_model=CreateRunResponse)
 def create_run(request: CreateRunRequest) -> CreateRunResponse:
     ctx = RunContext.create(
