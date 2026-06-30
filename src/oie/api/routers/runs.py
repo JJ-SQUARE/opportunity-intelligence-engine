@@ -70,8 +70,13 @@ def _ctx_for_existing_run(
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
+    merged_config = dict(config)
+    for metadata_key in ("account", "user", "hubspot_delivery"):
+        if metadata_key not in merged_config and manifest.get(metadata_key):
+            merged_config[metadata_key] = dict(manifest.get(metadata_key, {}) or {})
+
     ctx = RunContext.create(
-        config=config,
+        config=merged_config,
         flags=flags,
         mode=mode or str(manifest.get("mode") or "default"),
     )
