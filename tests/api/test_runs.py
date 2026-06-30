@@ -28,6 +28,8 @@ def test_openapi_documents_run_routes():
     assert "RunStageStatusResponse" in schema["components"]["schemas"]
     assert "RunMetricsSummaryResponse" in schema["components"]["schemas"]
     assert "ErrorResponse" in schema["components"]["schemas"]
+    assert "HTTPErrorResponse" in schema["components"]["schemas"]
+    assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["content"]["application/json"]["schema"]["$ref"].endswith("/HTTPErrorResponse")
     assert "StageCheckpointResponse" in schema["components"]["schemas"]
     assert "StageMetricsResponse" in schema["components"]["schemas"]
 

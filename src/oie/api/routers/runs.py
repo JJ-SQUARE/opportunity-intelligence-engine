@@ -9,6 +9,7 @@ from oie.api.schemas.runs import (
     CreateRunResponse,
     ErrorResponse,
     ExecuteRunRequest,
+    HTTPErrorResponse,
     RunExecutionResponse,
     RunMetricsSummaryResponse,
     StageCheckpointResponse,
@@ -25,7 +26,7 @@ from oie.orchestration.run_manifest import build_initial_manifest, write_manifes
 from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 
-router = APIRouter(tags=["Runs"])
+router = APIRouter(tags=["Runs"], responses={404: {"model": HTTPErrorResponse}})
 
 
 def _run_repository() -> RunRepository:

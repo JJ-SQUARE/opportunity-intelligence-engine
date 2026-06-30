@@ -65,6 +65,10 @@ class ErrorResponse(BaseModel):
     error_message: str
 
 
+class HTTPErrorResponse(BaseModel):
+    detail: str
+
+
 class StageCheckpointResponse(BaseModel):
     run_id: str
     stage: str
