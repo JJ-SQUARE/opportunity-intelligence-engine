@@ -57,6 +57,14 @@ def read_run_schedule(ctx: RunContext) -> JSONPayload | None:
     return read_json_file(schedule_path(ctx))
 
 
+def delete_run_schedule(ctx: RunContext) -> JSONPayload:
+    path = schedule_path(ctx)
+    if not path.exists():
+        raise FileNotFoundError("Run schedule not found")
+    path.unlink()
+    return {"run_id": ctx.run_id, "deleted": True}
+
+
 def run_schedule_status(ctx: RunContext, now: datetime | None = None) -> JSONPayload:
     schedule = read_run_schedule(ctx)
     if schedule is None:

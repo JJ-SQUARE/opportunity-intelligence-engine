@@ -50,6 +50,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/schedule"]["post"]["summary"] == "Create run schedule"
     assert schema["paths"]["/runs/{run_id}/schedule"]["put"]["summary"] == "Update run schedule"
     assert schema["paths"]["/runs/{run_id}/schedule"]["get"]["summary"] == "Get run schedule"
+    assert schema["paths"]["/runs/{run_id}/schedule"]["delete"]["summary"] == "Delete run schedule"
     assert schema["paths"]["/runs/{run_id}/schedule/status"]["get"]["summary"] == "Get run schedule status"
     assert schema["paths"]["/runs/{run_id}/schedule/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunScheduleStatusResponse")
     assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["put"]["summary"] == "Update run HubSpot delivery"
@@ -2625,3 +2626,67 @@ def test_resume_run_returns_404_for_missing_run(tmp_path):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run not found"}
+
+
+def test_delete_run_schedule_removes_existing_schedule(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    schedule_payload = {
+        "frequency": "weekly",
+        "duration": "permanent",
+        "scheduled_times": ["09:00"],
+        "scheduled_days": ["monday"],
+        "enabled": True,
+    }
+
+    create_response = client.post(f"/runs/{ctx.run_id}/schedule", json=schedule_payload)
+    delete_response = client.delete(f"/runs/{ctx.run_id}/schedule")
+    get_response = client.get(f"/runs/{ctx.run_id}/schedule")
+    status_response = client.get(f"/runs/{ctx.run_id}/schedule/status")
+
+    assert create_response.status_code == 200
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"run_id": ctx.run_id, "deleted": True}
+    assert get_response.status_code == 404
+    assert get_response.json() == {"detail": "Run schedule not found"}
+    assert status_response.status_code == 200
+    assert status_response.json()["scheduled"] is False
+
+
+def test_delete_run_schedule_returns_404_when_schedule_missing(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.delete(f"/runs/{ctx.run_id}/schedule")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run schedule not found"}
