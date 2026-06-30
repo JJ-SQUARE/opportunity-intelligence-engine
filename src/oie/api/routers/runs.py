@@ -232,32 +232,31 @@ def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) 
     return dict(checkpoint)
 
 
-@router.post("/runs/{run_id}/cancel", summary="Cancel run", response_model=RunStatusResponse)
-def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
-    return _update_run_status(
-        run_id=run_id,
-        request=request,
-        status="cancelled",
-        current_stage=None,
-    )
+
+@router.post("/runs/{run_id}/cancel")
+def cancel_run(run_id: str, request):
+    ctx = _run_repository().ctx
+    from oie.orchestration.run_manifest import set_run_status
+    return set_run_status(ctx, run_id, "cancelled")
 
 
-@router.post("/runs/{run_id}/pause", summary="Pause run", response_model=RunStatusResponse)
-def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
-    return _update_run_status(
-        run_id=run_id,
-        request=request,
-        status="waiting_for_user",
-    )
 
 
-@router.post("/runs/{run_id}/resume", summary="Resume run", response_model=RunStatusResponse)
-def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
-    return _update_run_status(
-        run_id=run_id,
-        request=request,
-        status="pending",
-    )
+@router.post("/runs/{run_id}/pause")
+def pause_run(run_id: str, request):
+    ctx = _run_repository().ctx
+    from oie.orchestration.run_manifest import set_run_status
+    return set_run_status(ctx, run_id, "waiting_for_user")
+
+
+
+
+@router.post("/runs/{run_id}/resume")
+def resume_run(run_id: str, request):
+    ctx = _run_repository().ctx
+    from oie.orchestration.run_manifest import set_run_status
+    return set_run_status(ctx, run_id, "pending")
+
 
 
 @router.get("/runs", summary="List runs", response_model=list[RunSummaryResponse])
