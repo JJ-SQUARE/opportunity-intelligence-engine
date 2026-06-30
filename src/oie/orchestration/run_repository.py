@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.run_context import RunConfiguration, RunContext
@@ -123,3 +124,10 @@ class RunRepository:
         if configuration is None:
             return None
         return RunConfiguration(**configuration)
+
+    def delete_run(self, run_id: str) -> bool:
+        run_dir = Path(self.ctx.paths["runs_base_dir"]) / run_id
+        if not run_dir.exists():
+            return False
+        shutil.rmtree(run_dir)
+        return True

@@ -46,6 +46,11 @@ class RunStatusResponse(BaseModel):
     current_stage: str | None
 
 
+class RunDeleteResponse(BaseModel):
+    run_id: str
+    deleted: bool
+
+
 class RunConfigurationResponse(BaseModel):
     runs: dict[str, Any] = Field(default_factory=dict)
     account: dict[str, Any] = Field(default_factory=dict)

@@ -45,6 +45,8 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/icp-profiles"]["put"]["tags"] == ["ICP Configuration"]
     assert schema["paths"]["/runs/{run_id}/artifacts"]["get"]["tags"] == ["Run Artifacts"]
     assert schema["paths"]["/runs"]["get"]["summary"] == "List runs"
+    assert schema["paths"]["/runs/{run_id}"]["delete"]["summary"] == "Delete run"
+    assert schema["paths"]["/runs/{run_id}"]["delete"]["tags"] == ["Run Management"]
     assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "object"
     assert schema["paths"]["/runs/{run_id}/status"]["get"]["summary"] == "Get run status"
     assert schema["paths"]["/runs/{run_id}/schedule"]["post"]["summary"] == "Create run schedule"
@@ -72,6 +74,7 @@ def test_openapi_documents_run_routes():
     assert "HealthResponse" in schema["components"]["schemas"]
     assert "RunSummaryResponse" in schema["components"]["schemas"]
     assert "RunStatusResponse" in schema["components"]["schemas"]
+    assert "RunDeleteResponse" in schema["components"]["schemas"]
     assert "CreateRunResponse" in schema["components"]["schemas"]
     assert "configuration_path" in schema["components"]["schemas"]["CreateRunResponse"]["properties"]
     assert schema["components"]["schemas"]["CreateRunResponse"]["properties"]["configuration_path"]["type"] == "string"
@@ -2748,6 +2751,54 @@ def test_delete_run_hubspot_delivery_returns_404_for_missing_run(tmp_path, monke
 
     client = TestClient(app)
     response = client.delete("/runs/missing_run/hubspot-delivery")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run not found"}
+
+
+def test_delete_run_removes_run_directory_and_returns_deleted_payload(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    delete_response = client.delete(f"/runs/{ctx.run_id}")
+    get_response = client.get(f"/runs/{ctx.run_id}")
+
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"run_id": ctx.run_id, "deleted": True}
+    assert not (runs_path / ctx.run_id).exists()
+    assert get_response.status_code == 404
+    assert get_response.json() == {"detail": "Run not found"}
+
+
+def test_delete_run_returns_404_for_missing_run(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.delete("/runs/missing_run")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run not found"}

@@ -19,6 +19,7 @@ from oie.api.schemas.runs import (
     ICPProfilesResponse,
     RunExecutionResponse,
     RunConfigurationResponse,
+    RunDeleteResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
     RunScheduleResponse,
@@ -241,6 +242,15 @@ def list_runs(
 ) -> list[JSONPayload]:
     repository = _run_repository()
     return repository.list_summaries(account_id=account_id, user_id=user_id)
+
+
+@router.delete("/runs/{run_id}", summary="Delete run", response_model=RunDeleteResponse, tags=["Run Management"])
+def delete_run(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    deleted = repository.delete_run(run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {"run_id": run_id, "deleted": True}
 
 
 @router.get("/runs/{run_id}/status", summary="Get run status", response_model=RunStatusResponse, tags=["Run Management"])
