@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from oie.domain import candidate_to_stage_item, job_dict_to_candidate
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_item import StageItem
 from oie.services.collection_service import CollectionService
@@ -14,15 +15,12 @@ class CollectJobsStage(Stage):
     def load_input(self) -> list[StageItem]:
         jobs = CollectionService(self.ctx).collect()
         return [
-            {
-                "id": self._job_id(job, index),
-                "value": job,
-                "metadata": {
-                    "source": job.get("source"),
-                    "job_url": job.get("job_url"),
-                    "apply_url": job.get("apply_url"),
-                },
-            }
+            candidate_to_stage_item(
+                job_dict_to_candidate(
+                    job,
+                    fallback_id=self._job_id(job, index),
+                )
+            )
             for index, job in enumerate(jobs, start=1)
         ]
 
