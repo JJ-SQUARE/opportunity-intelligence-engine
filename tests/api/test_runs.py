@@ -653,6 +653,59 @@ def test_get_run_status_returns_404_for_missing_run(tmp_path, monkeypatch):
 
 
 
+def test_run_read_endpoints_use_run_specific_repository(tmp_path, monkeypatch):
+    import json
+
+    from oie.api.routers import runs as runs_router
+
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["config_path"] = str(runs_path / ctx.run_id / "configuration.json")
+    manifest["hubspot_delivery"] = {"hubspot_user_id": "123"}
+    manifest["errors"].append({"error_type": "RuntimeError", "error_message": "boom"})
+    write_manifest(ctx, manifest)
+
+    config_path = runs_path / ctx.run_id / "configuration.json"
+    config_path.write_text(json.dumps({"runs": {"path": str(runs_path)}}), encoding="utf-8")
+
+    original_run_repository = runs_router._run_repository
+    seen_run_ids = []
+
+    def spy_run_repository(run_id=None, config=None, flags=None, mode=None):
+        seen_run_ids.append(run_id)
+        merged_config = dict(config or {})
+        merged_config["runs"] = {"path": str(runs_path)}
+        return original_run_repository(
+            run_id=run_id,
+            config=merged_config,
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr(runs_router, "_run_repository", spy_run_repository)
+
+    client = TestClient(app)
+
+    paths = [
+        f"/runs/{ctx.run_id}/status",
+        f"/runs/{ctx.run_id}/configuration",
+        f"/runs/{ctx.run_id}/hubspot-delivery",
+        f"/runs/{ctx.run_id}/stages",
+        f"/runs/{ctx.run_id}/stages/collect_jobs",
+        f"/runs/{ctx.run_id}/artifacts",
+        f"/runs/{ctx.run_id}/errors",
+        f"/runs/{ctx.run_id}/metrics",
+        f"/runs/{ctx.run_id}",
+    ]
+
+    for endpoint in paths:
+        response = client.get(endpoint)
+        assert response.status_code == 200
+
+    assert seen_run_ids == [ctx.run_id] * len(paths)
+
+
 def test_create_and_get_run_schedule_persists_frequency_duration_and_programming(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
