@@ -886,7 +886,7 @@ def test_execute_run_runs_existing_manifest(tmp_path, monkeypatch):
                 "leads_count": 0,
             }
 
-    monkeypatch.setattr("oie.api.main.PipelineOrchestrator", FakePipelineOrchestrator)
+    monkeypatch.setattr("oie.api.routers.runs.PipelineOrchestrator", FakePipelineOrchestrator)
 
     client = TestClient(app)
     response = client.post(

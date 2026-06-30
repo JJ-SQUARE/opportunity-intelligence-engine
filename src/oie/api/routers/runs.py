@@ -1,0 +1,167 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+from oie.orchestration.json_payload import JSONPayload
+from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
+from oie.orchestration.pipeline_stages import PIPELINE_STAGES
+from oie.orchestration.run_context import RunConfig, RunContext, RunFlags
+from oie.orchestration.run_manifest import build_initial_manifest, write_manifest
+from oie.orchestration.run_repository import RunRepository
+from oie.orchestration.stage_artifact_repository import StageArtifactRepository
+
+router = APIRouter()
+
+
+@router.post("/runs")
+def create_run(request: CreateRunRequest) -> CreateRunResponse:
+    ctx = RunContext.create(
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+    return CreateRunResponse(
+        run_id=manifest["run_id"],
+        status=manifest["status"],
+        current_stage=manifest["current_stage"],
+        manifest_path=ctx.paths["manifest_path"],
+    )
+
+
+@router.post("/runs/{run_id}/execute")
+def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    result = PipelineOrchestrator(ctx).run()
+    return dict(result)
+
+
+@router.post("/runs/{run_id}/cancel")
+def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
+    return _update_run_status(
+        run_id=run_id,
+        request=request,
+        status="cancelled",
+        current_stage=None,
+    )
+
+
+@router.post("/runs/{run_id}/pause")
+def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
+    return _update_run_status(
+        run_id=run_id,
+        request=request,
+        status="waiting_for_user",
+    )
+
+
+@router.post("/runs/{run_id}/resume")
+def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
+    return _update_run_status(
+        run_id=run_id,
+        request=request,
+        status="pending",
+    )
+
+
+@router.get("/runs")
+def list_runs() -> list[JSONPayload]:
+    repository = _run_repository()
+    return repository.list_summaries()
+
+
+@router.get("/runs/{run_id}/status")
+def get_run_status(run_id: str) -> JSONPayload:
+    repository = _run_repository()
+    status = repository.read_status(run_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return status
+
+
+@router.get("/runs/{run_id}/stages")
+def get_run_stages(run_id: str) -> list[JSONPayload]:
+    repository = _run_repository()
+    stages = repository.read_stages(run_id)
+    if stages is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return stages
+
+
+@router.get("/runs/{run_id}/stages/{stage_name}")
+def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
+    repository = _run_repository()
+    stage = repository.read_stage(run_id, stage_name)
+    if stage is None:
+        raise HTTPException(status_code=404, detail="Stage not found")
+    return stage
+
+
+@router.get("/runs/{run_id}/stages/{stage_name}/checkpoint")
+def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
+    repository = _stage_artifact_repository(run_id, stage_name, "Checkpoint not found")
+    checkpoint = repository.read_checkpoint(stage_name)
+    if checkpoint is None:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+    return checkpoint
+
+
+@router.get("/runs/{run_id}/stages/{stage_name}/metrics")
+def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
+    repository = _stage_artifact_repository(run_id, stage_name, "Stage metrics not found")
+    metrics = repository.read_metrics(stage_name)
+    if metrics is None:
+        raise HTTPException(status_code=404, detail="Stage metrics not found")
+    return metrics
+
+
+@router.get("/runs/{run_id}/stages/{stage_name}/output")
+def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
+    repository = _stage_artifact_repository(run_id, stage_name, "Stage output not found")
+    output = repository.read_output(stage_name)
+    if output is None:
+        raise HTTPException(status_code=404, detail="Stage output not found")
+    return output
+
+
+@router.get("/runs/{run_id}/stages/{stage_name}/errors")
+def get_run_stage_errors(run_id: str, stage_name: str) -> list[JSONPayload]:
+    repository = _stage_artifact_repository(run_id, stage_name, "Stage errors not found")
+    errors = repository.read_errors(stage_name)
+    if errors is None:
+        raise HTTPException(status_code=404, detail="Stage errors not found")
+    return errors
+
+
+@router.get("/runs/{run_id}/errors")
+def get_run_errors(run_id: str) -> list[JSONPayload]:
+    repository = _run_repository()
+    errors = repository.read_errors(run_id)
+    if errors is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return errors
+
+
+@router.get("/runs/{run_id}/metrics")
+def get_run_metrics(run_id: str) -> JSONPayload:
+    repository = _run_repository()
+    metrics = repository.read_metrics_summary(run_id)
+    if metrics is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return metrics
+
+
+@router.get("/runs/{run_id}")
+def get_run_detail(run_id: str) -> JSONPayload:
+    repository = _run_repository()
+    detail = repository.read_detail(run_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return detail
