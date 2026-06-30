@@ -22,6 +22,7 @@ from oie.domain.entities import (
     OpportunityCandidate,
     OpportunityScore,
 )
+from oie.domain.serialization import to_primitive
 from oie.domain.value_objects import (
     CompanyId,
     DecisionId,
@@ -52,4 +53,5 @@ __all__ = [
     "RunConfiguration",
     "StableId",
     "UserConfiguration",
+    "to_primitive",
 ]
