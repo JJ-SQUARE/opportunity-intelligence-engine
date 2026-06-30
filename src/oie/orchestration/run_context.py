@@ -50,6 +50,16 @@ class RunFlags(TypedDict, total=False):
     config_path: str
 
 
+class RunConfiguration(TypedDict, total=False):
+    database: DatabaseConfig
+    runs: RunsConfig
+    account: AccountConfig
+    user: UserConfig
+    hubspot_delivery: HubSpotDeliveryConfig
+    flags: RunFlags
+    mode: str
+
+
 class RunMetrics(TypedDict, total=False):
     total_processing_time_seconds: float
     total_input_count: int
