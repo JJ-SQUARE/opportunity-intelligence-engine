@@ -258,6 +258,26 @@ def test_run_repository_returns_none_when_configuration_missing(tmp_path):
     assert repository.read_configuration(ctx.run_id) is None
 
 
+def test_run_repository_builds_configuration_from_context(tmp_path):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(
+        config={
+            "runs": {"path": str(runs_path)},
+            "account": {"account_id": "tekton"},
+        },
+        flags={"dry_run": True},
+    )
+
+    repository = RunRepository(ctx)
+
+    assert repository.build_configuration() == {
+        "runs": {"path": str(runs_path)},
+        "account": {"account_id": "tekton"},
+        "flags": {"dry_run": True},
+        "mode": "dry-run",
+    }
+
+
 def test_run_repository_writes_configuration_snapshot(tmp_path):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
