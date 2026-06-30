@@ -101,6 +101,13 @@ class RunRepository:
             return None
         return dict(manifest)
 
+    def build_configuration(self) -> RunConfiguration:
+        return RunConfiguration(
+            **dict(self.ctx.config),
+            flags=dict(self.ctx.flags),
+            mode=self.ctx.mode,
+        )
+
     def write_configuration(self, configuration_path: Path, configuration: RunConfiguration) -> Path:
         write_json_file(configuration_path, dict(configuration))
         return configuration_path

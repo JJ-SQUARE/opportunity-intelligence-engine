@@ -135,13 +135,10 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
     configuration_path = Path(ctx.paths["run_dir"]) / "configuration.json"
     manifest["config_path"] = str(configuration_path)
     write_manifest(ctx, manifest)
-    configuration_path = RunRepository(ctx).write_configuration(
+    repository = RunRepository(ctx)
+    configuration_path = repository.write_configuration(
         configuration_path,
-        {
-            **dict(request.config),
-            "flags": dict(request.flags),
-            "mode": ctx.mode,
-        },
+        repository.build_configuration(),
     )
     return CreateRunResponse(
         run_id=manifest["run_id"],
