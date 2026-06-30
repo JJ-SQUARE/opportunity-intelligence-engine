@@ -22,7 +22,7 @@ class NormalizeJobsStage(Stage):
         normalized_job = normalized_jobs[0] if normalized_jobs else {}
 
         return {
-            "id": str(item.get("id") or self._job_id(normalized_job)),
+            "id": str(item.get("id")),
             "value": normalized_job,
             "metadata": dict(item.get("metadata") or {}),
         }
