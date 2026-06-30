@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from oie.domain import candidate_to_stage_item, job_dict_to_candidate
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_item import StageItem
 from oie.services.collection_service import CollectionService
@@ -35,3 +36,11 @@ class CollectJobsStage(Stage):
             if value:
                 return value
         return f"collected_job_{index}"
+
+    def _candidate_item(self, job: dict[str, Any], index: int) -> StageItem:
+        return candidate_to_stage_item(
+            job_dict_to_candidate(
+                job,
+                fallback_id=self._job_id(job, index),
+            )
+        )
