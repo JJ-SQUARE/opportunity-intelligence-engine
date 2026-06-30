@@ -279,14 +279,17 @@ def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) ->
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
+    account = manifest.get("account", {}) or {}
+    user = manifest.get("user", {}) or {}
+
     hubspot_delivery = {
         key: value
         for key, value in request.model_dump(exclude_none=True).items()
         if key != "hubspot_bearer_token"
     }
     if "hubspot_bearer_token" in request.model_fields_set and request.hubspot_bearer_token:
-        account_id = str((manifest.get("account", {}) or {}).get("account_id") or "unknown-account")
-        user_id = str((manifest.get("user", {}) or {}).get("user_id") or "unknown-user")
+        account_id = str(account.get("account_id") or "unknown-account")
+        user_id = str(user.get("user_id") or "unknown-user")
         hubspot_delivery["hubspot_credentials_ref"] = (
             hubspot_delivery.get("hubspot_credentials_ref")
             or f"hubspot/{account_id}/{user_id}"
