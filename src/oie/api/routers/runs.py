@@ -277,13 +277,7 @@ def _write_schedule_response(run_id: str, request: RunScheduleRequest) -> JSONPa
 
 @router.put("/runs/{run_id}/hubspot-delivery", summary="Update run HubSpot delivery", response_model=HubSpotDeliveryResponse)
 def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) -> JSONPayload:
-    ctx = _ctx_for_existing_run(
-        run_id=run_id,
-        config={},
-        flags={},
-        mode=None,
-    )
-    repository = RunRepository(ctx)
+    repository = _run_repository(run_id)
     manifest = repository.read_detail(run_id)
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
