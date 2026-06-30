@@ -135,7 +135,7 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
     configuration_path = Path(ctx.paths["run_dir"]) / "configuration.json"
     manifest["config_path"] = str(configuration_path)
     write_manifest(ctx, manifest)
-    RunRepository(ctx).write_configuration(
+    configuration_path = RunRepository(ctx).write_configuration(
         configuration_path,
         {
             **dict(request.config),
