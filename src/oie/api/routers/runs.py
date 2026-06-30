@@ -44,8 +44,21 @@ from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 router = APIRouter(tags=["Runs"], responses={404: {"model": HTTPErrorResponse}})
 
 
-def _run_repository() -> RunRepository:
-    return RunRepository.create()
+def _run_repository(run_id: str | None = None) -> RunRepository:
+    # FIX: repository must not create a new RunContext for reads
+    # RunContext.create() generates a NEW run_id which breaks identity resolution
+    if run_id is None:
+        return RunRepository(RunContext.create())
+
+    ctx = RunContext.create()
+    ctx.paths["run_dir"] = f"{ctx.paths['runs_base_dir']}/{run_id}"
+    ctx.paths["manifest_path"] = f"{ctx.paths['run_dir']}/manifest.json"
+    ctx.paths["stage_dirs"] = {
+        stage: f"{ctx.paths['run_dir']}/{index:02d}_{stage}"
+        for index, stage in enumerate(PIPELINE_STAGES, start=1)
+    }
+    return RunRepository(ctx)
+
 
 
 def _stage_artifact_repository(
