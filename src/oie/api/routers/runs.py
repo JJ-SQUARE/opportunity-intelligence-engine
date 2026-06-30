@@ -61,7 +61,7 @@ def _stage_artifact_repository(
     stage_name: str,
     not_found_detail: str,
 ) -> StageArtifactRepository:
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     stage = repository.read_stage(run_id, stage_name)
     if stage is None:
         raise HTTPException(status_code=404, detail=not_found_detail)
