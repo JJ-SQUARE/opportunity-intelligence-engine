@@ -188,6 +188,12 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
     import json
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    config_path = runs_path / run_id / "configuration.json"
+    assert config_path.exists()
+    assert json.loads(config_path.read_text(encoding="utf-8"))["account"] == {
+        "account_id": "tekton",
+        "account_name": "Tekton Labs",
+    }
     assert manifest["account"] == {
         "account_id": "tekton",
         "account_name": "Tekton Labs",
