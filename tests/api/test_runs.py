@@ -41,6 +41,9 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/schedule/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunScheduleStatusResponse")
     assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["put"]["summary"] == "Update run HubSpot delivery"
     assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["get"]["summary"] == "Get run HubSpot delivery"
+    assert schema["paths"]["/runs/{run_id}/cancel"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunStatusResponse")
+    assert schema["paths"]["/runs/{run_id}/pause"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunStatusResponse")
+    assert schema["paths"]["/runs/{run_id}/resume"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunStatusResponse")
     assert schema["paths"]["/runs/{run_id}/artifacts"]["get"]["summary"] == "Get artifact catalog"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/summary"]["get"]["summary"] == "Get stage artifact summary"
