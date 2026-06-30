@@ -91,6 +91,53 @@ def test_list_runs_returns_existing_run_summaries(tmp_path, monkeypatch):
 
 
 
+def test_list_runs_filters_by_account_id_and_user_id(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+
+    ctx_1 = RunContext.create(
+        config={
+            "runs": {"path": str(runs_path)},
+            "account": {"account_id": "tekton"},
+            "user": {"user_id": "juan"},
+        }
+    )
+    ctx_2 = RunContext.create(
+        config={
+            "runs": {"path": str(runs_path)},
+            "account": {"account_id": "tekton"},
+            "user": {"user_id": "ana"},
+        }
+    )
+    ctx_3 = RunContext.create(
+        config={
+            "runs": {"path": str(runs_path)},
+            "account": {"account_id": "other"},
+            "user": {"user_id": "juan"},
+        }
+    )
+
+    write_manifest(ctx_1, build_initial_manifest(ctx_1))
+    write_manifest(ctx_2, build_initial_manifest(ctx_2))
+    write_manifest(ctx_3, build_initial_manifest(ctx_3))
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.get("/runs?account_id=tekton&user_id=juan")
+
+    assert response.status_code == 200
+    assert [item["run_id"] for item in response.json()] == [ctx_1.run_id]
+
+
 def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path):
     runs_path = tmp_path / "runs"
     client = TestClient(app)

@@ -16,17 +16,29 @@ class RunRepository:
     def create(cls) -> "RunRepository":
         return cls(RunContext.create())
 
-    def list_summaries(self) -> list[JSONPayload]:
-        return [
-            {
-                "run_id": manifest["run_id"],
-                "status": manifest["status"],
-                "current_stage": manifest["current_stage"],
-                "created_at": manifest["created_at"],
-                "updated_at": manifest["updated_at"],
-            }
-            for manifest in list_run_manifests(self.ctx)
-        ]
+    def list_summaries(
+        self,
+        account_id: str | None = None,
+        user_id: str | None = None,
+    ) -> list[JSONPayload]:
+        summaries = []
+        for manifest in list_run_manifests(self.ctx):
+            account = manifest.get("account", {}) or {}
+            user = manifest.get("user", {}) or {}
+            if account_id is not None and account.get("account_id") != account_id:
+                continue
+            if user_id is not None and user.get("user_id") != user_id:
+                continue
+            summaries.append(
+                {
+                    "run_id": manifest["run_id"],
+                    "status": manifest["status"],
+                    "current_stage": manifest["current_stage"],
+                    "created_at": manifest["created_at"],
+                    "updated_at": manifest["updated_at"],
+                }
+            )
+        return summaries
 
     def read_status(self, run_id: str) -> JSONPayload | None:
         manifest = self._read_manifest(run_id)

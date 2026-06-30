@@ -223,9 +223,12 @@ def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
 
 
 @router.get("/runs", summary="List runs", response_model=list[RunSummaryResponse])
-def list_runs() -> list[JSONPayload]:
+def list_runs(
+    account_id: str | None = None,
+    user_id: str | None = None,
+) -> list[JSONPayload]:
     repository = _run_repository()
-    return repository.list_summaries()
+    return repository.list_summaries(account_id=account_id, user_id=user_id)
 
 
 @router.get("/runs/{run_id}/status", summary="Get run status", response_model=RunStatusResponse)
