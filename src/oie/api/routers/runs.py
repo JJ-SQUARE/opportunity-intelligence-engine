@@ -15,6 +15,7 @@ from oie.api.schemas.runs import (
     HubSpotDeliveryRequest,
     HubSpotDeliveryResponse,
     RunExecutionResponse,
+    RunConfigurationResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
     RunScheduleResponse,
@@ -260,7 +261,7 @@ def get_run_status(run_id: str) -> JSONPayload:
     return status
 
 
-@router.get("/runs/{run_id}/configuration", summary="Get run configuration")
+@router.get("/runs/{run_id}/configuration", summary="Get run configuration", response_model=RunConfigurationResponse)
 def get_run_configuration(run_id: str) -> JSONPayload:
     repository = _run_repository()
     manifest = repository.read_detail(run_id)

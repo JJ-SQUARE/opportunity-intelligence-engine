@@ -46,6 +46,15 @@ class RunStatusResponse(BaseModel):
     current_stage: str | None
 
 
+class RunConfigurationResponse(BaseModel):
+    runs: dict[str, Any] = Field(default_factory=dict)
+    account: dict[str, Any] = Field(default_factory=dict)
+    user: dict[str, Any] = Field(default_factory=dict)
+    hubspot_delivery: dict[str, Any] = Field(default_factory=dict)
+    flags: dict[str, Any] = Field(default_factory=dict)
+    mode: str
+
+
 class RunScheduleRequest(BaseModel):
     frequency: str
     duration: str
