@@ -2096,6 +2096,68 @@ def test_execute_run_resumes_from_start_stage(tmp_path, monkeypatch):
     assert refreshed["stages"]["company_gate"] == "completed"
 
 
+def test_execute_run_resumed_stage_with_rerun_resets_previous_output(tmp_path, monkeypatch):
+    from oie.orchestration.stage_base import Stage
+
+    class ResumeRerunStage(Stage):
+        name = "company_gate"
+        order = 2
+
+        def load_input(self):
+            return [{"id": "company_1", "value": {"company": "Acme"}}]
+
+        def process_item(self, item):
+            return {"id": item["id"], "value": item["value"]}
+
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["stages"]["collect_jobs"] = "completed"
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+    monkeypatch.setitem(
+        __import__("oie.api.routers.runs", fromlist=["STAGE_CLASSES"]).STAGE_CLASSES,
+        "company_gate",
+        ResumeRerunStage,
+    )
+
+    client = TestClient(app)
+    first_response = client.post(
+        f"/runs/{ctx.run_id}/execute",
+        json={
+            "config": {"runs": {"path": str(runs_path)}},
+            "start_stage": "company_gate",
+        },
+    )
+    rerun_response = client.post(
+        f"/runs/{ctx.run_id}/execute",
+        json={
+            "config": {"runs": {"path": str(runs_path)}},
+            "start_stage": "company_gate",
+            "rerun": True,
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert rerun_response.status_code == 200
+    assert first_response.json()["jobs_count"] == 1
+    assert rerun_response.json()["jobs_count"] == 1
+
+    output_response = client.get(f"/runs/{ctx.run_id}/stages/company_gate/output")
+    assert output_response.status_code == 200
+    assert len(output_response.json()) == 1
+
+
 def test_execute_run_from_unknown_start_stage_returns_404(tmp_path):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
