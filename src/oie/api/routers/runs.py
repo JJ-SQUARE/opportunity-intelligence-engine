@@ -114,11 +114,9 @@ def _update_run_status(
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
     
-    ctx = RunContext.create(
-        config={"runs": {"path": manifest.get("config_path", "data/runs")}},
-        flags={},
-        mode=manifest.get("mode"),
-    )
+    # FIX: reuse repository context to preserve run identity + filesystem mapping
+    repository = _run_repository()
+    ctx = repository.ctx
     repository = RunRepository(ctx)
     manifest = repository.read_detail(run_id)
     if manifest is None:
@@ -168,11 +166,9 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
     
-    ctx = RunContext.create(
-        config={"runs": {"path": manifest.get("config_path", "data/runs")}},
-        flags={},
-        mode=manifest.get("mode"),
-    )
+    # FIX: reuse repository context to preserve run identity + filesystem mapping
+    repository = _run_repository()
+    ctx = repository.ctx
     if request.start_stage is not None:
         start_index = PIPELINE_STAGES.index(request.start_stage) if request.start_stage in PIPELINE_STAGES else -1
         if start_index < 0:
@@ -223,11 +219,9 @@ def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) 
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
     
-    ctx = RunContext.create(
-        config={"runs": {"path": manifest.get("config_path", "data/runs")}},
-        flags={},
-        mode=manifest.get("mode"),
-    )
+    # FIX: reuse repository context to preserve run identity + filesystem mapping
+    repository = _run_repository()
+    ctx = repository.ctx
     checkpoint = StageRunner(ctx).run_stage(stage_cls)
     return dict(checkpoint)
 
@@ -410,11 +404,9 @@ def get_run_artifact_catalog(run_id: str) -> JSONPayload:
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
     
-    ctx = RunContext.create(
-        config={"runs": {"path": manifest.get("config_path", "data/runs")}},
-        flags={},
-        mode=manifest.get("mode"),
-    )
+    # FIX: reuse repository context to preserve run identity + filesystem mapping
+    repository = _run_repository()
+    ctx = repository.ctx
     repository = RunRepository(ctx)
     manifest = repository.read_detail(run_id)
     if manifest is None:
