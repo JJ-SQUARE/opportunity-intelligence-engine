@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -31,6 +32,7 @@ from oie.orchestration.normalize_jobs_stage import NormalizeJobsStage
 from oie.orchestration.company_gate_stage import CompanyGateStage
 from oie.orchestration.job_intelligence_stage import JobIntelligenceStage
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
+from oie.orchestration.stage_io import write_json_file
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunConfig, RunContext, RunFlags
@@ -131,6 +133,7 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
     )
     manifest = build_initial_manifest(ctx)
     write_manifest(ctx, manifest)
+    write_json_file(Path(ctx.paths["run_dir"]) / "configuration.json", dict(request.config))
     return CreateRunResponse(
         run_id=manifest["run_id"],
         status=manifest["status"],
