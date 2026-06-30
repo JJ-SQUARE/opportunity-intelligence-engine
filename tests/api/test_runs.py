@@ -231,6 +231,40 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
     assert "hubspot_bearer_token" not in manifest["hubspot_delivery"]
 
 
+def test_get_run_configuration_returns_sanitized_snapshot(tmp_path):
+    runs_path = tmp_path / "runs"
+    client = TestClient(app)
+
+    response = client.post(
+        "/runs",
+        json={
+            "config": {
+                "runs": {"path": str(runs_path)},
+                "account": {"account_id": "tekton"},
+                "hubspot_delivery": {
+                    "hubspot_user_id": "123",
+                    "hubspot_bearer_token": "secret-token",
+                },
+            },
+            "flags": {"dry_run": True},
+        },
+    )
+
+    assert response.status_code == 200
+    run_id = response.json()["run_id"]
+
+    configuration = client.get(f"/runs/{run_id}/configuration")
+
+    assert configuration.status_code == 200
+    payload = configuration.json()
+    assert payload["flags"] == {"dry_run": True}
+    assert payload["runs"] == {"path": str(runs_path)}
+    assert payload["hubspot_delivery"] == {
+        "hubspot_user_id": "123",
+    }
+    assert "hubspot_bearer_token" not in payload["hubspot_delivery"]
+
+
 def test_update_run_hubspot_delivery_sanitizes_bearer_token(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
