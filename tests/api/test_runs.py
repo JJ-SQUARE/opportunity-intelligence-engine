@@ -34,6 +34,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "object"
     assert schema["paths"]["/runs/{run_id}/status"]["get"]["summary"] == "Get run status"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
+    assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/execute"]["post"]["summary"] == "Execute run stage"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "array"
     assert schema["paths"]["/health"]["get"]["tags"] == ["Health"]
     assert "HealthResponse" in schema["components"]["schemas"]
@@ -959,6 +960,22 @@ def test_execute_collect_jobs_stage_writes_checkpoint_and_output(tmp_path, monke
     assert output_response.status_code == 200
     assert output_response.json()[0]["id"] == "job_1"
     assert output_response.json()[0]["value"]["company"] == "Acme"
+
+
+def test_execute_unknown_stage_returns_404(tmp_path):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    client = TestClient(app)
+    response = client.post(
+        f"/runs/{ctx.run_id}/stages/lead_generation/execute",
+        json={"config": {"runs": {"path": str(runs_path)}}},
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Stage not executable"}
 
 
 def test_execute_run_runs_existing_manifest(tmp_path, monkeypatch):
