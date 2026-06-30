@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 
 from oie.api.schemas.runs import (
@@ -209,7 +211,7 @@ def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
     return metrics
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/output", summary="Get stage output")
+@router.get("/runs/{run_id}/stages/{stage_name}/output", summary="Get stage output", response_model=list[dict[str, Any]])
 def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
     repository = _stage_artifact_repository(run_id, stage_name, "Stage output not found")
     output = repository.read_output(stage_name)
