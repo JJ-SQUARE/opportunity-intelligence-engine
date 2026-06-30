@@ -27,6 +27,7 @@ Default local URLs:
 - GET /health
 - POST /runs
 - POST /runs/{run_id}/execute
+- POST /runs/{run_id}/stages/{stage_name}/execute
 - POST /runs/{run_id}/cancel
 - POST /runs/{run_id}/pause
 - POST /runs/{run_id}/resume
