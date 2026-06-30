@@ -641,8 +641,9 @@ class PipelineOrchestrator:
         executive_summary: Dict[str, Any] | None,
         run_analytics: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
+        final_status = "completed"
         result = self.build_result_payload(
-            status=status,
+            status=final_status,
             unique_jobs=unique_jobs,
             companies=companies,
             best_leads=best_leads,
@@ -654,7 +655,7 @@ class PipelineOrchestrator:
         result.update(artifact_paths)
         finalize_manifest(
             self.ctx,
-            str(result.get("status") or status),
+            final_status,
             metadata={"artifact_paths": artifact_paths},
         )
         return result
