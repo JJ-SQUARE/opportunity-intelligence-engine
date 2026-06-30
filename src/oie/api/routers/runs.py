@@ -323,6 +323,22 @@ def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) ->
     }
 
 
+@router.delete("/runs/{run_id}/hubspot-delivery", summary="Delete run HubSpot delivery", response_model=HubSpotDeliveryResponse, tags=["CRM Delivery"])
+def delete_run_hubspot_delivery(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    manifest["hubspot_delivery"] = {}
+    repository.write_detail(manifest)
+
+    return {
+        "run_id": run_id,
+        "hubspot_delivery": {},
+    }
+
+
 @router.get(
     "/runs/{run_id}/hubspot-delivery",
     summary="Get run HubSpot delivery",

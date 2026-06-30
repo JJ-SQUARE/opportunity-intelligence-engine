@@ -55,6 +55,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/schedule/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunScheduleStatusResponse")
     assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["put"]["summary"] == "Update run HubSpot delivery"
     assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["get"]["summary"] == "Get run HubSpot delivery"
+    assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["delete"]["summary"] == "Delete run HubSpot delivery"
     assert schema["paths"]["/runs/{run_id}/icp-profiles"]["put"]["summary"] == "Update run ICP profiles"
     assert schema["paths"]["/runs/{run_id}/icp-profiles"]["post"]["summary"] == "Add run ICP profile"
     assert schema["paths"]["/runs/{run_id}/icp-profiles"]["get"]["summary"] == "Get run ICP profiles"
@@ -2690,3 +2691,63 @@ def test_delete_run_schedule_returns_404_when_schedule_missing(tmp_path, monkeyp
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run schedule not found"}
+
+
+def test_delete_run_hubspot_delivery_clears_existing_settings(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["hubspot_delivery"] = {
+        "hubspot_user_id": "123",
+        "hubspot_owner_id": "456",
+    }
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    delete_response = client.delete(f"/runs/{ctx.run_id}/hubspot-delivery")
+    get_response = client.get(f"/runs/{ctx.run_id}/hubspot-delivery")
+    detail_response = client.get(f"/runs/{ctx.run_id}")
+
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {
+        "run_id": ctx.run_id,
+        "hubspot_delivery": {},
+    }
+    assert get_response.status_code == 200
+    assert get_response.json() == {
+        "run_id": ctx.run_id,
+        "hubspot_delivery": {},
+    }
+    assert detail_response.status_code == 200
+    assert detail_response.json()["hubspot_delivery"] == {}
+
+
+def test_delete_run_hubspot_delivery_returns_404_for_missing_run(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.delete("/runs/missing_run/hubspot-delivery")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run not found"}
