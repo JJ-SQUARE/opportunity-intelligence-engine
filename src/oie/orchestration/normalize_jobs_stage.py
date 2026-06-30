@@ -10,7 +10,7 @@ from oie.services.normalization_service import NormalizationService
 
 
 class NormalizeJobsStage(Stage):
-    name = "company_gate"
+    name = "freshness_gate"
     order = 2
 
     def load_input(self) -> list[StageItem]:

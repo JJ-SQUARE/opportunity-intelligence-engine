@@ -20,6 +20,9 @@ from oie.api.schemas.runs import (
 )
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.collect_jobs_stage import CollectJobsStage
+from oie.orchestration.normalize_jobs_stage import NormalizeJobsStage
+from oie.orchestration.company_gate_stage import CompanyGateStage
+from oie.orchestration.job_intelligence_stage import JobIntelligenceStage
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
@@ -135,15 +138,27 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     return dict(result)
 
 
-@router.post("/runs/{run_id}/stages/collect_jobs/execute", summary="Execute collect jobs stage", response_model=StageCheckpointResponse)
-def execute_collect_jobs_stage(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
+STAGE_CLASSES = {
+    "collect_jobs": CollectJobsStage,
+    "freshness_gate": NormalizeJobsStage,
+    "company_gate": CompanyGateStage,
+    "domain_gate": JobIntelligenceStage,
+}
+
+
+@router.post("/runs/{run_id}/stages/{stage_name}/execute", summary="Execute run stage", response_model=StageCheckpointResponse)
+def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) -> JSONPayload:
+    stage_cls = STAGE_CLASSES.get(stage_name)
+    if stage_cls is None:
+        raise HTTPException(status_code=404, detail="Stage not executable")
+
     ctx = _ctx_for_existing_run(
         run_id=run_id,
         config=request.config,
         flags=request.flags,
         mode=request.mode,
     )
-    checkpoint = StageRunner(ctx).run_stage(CollectJobsStage)
+    checkpoint = StageRunner(ctx).run_stage(stage_cls)
     return dict(checkpoint)
 
 
