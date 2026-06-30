@@ -620,6 +620,16 @@ class PipelineOrchestrator:
         return run_analytics
 
 
+    def build_executive_summary(
+        self,
+        companies: List[Dict[str, Any]],
+        best_leads: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        executive_summary = self.executive_summary_service.build_summary(companies, best_leads)
+        self.executive_summary_service.write_summary(executive_summary)
+        return executive_summary
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -655,8 +665,7 @@ class PipelineOrchestrator:
 
             self.export_opportunity_outputs()
 
-            executive_summary = self.executive_summary_service.build_summary(companies, best_leads)
-            self.executive_summary_service.write_summary(executive_summary)
+            executive_summary = self.build_executive_summary(companies, best_leads)
 
             self.export_historical_outputs()
 
