@@ -101,8 +101,9 @@ class RunRepository:
             return None
         return dict(manifest)
 
-    def write_configuration(self, configuration_path: Path, configuration: RunConfiguration) -> None:
+    def write_configuration(self, configuration_path: Path, configuration: RunConfiguration) -> Path:
         write_json_file(configuration_path, dict(configuration))
+        return configuration_path
 
     def read_configuration(self, run_id: str) -> RunConfiguration | None:
         manifest = self._read_manifest(run_id)

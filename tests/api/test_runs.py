@@ -251,7 +251,7 @@ def test_run_repository_writes_configuration_snapshot(tmp_path):
     repository = RunRepository(ctx)
     config_path = runs_path / ctx.run_id / "configuration.json"
 
-    repository.write_configuration(
+    returned_path = repository.write_configuration(
         config_path,
         {
             "runs": {"path": str(runs_path)},
@@ -259,6 +259,8 @@ def test_run_repository_writes_configuration_snapshot(tmp_path):
             "flags": {"dry_run": True},
         },
     )
+
+    assert returned_path == config_path
 
     import json
 
