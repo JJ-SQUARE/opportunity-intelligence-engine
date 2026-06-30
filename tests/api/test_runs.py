@@ -37,6 +37,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/schedule"]["put"]["summary"] == "Update run schedule"
     assert schema["paths"]["/runs/{run_id}/schedule"]["get"]["summary"] == "Get run schedule"
     assert schema["paths"]["/runs/{run_id}/schedule/status"]["get"]["summary"] == "Get run schedule status"
+    assert schema["paths"]["/runs/{run_id}/schedule/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunScheduleStatusResponse")
     assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["put"]["summary"] == "Update run HubSpot delivery"
     assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["get"]["summary"] == "Get run HubSpot delivery"
     assert schema["paths"]["/runs/{run_id}/artifacts"]["get"]["summary"] == "Get artifact catalog"
