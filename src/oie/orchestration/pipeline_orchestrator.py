@@ -355,6 +355,35 @@ class PipelineOrchestrator:
 
         return jobs_with_company_keys, companies, duplicate_jobs
 
+    def build_result_payload(
+        self,
+        *,
+        status: str,
+        unique_jobs: List[Dict[str, Any]],
+        companies: List[Dict[str, Any]],
+        best_leads: List[Dict[str, Any]],
+        run_metrics_summary: Dict[str, Any] | None,
+        executive_summary: Dict[str, Any] | None,
+        run_analytics: Dict[str, Any] | None,
+    ) -> Dict[str, Any]:
+        return {
+            "run_id": self.ctx.run_id,
+            "run_date": self.ctx.run_date,
+            "status": status,
+            "jobs_count": len(unique_jobs),
+            "companies_count": len(companies),
+            "leads_count": len(best_leads),
+            "top_companies": companies[:5],
+            "metrics": self.ctx.metrics,
+            "budgets": self.ctx.budgets,
+            "provider_events_count": len(self.ctx.provider_events),
+            "db_path": self.ctx.paths.get("db_path"),
+            "run_metrics_summary": run_metrics_summary,
+            "executive_summary": executive_summary,
+            "run_analytics": run_analytics,
+        }
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
