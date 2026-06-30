@@ -83,7 +83,9 @@ def test_openapi_documents_run_routes():
     assert "configuration_path" in schema["components"]["schemas"]["CreateRunResponse"]["properties"]
     assert schema["components"]["schemas"]["CreateRunResponse"]["properties"]["configuration_path"]["type"] == "string"
     assert schema["paths"]["/runs/{run_id}/configuration"]["get"]["summary"] == "Get run configuration"
+    assert schema["paths"]["/runs/{run_id}/configuration"]["put"]["summary"] == "Update run configuration"
     assert schema["paths"]["/runs/{run_id}/configuration"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunConfigurationResponse")
+    assert schema["paths"]["/runs/{run_id}/configuration"]["put"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/RunConfigurationResponse")
     assert "RunConfigurationResponse" in schema["components"]["schemas"]
     assert "icp_profiles" in schema["components"]["schemas"]["RunConfigurationResponse"]["properties"]
     assert schema["components"]["schemas"]["RunConfigurationResponse"]["properties"]["icp_profiles"]["type"] == "array"
@@ -3127,3 +3129,104 @@ def test_get_run_output_returns_404_when_output_file_missing(tmp_path, monkeypat
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run output file not found: commercial_pipeline_csv"}
+
+
+def test_update_run_configuration_replaces_snapshot_and_manifest_metadata(tmp_path, monkeypatch):
+    import json
+
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["config_path"] = str(runs_path / ctx.run_id / "configuration.json")
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        merged_config = dict(config or {})
+        merged_config["runs"] = {"path": str(runs_path)}
+        return original_create(
+            config=merged_config,
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    payload = {
+        "config": {
+            "runs": {"path": str(runs_path)},
+            "account": {"account_id": "tekton", "account_name": "Tekton Labs"},
+            "user": {"user_id": "juan", "email": "juan@example.com"},
+            "hubspot_delivery": {
+                "hubspot_user_id": "123",
+                "hubspot_owner_id": "456",
+                "hubspot_bearer_token": "secret-token",
+            },
+            "icp_profiles": [
+                {"profile_id": "asd-midmarket", "service_line": "ASD", "enabled": True}
+            ],
+        },
+        "flags": {"dry_run": True},
+    }
+
+    response = client.put(f"/runs/{ctx.run_id}/configuration", json=payload)
+    get_response = client.get(f"/runs/{ctx.run_id}/configuration")
+    detail_response = client.get(f"/runs/{ctx.run_id}")
+
+    assert response.status_code == 200
+    assert get_response.status_code == 200
+    assert detail_response.status_code == 200
+
+    expected_config = {
+        "runs": {"path": str(runs_path)},
+        "account": {"account_id": "tekton", "account_name": "Tekton Labs"},
+        "user": {"user_id": "juan", "email": "juan@example.com"},
+        "hubspot_delivery": {
+            "hubspot_user_id": "123",
+            "hubspot_owner_id": "456",
+        },
+        "icp_profiles": [
+            {"profile_id": "asd-midmarket", "service_line": "ASD", "enabled": True}
+        ],
+        "flags": {"dry_run": True},
+        "mode": "dry-run",
+    }
+
+    assert response.json() == expected_config
+    assert get_response.json() == expected_config
+    assert "hubspot_bearer_token" not in response.json()["hubspot_delivery"]
+
+    detail = detail_response.json()
+    assert detail["account"] == expected_config["account"]
+    assert detail["user"] == expected_config["user"]
+    assert detail["hubspot_delivery"] == expected_config["hubspot_delivery"]
+    assert detail["icp_profiles"] == expected_config["icp_profiles"]
+    assert detail["mode"] == "dry-run"
+
+    persisted_config = json.loads((runs_path / ctx.run_id / "configuration.json").read_text(encoding="utf-8"))
+    assert persisted_config == expected_config
+
+
+def test_update_run_configuration_returns_404_for_missing_run(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.put(
+        "/runs/missing_run/configuration",
+        json={"config": {"runs": {"path": str(runs_path)}}},
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run not found"}

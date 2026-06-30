@@ -277,6 +277,45 @@ def get_run_configuration(run_id: str) -> JSONPayload:
     return configuration
 
 
+@router.put("/runs/{run_id}/configuration", summary="Update run configuration", response_model=RunConfigurationResponse, tags=["Run Management"])
+def update_run_configuration(run_id: str, request: CreateRunRequest) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    configuration_path_value = manifest.get("config_path")
+    if not configuration_path_value:
+        configuration_path_value = str(Path(repository.ctx.paths["run_dir"]) / "configuration.json")
+        manifest["config_path"] = configuration_path_value
+
+    updated_ctx = RunContext.create(
+        config=request.config,
+        flags=request.flags,
+        mode=request.mode,
+    )
+    updated_repository = RunRepository(updated_ctx)
+    configuration = updated_repository.build_configuration()
+
+    safe_hubspot_delivery = {
+        key: value
+        for key, value in dict(configuration.get("hubspot_delivery", {}) or {}).items()
+        if key != "hubspot_bearer_token"
+    }
+    configuration["hubspot_delivery"] = safe_hubspot_delivery
+
+    repository.write_configuration(Path(configuration_path_value), configuration)
+
+    manifest["account"] = dict(configuration.get("account", {}) or {})
+    manifest["user"] = dict(configuration.get("user", {}) or {})
+    manifest["hubspot_delivery"] = safe_hubspot_delivery
+    manifest["icp_profiles"] = list(configuration.get("icp_profiles", []) or [])
+    manifest["mode"] = str(configuration.get("mode") or manifest.get("mode") or "default")
+    repository.write_detail(manifest)
+
+    return configuration
+
+
 @router.post("/runs/{run_id}/schedule", summary="Create run schedule", response_model=RunScheduleResponse, tags=["Run Scheduling"])
 def create_run_schedule(run_id: str, request: RunScheduleRequest) -> JSONPayload:
     return _write_schedule_response(run_id, request)
