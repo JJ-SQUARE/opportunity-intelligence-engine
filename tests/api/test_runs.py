@@ -231,6 +231,17 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
     assert "hubspot_bearer_token" not in manifest["hubspot_delivery"]
 
 
+def test_get_run_configuration_returns_404_for_missing_run():
+    client = TestClient(app)
+
+    response = client.get("/runs/run-does-not-exist/configuration")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Run not found",
+    }
+
+
 def test_get_run_configuration_returns_sanitized_snapshot(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     client = TestClient(app)
