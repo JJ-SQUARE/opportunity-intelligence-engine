@@ -4,7 +4,7 @@ from pathlib import Path
 
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.run_context import RunConfiguration, RunContext
-from oie.orchestration.run_manifest import list_run_manifests, read_run_manifest
+from oie.orchestration.run_manifest import RunManifest, list_run_manifests, read_run_manifest, write_manifest
 from oie.orchestration.stage_io import read_json_file, write_json_file
 
 
@@ -100,6 +100,9 @@ class RunRepository:
         if manifest is None:
             return None
         return dict(manifest)
+
+    def write_detail(self, manifest: RunManifest) -> Path:
+        return write_manifest(self.ctx, manifest)
 
     def build_configuration(self) -> RunConfiguration:
         return RunConfiguration(

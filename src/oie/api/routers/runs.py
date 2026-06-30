@@ -36,7 +36,7 @@ from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunConfig, RunContext, RunFlags
-from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, write_manifest
+from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest
 from oie.orchestration.run_schedule import read_run_schedule, run_schedule_status, write_run_schedule
 from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
@@ -134,8 +134,8 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
     manifest = build_initial_manifest(ctx)
     configuration_path = Path(ctx.paths["run_dir"]) / "configuration.json"
     manifest["config_path"] = str(configuration_path)
-    write_manifest(ctx, manifest)
     repository = RunRepository(ctx)
+    repository.write_detail(manifest)
     configuration_path = repository.write_configuration(
         configuration_path,
         repository.build_configuration(),
