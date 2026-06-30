@@ -36,7 +36,7 @@ from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunConfig, RunContext, RunFlags
-from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest
+from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, set_run_status
 from oie.orchestration.run_schedule import read_run_schedule, run_schedule_status, write_run_schedule
 from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
@@ -199,7 +199,6 @@ def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) 
 @router.post("/runs/{run_id}/cancel")
 def cancel_run(run_id: str, request: ExecuteRunRequest):
     ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
-    from oie.orchestration.run_manifest import set_run_status
     return set_run_status(ctx, run_id, "cancelled")
 
 
@@ -208,7 +207,6 @@ def cancel_run(run_id: str, request: ExecuteRunRequest):
 @router.post("/runs/{run_id}/pause")
 def pause_run(run_id: str, request: ExecuteRunRequest):
     ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
-    from oie.orchestration.run_manifest import set_run_status
     return set_run_status(ctx, run_id, "waiting_for_user")
 
 
@@ -217,7 +215,6 @@ def pause_run(run_id: str, request: ExecuteRunRequest):
 @router.post("/runs/{run_id}/resume")
 def resume_run(run_id: str, request: ExecuteRunRequest):
     ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
-    from oie.orchestration.run_manifest import set_run_status
     return set_run_status(ctx, run_id, "pending")
 
 
