@@ -51,6 +51,7 @@ def _run_repository(run_id: str | None = None) -> RunRepository:
         return RunRepository(RunContext.create())
 
     ctx = RunContext.create()
+    ctx.run_id = run_id
     ctx.paths["run_dir"] = f"{ctx.paths['runs_base_dir']}/{run_id}"
     ctx.paths["manifest_path"] = f"{ctx.paths['run_dir']}/manifest.json"
     ctx.paths["stage_dirs"] = {
@@ -128,7 +129,7 @@ def _update_run_status(
         raise HTTPException(status_code=404, detail="Run not found")
     
     # FIX: reuse repository context to preserve run identity + filesystem mapping
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     ctx = repository.ctx
     repository = RunRepository(ctx)
     manifest = repository.read_detail(run_id)
@@ -180,7 +181,7 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
         raise HTTPException(status_code=404, detail="Run not found")
     
     # FIX: reuse repository context to preserve run identity + filesystem mapping
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     ctx = repository.ctx
     if request.start_stage is not None:
         start_index = PIPELINE_STAGES.index(request.start_stage) if request.start_stage in PIPELINE_STAGES else -1
@@ -233,7 +234,7 @@ def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) 
         raise HTTPException(status_code=404, detail="Run not found")
     
     # FIX: reuse repository context to preserve run identity + filesystem mapping
-    repository = _run_repository()
+    repository = _run_repository(run_id)
     ctx = repository.ctx
     checkpoint = StageRunner(ctx).run_stage(stage_cls)
     return dict(checkpoint)
