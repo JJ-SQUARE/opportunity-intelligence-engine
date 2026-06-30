@@ -191,7 +191,7 @@ def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) 
         flags=request.flags,
         mode=request.mode,
     )
-    checkpoint = StageRunner(ctx).run_stage(stage_cls)
+    checkpoint = StageRunner(ctx).run_stage(stage_cls, reset=request.rerun)
     return dict(checkpoint)
 
 
