@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from oie.domain.value_objects import CompanyId, OpportunityId
+from oie.domain.value_objects import CompanyId, JobId, OpportunityId
 
 JSONDict = dict[str, Any]
 
@@ -12,6 +12,7 @@ JSONDict = dict[str, Any]
 class JobPosting:
     title: str
     company: str
+    id: JobId | str | None = None
     location: str | None = None
     job_url: str | None = None
     apply_url: str | None = None
