@@ -234,6 +234,17 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
     assert "hubspot_bearer_token" not in manifest["hubspot_delivery"]
 
 
+def test_run_repository_returns_none_when_configuration_missing(tmp_path):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    repository = RunRepository(ctx)
+
+    assert repository.read_configuration(ctx.run_id) is None
+
+
 def test_run_repository_reads_configuration_snapshot(tmp_path):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
