@@ -125,9 +125,13 @@ def update_stage_status(ctx: RunContext, stage_name: str, status: str) -> Path:
     return write_manifest(ctx, manifest)
 
 
-def set_run_status(ctx, run_id: str, status: str, current_stage: str | None = None, error: dict | None = None):
-    from oie.orchestration.pipeline_stages import validate_run_status
-
+def set_run_status(
+    ctx: RunContext,
+    run_id: str,
+    status: str,
+    current_stage: str | None = None,
+    error: JSONPayload | None = None,
+) -> JSONPayload:
     validate_run_status(status)
 
     manifest_path = Path(ctx.paths["manifest_path"])
