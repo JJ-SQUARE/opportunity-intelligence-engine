@@ -591,6 +591,10 @@ def test_run_schedule_status_marks_due_when_time_and_day_match(tmp_path):
     assert payload["enabled"] is True
     assert payload["due"] is True
     assert payload["frequency"] == "weekly"
+    assert payload["duration"] == "permanent"
+    assert payload["scheduled_times"] == ["09:00"]
+    assert payload["scheduled_days"] == ["monday"]
+    assert payload["checked_at"] == "2026-07-06T09:00:00+00:00"
 
 
 def test_update_run_schedule_replaces_existing_schedule(tmp_path, monkeypatch):
