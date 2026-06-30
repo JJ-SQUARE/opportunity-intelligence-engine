@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TypeAlias
 
 from oie.orchestration.run_context import RunContext
-from oie.orchestration.run_manifest import update_stage_status
+from oie.orchestration.run_manifest import build_initial_manifest, read_manifest, update_stage_status, write_manifest
 from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
 from oie.orchestration.stage_timing import start_timer
 from oie.orchestration.stage_base import Stage
@@ -22,9 +22,6 @@ class StageRunner:
         stage = stage_cls(self.ctx)
         checkpoint_manager = StageCheckpointManager(stage)
         stage.ensure_stage_dir()
-        # FIX: ensure manifest exists before any stage execution (required by tests)
-        from oie.orchestration.run_manifest import read_manifest, build_initial_manifest, write_manifest
-
         manifest_path = Path(self.ctx.paths["manifest_path"])
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
