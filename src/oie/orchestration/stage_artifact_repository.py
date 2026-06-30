@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from oie.orchestration.json_payload import JSONPayload
+from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_storage_resolver import configure_ctx_for_run_storage
 from oie.orchestration.stage_artifacts import stage_artifact_paths
