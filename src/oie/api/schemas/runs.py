@@ -247,3 +247,9 @@ class RunCommercialPipelineResponse(BaseModel):
     run_id: str
     path: str
     commercial_pipeline: str
+
+
+class RunTopOpportunitiesResponse(BaseModel):
+    run_id: str
+    path: str
+    top_opportunities: str

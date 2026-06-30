@@ -28,6 +28,7 @@ from oie.api.schemas.runs import (
     RunExecutiveSummaryResponse,
     RunCommercialReportResponse,
     RunCommercialPipelineResponse,
+    RunTopOpportunitiesResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
     RunScheduleResponse,
@@ -781,6 +782,29 @@ def get_run_commercial_pipeline(run_id: str) -> JSONPayload:
         "run_id": run_id,
         "path": str(pipeline_path),
         "commercial_pipeline": pipeline_path.read_text(encoding="utf-8"),
+    }
+
+
+@router.get("/runs/{run_id}/top-opportunities", summary="Get run top opportunities", response_model=RunTopOpportunitiesResponse, tags=["Run Artifacts"])
+def get_run_top_opportunities(run_id: str) -> JSONPayload:
+    repository = _run_repository(run_id)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    artifact_paths = dict(manifest.get("artifact_paths", {}) or {})
+    top_opportunities_path_value = artifact_paths.get("top_opportunities_csv")
+    if not top_opportunities_path_value:
+        raise HTTPException(status_code=404, detail="Run top opportunities not found")
+
+    top_opportunities_path = Path(str(top_opportunities_path_value))
+    if not top_opportunities_path.exists():
+        raise HTTPException(status_code=404, detail="Run top opportunities file not found")
+
+    return {
+        "run_id": run_id,
+        "path": str(top_opportunities_path),
+        "top_opportunities": top_opportunities_path.read_text(encoding="utf-8"),
     }
 
 
