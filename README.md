@@ -133,32 +133,67 @@ GET /health
 
 ---
 
-### Runs
+## Run Management Endpoints
+
+### Run lifecycle
 
 ```
-POST /runs
-GET  /runs
-GET  /runs/{run_id}
-POST /runs/{run_id}/execute
-POST /runs/{run_id}/cancel
-POST /runs/{run_id}/pause
-POST /runs/{run_id}/resume
-GET  /runs/{run_id}/status
-GET  /runs/{run_id}/configuration
-GET  /runs/{run_id}/metrics
-GET  /runs/{run_id}/errors
-GET  /runs/{run_id}/artifacts
+POST   /runs
+GET    /runs
+GET    /runs/{run_id}
+DELETE /runs/{run_id}
+
+POST   /runs/{run_id}/execute
+POST   /runs/{run_id}/cancel
+POST   /runs/{run_id}/pause
+POST   /runs/{run_id}/resume
+GET    /runs/{run_id}/status
+GET    /runs/{run_id}/metrics
+GET    /runs/{run_id}/errors
+GET    /runs/{run_id}/artifacts
 ```
 
 ---
 
-### Run Scheduling
+### Stage execution
 
 ```
-POST /runs/{run_id}/schedule
-PUT  /runs/{run_id}/schedule
-GET  /runs/{run_id}/schedule
-GET  /runs/{run_id}/schedule/status
+POST /runs/{run_id}/stages/{stage_name}/execute
+
+GET  /runs/{run_id}/stages/{stage_name}/checkpoint
+GET  /runs/{run_id}/stages/{stage_name}/metrics
+GET  /runs/{run_id}/stages/{stage_name}/output
+GET  /runs/{run_id}/stages/{stage_name}/errors
+```
+
+Stage artifact endpoints:
+
+- `checkpoint` — progress snapshot written at the end of each stage execution
+- `metrics` — timing, counts, and performance data produced by the stage
+- `output` — the data records produced and passed downstream
+- `errors` — structured error records registered during execution
+
+---
+
+### Configuration
+
+```
+GET /runs/{run_id}/configuration
+PUT /runs/{run_id}/configuration
+```
+
+The run configuration is persisted as a snapshot at run creation time. Subsequent updates via `PUT` modify the stored configuration for the run without affecting already-completed stages.
+
+---
+
+### Scheduling
+
+```
+POST   /runs/{run_id}/schedule
+PUT    /runs/{run_id}/schedule
+GET    /runs/{run_id}/schedule
+GET    /runs/{run_id}/schedule/status
+DELETE /runs/{run_id}/schedule
 ```
 
 Schedule fields:
@@ -185,14 +220,15 @@ Example:
 
 ---
 
-### HubSpot Delivery
+### HubSpot delivery
 
 ```
-PUT /runs/{run_id}/hubspot-delivery
-GET /runs/{run_id}/hubspot-delivery
+GET    /runs/{run_id}/hubspot-delivery
+PUT    /runs/{run_id}/hubspot-delivery
+DELETE /runs/{run_id}/hubspot-delivery
 ```
 
-Used to persist HubSpot delivery metadata for a run. Sensitive fields such as bearer tokens are not persisted directly in the manifest. Instead, the API stores a credentials reference when needed.
+Used to persist HubSpot delivery metadata for a run. Sensitive fields such as bearer tokens are never returned by the API. Instead, the API stores and resolves a credentials reference.
 
 Example:
 
@@ -207,35 +243,65 @@ Example:
 
 ---
 
-### Stage Execution
+### Artifacts
 
 ```
-POST /runs/{run_id}/stages/{stage_name}/execute
+GET /runs/{run_id}/artifact-paths
+GET /runs/{run_id}/outputs
+GET /runs/{run_id}/outputs/{artifact_name}
 ```
 
-Supported executable stages:
+- `artifact-paths` — returns the artifact paths persisted in `manifest.json` for the run
+- `outputs` — lists all exported files available for the run
+- `outputs/{artifact_name}` — returns the content of the requested artifact, parsed according to its format
+
+Supported output formats:
+
+- `csv`
+- `json`
+- `jsonl`
+- `markdown`
+- `text`
+
+---
+
+### Reports
 
 ```
-collect_jobs
-company_gate
-freshness_gate
-domain_gate
+GET /runs/{run_id}/readiness
 ```
 
-A run can also resume from an executable stage using:
+Returns the run readiness report, indicating whether all pipeline stages completed successfully and the output is ready for commercial use.
 
 ```
-POST /runs/{run_id}/execute
+GET /runs/{run_id}/analytics
 ```
 
-Example body:
+Returns the full run analytics report, including stage-level performance data, pipeline metrics, and aggregated counts.
 
-```json
-{
-  "start_stage": "company_gate",
-  "rerun": true
-}
 ```
+GET /runs/{run_id}/executive-summary
+```
+
+Returns the executive summary generated at the end of the pipeline run.
+
+```
+GET /runs/{run_id}/commercial-report
+```
+
+Returns the commercial report in Markdown format, suitable for direct sharing with the commercial team.
+
+```
+GET /runs/{run_id}/commercial-pipeline
+```
+
+Returns the exported commercial pipeline data.
+
+```
+GET /runs/{run_id}/top-opportunities
+```
+
+Returns the CSV with the highest-ranked commercial opportunities identified during the run.
 
 ---
 
@@ -498,26 +564,33 @@ Each run has its own run directory. Typical structure:
 
 ```
 runs/
-  {run_id}/
-    manifest.json
-    configuration.json
-    stages/
-      collect_jobs/
-        checkpoint.json
-        metrics.json
-        output.jsonl
-      company_gate/
-        checkpoint.json
-        metrics.json
-        output.jsonl
-      freshness_gate/
-        checkpoint.json
-        metrics.json
-        output.jsonl
-      domain_gate/
-        checkpoint.json
-        metrics.json
-        output.jsonl
+└── <run_id>/
+    ├── manifest.json
+    ├── configuration.json
+    ├── stages/
+    │   ├── collect_jobs/
+    │   │   ├── checkpoint.json
+    │   │   ├── metrics.json
+    │   │   └── output.jsonl
+    │   ├── company_gate/
+    │   │   ├── checkpoint.json
+    │   │   ├── metrics.json
+    │   │   └── output.jsonl
+    │   ├── freshness_gate/
+    │   │   ├── checkpoint.json
+    │   │   ├── metrics.json
+    │   │   └── output.jsonl
+    │   └── domain_gate/
+    │       ├── checkpoint.json
+    │       ├── metrics.json
+    │       └── output.jsonl
+    └── outputs/
+        ├── commercial_pipeline.csv
+        ├── commercial.md
+        ├── executive_summary.json
+        ├── run_analytics.json
+        ├── run_readiness_report.json
+        └── top_opportunities.csv
 ```
 
 ---
@@ -734,13 +807,23 @@ Recommended next sequence:
 
 ---
 
-## Suggested Freeze Command
+## Verification
+
+```bash
+PYTHONPATH=src python -m py_compile src/oie/api/routers/runs.py
+
+PYTHONPATH=src pytest -q
+```
+
+All tests must continue to pass after documentation updates.
+
+---
+
+## Suggested Commit
 
 ```bash
 git status --short
 git add README.md
-git commit -m "update project readme after orchestrator refactor"
+git commit -m "document run management and artifact endpoints"
 git push
-git tag v0.1.0-refactor-baseline
-git push origin v0.1.0-refactor-baseline
 ```
