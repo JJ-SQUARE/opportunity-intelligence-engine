@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_checkpoint import load_checkpoint_payload
 from oie.orchestration.stage_io import append_jsonl_item, read_json_file, read_jsonl_file, write_json_file
@@ -38,6 +40,13 @@ class StageCheckpointManager:
         if checkpoint is None:
             return None
         return load_checkpoint_payload(checkpoint)
+
+    def reset_artifacts(self) -> None:
+        paths = self.stage.artifact_paths()
+        for artifact_path in (paths["output"], paths["checkpoint"], paths["metrics"]):
+            path = Path(artifact_path)
+            if path.exists():
+                path.unlink()
 
     def output_count_from_artifact(self) -> int:
         return len(self.read_output())

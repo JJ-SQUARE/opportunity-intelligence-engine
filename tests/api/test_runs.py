@@ -962,6 +962,61 @@ def test_execute_collect_jobs_stage_writes_checkpoint_and_output(tmp_path, monke
     assert output_response.json()[0]["value"]["company"] == "Acme"
 
 
+def test_execute_stage_with_rerun_resets_previous_output(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    collected_jobs = [
+        {
+            "job_id": "job_1",
+            "title": "Backend Engineer",
+            "company": "Acme",
+            "source": "test",
+            "job_url": "https://example.com/jobs/1",
+        }
+    ]
+
+    monkeypatch.setattr(
+        "oie.orchestration.collect_jobs_stage.CollectionService.collect",
+        lambda self: collected_jobs,
+    )
+
+    client = TestClient(app)
+    first_response = client.post(
+        f"/runs/{ctx.run_id}/stages/collect_jobs/execute",
+        json={"config": {"runs": {"path": str(runs_path)}}},
+    )
+    rerun_response = client.post(
+        f"/runs/{ctx.run_id}/stages/collect_jobs/execute",
+        json={
+            "config": {"runs": {"path": str(runs_path)}},
+            "rerun": True,
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert rerun_response.status_code == 200
+    assert rerun_response.json()["processed_count"] == 1
+    assert rerun_response.json()["output_count"] == 1
+
+    output_response = client.get(f"/runs/{ctx.run_id}/stages/collect_jobs/output")
+    assert output_response.status_code == 200
+    assert len(output_response.json()) == 1
+
+
 def test_execute_unknown_stage_returns_404(tmp_path):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})

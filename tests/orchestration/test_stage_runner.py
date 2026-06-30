@@ -466,6 +466,27 @@ def test_stage_runner_resumes_after_last_processed_index(tmp_path):
     assert metrics["processing_time_seconds"] == checkpoint["processing_time_seconds"]
 
 
+def test_stage_runner_rerun_resets_previous_artifacts(tmp_path):
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    runner = StageRunner(ctx)
+    runner.run_stage(RunnerItemsStage)
+    checkpoint = runner.run_stage(RunnerItemsStage, reset=True)
+    paths = RunnerItemsStage(ctx).artifact_paths()
+    output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
+
+    assert [json.loads(line) for line in output_lines] == [
+        {"id": "item_1", "value": 10},
+        {"id": "item_2", "value": 20},
+    ]
+    assert checkpoint["processed_count"] == 2
+    assert checkpoint["output_count"] == 2
+    assert checkpoint["last_processed_index"] == 1
+
+
 def test_stage_runner_zero_processed_failure_stays_failed(tmp_path):
     ctx = RunContext.create(
         config={"runs": {"path": str(tmp_path / "runs")}},

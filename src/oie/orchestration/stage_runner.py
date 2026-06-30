@@ -17,10 +17,12 @@ class StageRunner:
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
 
-    def run_stage(self, stage_cls: StageClass) -> StageState:
+    def run_stage(self, stage_cls: StageClass, *, reset: bool = False) -> StageState:
         stage = stage_cls(self.ctx)
         checkpoint_manager = StageCheckpointManager(stage)
         stage.ensure_stage_dir()
+        if reset:
+            checkpoint_manager.reset_artifacts()
         update_stage_status(self.ctx, stage.name, "running")
         inputs = list(stage.load_input())
         checkpoint, start_index = checkpoint_manager.prepare_checkpoint(len(inputs))
