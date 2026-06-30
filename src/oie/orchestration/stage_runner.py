@@ -50,5 +50,5 @@ class StageRunner:
         checkpoint_manager.record_stage_completion(checkpoint, start_time)
         checkpoint_manager.write_checkpoint(checkpoint)
         checkpoint_manager.write_metrics(checkpoint)
-        update_stage_status(self.ctx, stage.name, "completed")
+        update_stage_status(self.ctx, stage.name, checkpoint["status"])
         return checkpoint
