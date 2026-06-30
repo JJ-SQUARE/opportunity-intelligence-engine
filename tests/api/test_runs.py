@@ -276,6 +276,34 @@ def test_create_run_schedule_rejects_invalid_frequency_time_and_day(tmp_path, mo
     assert invalid_day.json() == {"detail": "Invalid scheduled day: funday"}
 
 
+def test_run_schedule_status_marks_due_when_time_and_day_match(tmp_path):
+    from datetime import UTC, datetime
+
+    from oie.orchestration.run_schedule import run_schedule_status, write_run_schedule
+
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+
+    write_run_schedule(
+        ctx,
+        {
+            "frequency": "weekly",
+            "duration": "permanent",
+            "scheduled_times": ["09:00"],
+            "scheduled_days": ["monday"],
+            "enabled": True,
+        },
+    )
+
+    payload = run_schedule_status(ctx, datetime(2026, 7, 6, 9, 0, tzinfo=UTC))
+
+    assert payload["run_id"] == ctx.run_id
+    assert payload["scheduled"] is True
+    assert payload["enabled"] is True
+    assert payload["due"] is True
+    assert payload["frequency"] == "weekly"
+
+
 def test_update_run_schedule_replaces_existing_schedule(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})

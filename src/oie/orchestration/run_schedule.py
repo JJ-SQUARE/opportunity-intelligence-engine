@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 import re
 
@@ -54,3 +55,33 @@ def write_run_schedule(ctx: RunContext, schedule: JSONPayload) -> JSONPayload:
 
 def read_run_schedule(ctx: RunContext) -> JSONPayload | None:
     return read_json_file(schedule_path(ctx))
+
+
+def run_schedule_status(ctx: RunContext, now: datetime | None = None) -> JSONPayload:
+    schedule = read_run_schedule(ctx)
+    if schedule is None:
+        return {"run_id": ctx.run_id, "scheduled": False, "enabled": False, "due": False}
+
+    current_time = now or datetime.now(UTC)
+    scheduled_times = list(schedule.get("scheduled_times", []))
+    scheduled_days = list(schedule.get("scheduled_days", []))
+    current_hhmm = current_time.strftime("%H:%M")
+    current_day = current_time.strftime("%A").lower()
+
+    due = bool(schedule.get("enabled", True))
+    if scheduled_times:
+        due = due and current_hhmm in scheduled_times
+    if scheduled_days:
+        due = due and current_day in scheduled_days
+
+    return {
+        "run_id": ctx.run_id,
+        "scheduled": True,
+        "enabled": bool(schedule.get("enabled", True)),
+        "due": due,
+        "frequency": schedule.get("frequency"),
+        "duration": schedule.get("duration"),
+        "scheduled_times": scheduled_times,
+        "scheduled_days": scheduled_days,
+        "checked_at": current_time.isoformat(),
+    }
