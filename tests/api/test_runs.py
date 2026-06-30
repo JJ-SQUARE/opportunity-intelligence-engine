@@ -535,8 +535,20 @@ def test_create_run_schedule_rejects_invalid_frequency_time_and_day(tmp_path, mo
     assert invalid_frequency.json() == {"detail": "Invalid schedule frequency: hourly"}
     assert invalid_time.status_code == 422
     assert invalid_time.json() == {"detail": "Invalid scheduled time: 25:00"}
+    invalid_duration = client.post(
+        f"/runs/{ctx.run_id}/schedule",
+        json={
+            "frequency": "weekly",
+            "duration": "forever",
+            "scheduled_times": ["09:00"],
+            "scheduled_days": ["monday"],
+        },
+    )
+
     assert invalid_day.status_code == 422
     assert invalid_day.json() == {"detail": "Invalid scheduled day: funday"}
+    assert invalid_duration.status_code == 422
+    assert invalid_duration.json() == {"detail": "Invalid schedule duration: forever"}
 
 
 def test_run_schedule_status_marks_due_when_time_and_day_match(tmp_path):
