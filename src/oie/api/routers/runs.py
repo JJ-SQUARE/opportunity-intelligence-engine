@@ -397,16 +397,7 @@ def get_run_stages(run_id: str) -> list[JSONPayload]:
 
 @router.get("/runs/{run_id}/artifacts", summary="Get artifact catalog", response_model=ArtifactCatalogResponse)
 def get_run_artifact_catalog(run_id: str) -> JSONPayload:
-    # FIX: artifact endpoint must be read-only, no request context
-    repository = _run_repository()
-    manifest = repository.read_detail(run_id)
-    if manifest is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    
-    # FIX: reuse repository context to preserve run identity + filesystem mapping
-    repository = _run_repository()
-    ctx = repository.ctx
-    repository = RunRepository(ctx)
+    repository = _run_repository(run_id)
     manifest = repository.read_detail(run_id)
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
