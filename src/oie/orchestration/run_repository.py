@@ -20,7 +20,7 @@ class RunRepository:
         for key, value in patch.items():
             updated[key] = value
 
-        manifest_path = Path(self.ctx.paths["runs_base_dir"]) / run_id / "manifest.json"
+        manifest_path = Path(self.ctx.config.get("runs", {}).get("path", "data/runs")) / run_id / "manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         from oie.orchestration.stage_io import write_json_file
         return write_json_file(manifest_path, updated)
