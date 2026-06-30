@@ -448,6 +448,26 @@ class PipelineOrchestrator:
         return self.master_dedup_service.dedupe_leads_against_master(best_leads)
 
 
+    def persist_pipeline_data(
+        self,
+        *,
+        status: str,
+        unique_jobs: List[Dict[str, Any]],
+        companies: List[Dict[str, Any]],
+        best_leads: List[Dict[str, Any]],
+    ) -> None:
+        self.persistence_service.persist_run_snapshot(
+            status=status,
+            companies=companies,
+            jobs=unique_jobs,
+            leads=best_leads,
+        )
+
+        self.master_data_service.append_jobs(unique_jobs)
+        self.master_data_service.append_companies(companies)
+        self.master_data_service.append_leads(best_leads)
+
+
     def run(self) -> Dict[str, Any]:
         unique_jobs: List[Dict[str, Any]] = []
         companies: List[Dict[str, Any]] = []
@@ -468,16 +488,12 @@ class PipelineOrchestrator:
 
             status = "company_pipeline_completed"
 
-            self.persistence_service.persist_run_snapshot(
+            self.persist_pipeline_data(
                 status=status,
+                unique_jobs=unique_jobs,
                 companies=companies,
-                jobs=unique_jobs,
-                leads=best_leads,
+                best_leads=best_leads,
             )
-
-            self.master_data_service.append_jobs(unique_jobs)
-            self.master_data_service.append_companies(companies)
-            self.master_data_service.append_leads(best_leads)
 
             duplicate_report_rows = self.master_dedup_service.build_suspected_duplicates_report(
                 jobs_duplicates=duplicate_jobs,
