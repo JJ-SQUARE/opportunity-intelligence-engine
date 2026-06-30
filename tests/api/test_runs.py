@@ -667,7 +667,13 @@ def test_run_read_endpoints_use_run_specific_repository(tmp_path, monkeypatch):
     write_manifest(ctx, manifest)
 
     config_path = runs_path / ctx.run_id / "configuration.json"
-    config_path.write_text(json.dumps({"runs": {"path": str(runs_path)}}), encoding="utf-8")
+    config_path.write_text(
+        json.dumps({
+            "runs": {"path": str(runs_path)},
+            "mode": "default",
+        }),
+        encoding="utf-8",
+    )
 
     original_run_repository = runs_router._run_repository
     seen_run_ids = []
