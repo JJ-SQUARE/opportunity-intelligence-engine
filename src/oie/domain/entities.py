@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from oie.domain.value_objects import CompanyId, JobId, OpportunityId
+from oie.domain.value_objects import CompanyId, DecisionId, JobId, OpportunityId
 
 JSONDict = dict[str, Any]
 
@@ -59,6 +59,7 @@ class Decision:
     stage: str
     decision: str
     confidence: float
+    id: DecisionId | str | None = None
     reason: str
     evidence: list[Evidence] = field(default_factory=list)
     timestamp: str | None = None
