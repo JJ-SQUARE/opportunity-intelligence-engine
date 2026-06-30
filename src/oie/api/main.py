@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from pydantic import BaseModel
 
 from oie.api.routers.runs import router as runs_router
+
+class HealthResponse(BaseModel):
+    status: str
+
 
 app = FastAPI(
     title="Opportunity Intelligence Engine API",
@@ -22,6 +27,6 @@ app = FastAPI(
 app.include_router(runs_router)
 
 
-@app.get("/health", tags=["Health"])
-def healthcheck() -> dict[str, str]:
-    return {"status": "ok"}
+@app.get("/health", tags=["Health"], response_model=HealthResponse)
+def healthcheck() -> HealthResponse:
+    return HealthResponse(status="ok")
