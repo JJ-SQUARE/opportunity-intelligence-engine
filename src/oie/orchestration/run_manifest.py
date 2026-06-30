@@ -118,6 +118,28 @@ def update_stage_status(ctx: RunContext, stage_name: str, status: str) -> Path:
     manifest = read_json_file(manifest_path)
     if manifest is None:
         manifest = build_initial_manifest(ctx)
+def set_run_status(ctx, run_id: str, status: str, current_stage: str | None = None, error: dict | None = None):
+    from oie.orchestration.pipeline_stages import validate_run_status
+
+    validate_run_status(status)
+
+    manifest_path = Path(ctx.paths["manifest_path"])
+    manifest = read_json_file(manifest_path)
+
+    if manifest is None:
+        manifest = build_initial_manifest(ctx)
+
+    manifest["status"] = status
+    manifest["updated_at"] = utc_now_iso()
+
+    if current_stage is not None:
+        manifest["current_stage"] = current_stage
+
+    if error is not None:
+        manifest.setdefault("errors", []).append(error)
+
+    return write_manifest(ctx, manifest)
+
 
     manifest["current_stage"] = stage_name
     manifest.setdefault("stages", {})[stage_name] = status
