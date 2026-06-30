@@ -104,12 +104,12 @@ def _decision_history_from_payload(payload: Any) -> DecisionHistory:
 
 def job_dict_to_candidate(job: dict[str, Any], fallback_id: str) -> OpportunityCandidate:
     job_id = _first_non_empty(job, ("job_id", "id", "job_url", "apply_url"), fallback_id)
-    candidate_id = f"opp_{job_id}"
+    candidate_id = job_id
 
     return OpportunityCandidate(
         id=OpportunityId(candidate_id),
         source_job=JobPosting(
-            id=JobId(f"job_{job_id}"),
+            id=JobId(job_id),
             title=str(job.get("title") or ""),
             company=str(job.get("company") or ""),
             location=job.get("location"),
