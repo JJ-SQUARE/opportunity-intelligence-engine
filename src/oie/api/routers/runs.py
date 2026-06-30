@@ -309,6 +309,23 @@ def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) ->
     }
 
 
+@router.get(
+    "/runs/{run_id}/hubspot-delivery",
+    summary="Get run HubSpot delivery",
+    response_model=HubSpotDeliveryResponse,
+)
+def get_run_hubspot_delivery(run_id: str) -> JSONPayload:
+    repository = _run_repository()
+    detail = repository.read_detail(run_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    return {
+        "run_id": run_id,
+        "hubspot_delivery": detail.get("hubspot_delivery", {}),
+    }
+
+
 @router.get("/runs/{run_id}/schedule/status", summary="Get run schedule status", response_model=RunScheduleStatusResponse)
 def get_run_schedule_status(run_id: str) -> JSONPayload:
     ctx = _ctx_for_existing_run(

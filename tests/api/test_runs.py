@@ -289,6 +289,44 @@ def test_update_run_hubspot_delivery_defaults_credentials_ref_from_account_and_u
     assert response.json()["hubspot_delivery"]["hubspot_credentials_ref"] == "hubspot/tekton/juan"
 
 
+def test_get_run_hubspot_delivery_returns_persisted_settings(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["hubspot_delivery"] = {
+        "hubspot_user_id": "123",
+        "hubspot_owner_id": "456",
+        "hubspot_company_id": "company",
+        "hubspot_credentials_ref": "hubspot/test/user",
+    }
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr(
+        "oie.orchestration.run_repository.RunContext.create",
+        fake_create,
+    )
+
+    client = TestClient(app)
+
+    response = client.get(f"/runs/{ctx.run_id}/hubspot-delivery")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "hubspot_delivery": manifest["hubspot_delivery"],
+    }
+
+
 def test_get_run_detail_returns_existing_manifest(tmp_path, monkeypatch):
     runs_path = tmp_path / "runs"
     ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
