@@ -244,8 +244,8 @@ def test_update_run_hubspot_delivery_sanitizes_bearer_token(tmp_path, monkeypatc
     }
 
     detail_response = client.get(f"/runs/{ctx.run_id}")
-    assert payload["hubspot_delivery"] == detail_response.json()["hubspot_delivery"]
     assert detail_response.status_code == 200
+    assert payload["hubspot_delivery"] == detail_response.json()["hubspot_delivery"]
     hubspot_delivery = detail_response.json()["hubspot_delivery"]
     assert hubspot_delivery["hubspot_credentials_ref"] == "hubspot/tekton/juan"
     assert "hubspot_bearer_token" not in hubspot_delivery
