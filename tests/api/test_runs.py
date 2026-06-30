@@ -39,6 +39,11 @@ def test_openapi_documents_run_routes():
         "Health",
     ]
     assert schema["paths"]["/runs"]["post"]["summary"] == "Create run"
+    assert schema["paths"]["/runs"]["post"]["tags"] == ["Run Management"]
+    assert schema["paths"]["/runs/{run_id}/schedule"]["post"]["tags"] == ["Run Scheduling"]
+    assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["put"]["tags"] == ["CRM Delivery"]
+    assert schema["paths"]["/runs/{run_id}/icp-profiles"]["put"]["tags"] == ["ICP Configuration"]
+    assert schema["paths"]["/runs/{run_id}/artifacts"]["get"]["tags"] == ["Run Artifacts"]
     assert schema["paths"]["/runs"]["get"]["summary"] == "List runs"
     assert schema["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"] == "object"
     assert schema["paths"]["/runs/{run_id}/status"]["get"]["summary"] == "Get run status"

@@ -45,7 +45,7 @@ from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
 from oie.orchestration.run_storage_resolver import configure_ctx_for_run_storage
 
-router = APIRouter(tags=["Runs"], responses={404: {"model": HTTPErrorResponse}})
+router = APIRouter(responses={404: {"model": HTTPErrorResponse}})
 
 
 def _run_repository(
@@ -108,7 +108,7 @@ def _ctx_for_existing_run(
     return ctx
 
 
-@router.post("/runs", summary="Create run", response_model=CreateRunResponse)
+@router.post("/runs", summary="Create run", response_model=CreateRunResponse, tags=["Run Management"])
 def create_run(request: CreateRunRequest) -> CreateRunResponse:
     ctx = RunContext.create(
         config=request.config,
@@ -148,7 +148,7 @@ def executable_stages_from(start_stage: str) -> list[str]:
     return executable_stages
 
 
-@router.post("/runs/{run_id}/execute", summary="Execute run", response_model=RunExecutionResponse)
+@router.post("/runs/{run_id}/execute", summary="Execute run", response_model=RunExecutionResponse, tags=["Run Management"])
 def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     if request.start_stage is not None:
         executable_stages = executable_stages_from(request.start_stage)
@@ -194,7 +194,7 @@ STAGE_CLASSES = {
 }
 
 
-@router.post("/runs/{run_id}/stages/{stage_name}/execute", summary="Execute run stage", response_model=StageCheckpointResponse)
+@router.post("/runs/{run_id}/stages/{stage_name}/execute", summary="Execute run stage", response_model=StageCheckpointResponse, tags=["Run Management"])
 def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) -> JSONPayload:
     stage_cls = STAGE_CLASSES.get(stage_name)
     if stage_cls is None:
@@ -211,7 +211,7 @@ def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) 
 
 
 
-@router.post("/runs/{run_id}/cancel", response_model=RunStatusResponse)
+@router.post("/runs/{run_id}/cancel", response_model=RunStatusResponse, tags=["Run Management"])
 def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
     return set_run_status(ctx, run_id, "cancelled")
@@ -219,7 +219,7 @@ def cancel_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
 
 
 
-@router.post("/runs/{run_id}/pause", response_model=RunStatusResponse)
+@router.post("/runs/{run_id}/pause", response_model=RunStatusResponse, tags=["Run Management"])
 def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
     return set_run_status(ctx, run_id, "waiting_for_user")
@@ -227,14 +227,14 @@ def pause_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
 
 
 
-@router.post("/runs/{run_id}/resume", response_model=RunStatusResponse)
+@router.post("/runs/{run_id}/resume", response_model=RunStatusResponse, tags=["Run Management"])
 def resume_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
     ctx = _ctx_for_existing_run(run_id, request.config, request.flags, request.mode)
     return set_run_status(ctx, run_id, "pending")
 
 
 
-@router.get("/runs", summary="List runs", response_model=list[RunSummaryResponse])
+@router.get("/runs", summary="List runs", response_model=list[RunSummaryResponse], tags=["Run Management"])
 def list_runs(
     account_id: str | None = None,
     user_id: str | None = None,
@@ -243,7 +243,7 @@ def list_runs(
     return repository.list_summaries(account_id=account_id, user_id=user_id)
 
 
-@router.get("/runs/{run_id}/status", summary="Get run status", response_model=RunStatusResponse)
+@router.get("/runs/{run_id}/status", summary="Get run status", response_model=RunStatusResponse, tags=["Run Management"])
 def get_run_status(run_id: str) -> JSONPayload:
     repository = _run_repository(run_id)
     status = repository.read_status(run_id)
@@ -252,7 +252,7 @@ def get_run_status(run_id: str) -> JSONPayload:
     return status
 
 
-@router.get("/runs/{run_id}/configuration", summary="Get run configuration", response_model=RunConfigurationResponse)
+@router.get("/runs/{run_id}/configuration", summary="Get run configuration", response_model=RunConfigurationResponse, tags=["Run Management"])
 def get_run_configuration(run_id: str) -> JSONPayload:
     repository = _run_repository(run_id)
     if repository.read_detail(run_id) is None:
@@ -264,12 +264,12 @@ def get_run_configuration(run_id: str) -> JSONPayload:
     return configuration
 
 
-@router.post("/runs/{run_id}/schedule", summary="Create run schedule", response_model=RunScheduleResponse)
+@router.post("/runs/{run_id}/schedule", summary="Create run schedule", response_model=RunScheduleResponse, tags=["Run Scheduling"])
 def create_run_schedule(run_id: str, request: RunScheduleRequest) -> JSONPayload:
     return _write_schedule_response(run_id, request)
 
 
-@router.put("/runs/{run_id}/schedule", summary="Update run schedule", response_model=RunScheduleResponse)
+@router.put("/runs/{run_id}/schedule", summary="Update run schedule", response_model=RunScheduleResponse, tags=["Run Scheduling"])
 def update_run_schedule(run_id: str, request: RunScheduleRequest) -> JSONPayload:
     return _write_schedule_response(run_id, request)
 
@@ -287,7 +287,7 @@ def _write_schedule_response(run_id: str, request: RunScheduleRequest) -> JSONPa
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.put("/runs/{run_id}/hubspot-delivery", summary="Update run HubSpot delivery", response_model=HubSpotDeliveryResponse)
+@router.put("/runs/{run_id}/hubspot-delivery", summary="Update run HubSpot delivery", response_model=HubSpotDeliveryResponse, tags=["CRM Delivery"])
 def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) -> JSONPayload:
     repository = _run_repository(run_id)
     manifest = repository.read_detail(run_id)
@@ -327,6 +327,7 @@ def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) ->
     "/runs/{run_id}/hubspot-delivery",
     summary="Get run HubSpot delivery",
     response_model=HubSpotDeliveryResponse,
+    tags=["CRM Delivery"],
 )
 def get_run_hubspot_delivery(run_id: str) -> JSONPayload:
     repository = _run_repository(run_id)
@@ -340,7 +341,7 @@ def get_run_hubspot_delivery(run_id: str) -> JSONPayload:
     }
 
 
-@router.put("/runs/{run_id}/icp-profiles", summary="Update run ICP profiles", response_model=ICPProfilesResponse)
+@router.put("/runs/{run_id}/icp-profiles", summary="Update run ICP profiles", response_model=ICPProfilesResponse, tags=["ICP Configuration"])
 def update_run_icp_profiles(run_id: str, request: ICPProfilesRequest) -> JSONPayload:
     repository = _run_repository(run_id)
     manifest = repository.read_detail(run_id)
@@ -356,7 +357,7 @@ def update_run_icp_profiles(run_id: str, request: ICPProfilesRequest) -> JSONPay
     }
 
 
-@router.post("/runs/{run_id}/icp-profiles", summary="Add run ICP profile", response_model=ICPProfilesResponse)
+@router.post("/runs/{run_id}/icp-profiles", summary="Add run ICP profile", response_model=ICPProfilesResponse, tags=["ICP Configuration"])
 def add_run_icp_profile(run_id: str, request: ICPProfileRequest) -> JSONPayload:
     repository = _run_repository(run_id)
     manifest = repository.read_detail(run_id)
@@ -381,7 +382,7 @@ def add_run_icp_profile(run_id: str, request: ICPProfileRequest) -> JSONPayload:
     }
 
 
-@router.get("/runs/{run_id}/icp-profiles", summary="Get run ICP profiles", response_model=ICPProfilesResponse)
+@router.get("/runs/{run_id}/icp-profiles", summary="Get run ICP profiles", response_model=ICPProfilesResponse, tags=["ICP Configuration"])
 def get_run_icp_profiles(run_id: str) -> JSONPayload:
     repository = _run_repository(run_id)
     detail = repository.read_detail(run_id)
@@ -394,7 +395,7 @@ def get_run_icp_profiles(run_id: str) -> JSONPayload:
     }
 
 
-@router.delete("/runs/{run_id}/icp-profiles/{profile_id}", summary="Delete run ICP profile", response_model=ICPProfilesResponse)
+@router.delete("/runs/{run_id}/icp-profiles/{profile_id}", summary="Delete run ICP profile", response_model=ICPProfilesResponse, tags=["ICP Configuration"])
 def delete_run_icp_profile(run_id: str, profile_id: str) -> JSONPayload:
     repository = _run_repository(run_id)
     manifest = repository.read_detail(run_id)
@@ -420,7 +421,7 @@ def delete_run_icp_profile(run_id: str, profile_id: str) -> JSONPayload:
     }
 
 
-@router.get("/runs/{run_id}/schedule/status", summary="Get run schedule status", response_model=RunScheduleStatusResponse)
+@router.get("/runs/{run_id}/schedule/status", summary="Get run schedule status", response_model=RunScheduleStatusResponse, tags=["Run Scheduling"])
 def get_run_schedule_status(run_id: str) -> JSONPayload:
     ctx = _ctx_for_existing_run(
         run_id=run_id,
@@ -431,7 +432,7 @@ def get_run_schedule_status(run_id: str) -> JSONPayload:
     return run_schedule_status(ctx)
 
 
-@router.get("/runs/{run_id}/schedule", summary="Get run schedule", response_model=RunScheduleResponse)
+@router.get("/runs/{run_id}/schedule", summary="Get run schedule", response_model=RunScheduleResponse, tags=["Run Scheduling"])
 def get_run_schedule(run_id: str) -> JSONPayload:
     ctx = _ctx_for_existing_run(
         run_id=run_id,
@@ -445,7 +446,7 @@ def get_run_schedule(run_id: str) -> JSONPayload:
     return schedule
 
 
-@router.get("/runs/{run_id}/stages", summary="List run stages", response_model=list[RunStageStatusResponse])
+@router.get("/runs/{run_id}/stages", summary="List run stages", response_model=list[RunStageStatusResponse], tags=["Run Artifacts"])
 def get_run_stages(run_id: str) -> list[JSONPayload]:
     repository = _run_repository(run_id)
     stages = repository.read_stages(run_id)
@@ -454,7 +455,7 @@ def get_run_stages(run_id: str) -> list[JSONPayload]:
     return stages
 
 
-@router.get("/runs/{run_id}/artifacts", summary="Get artifact catalog", response_model=ArtifactCatalogResponse)
+@router.get("/runs/{run_id}/artifacts", summary="Get artifact catalog", response_model=ArtifactCatalogResponse, tags=["Run Artifacts"])
 def get_run_artifact_catalog(run_id: str) -> JSONPayload:
     repository = _run_repository(run_id)
     manifest = repository.read_detail(run_id)
@@ -463,7 +464,7 @@ def get_run_artifact_catalog(run_id: str) -> JSONPayload:
     return StageArtifactRepository(repository.ctx, run_id).read_catalog()
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}", summary="Get stage status", response_model=RunStageStatusResponse)
+@router.get("/runs/{run_id}/stages/{stage_name}", summary="Get stage status", response_model=RunStageStatusResponse, tags=["Run Artifacts"])
 def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
     repository = _run_repository(run_id)
     stage = repository.read_stage(run_id, stage_name)
@@ -472,13 +473,13 @@ def get_run_stage(run_id: str, stage_name: str) -> JSONPayload:
     return stage
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/summary", summary="Get stage artifact summary", response_model=StageArtifactSummaryResponse)
+@router.get("/runs/{run_id}/stages/{stage_name}/summary", summary="Get stage artifact summary", response_model=StageArtifactSummaryResponse, tags=["Run Artifacts"])
 def get_run_stage_artifact_summary(run_id: str, stage_name: str) -> JSONPayload:
     repository = _stage_artifact_repository(run_id, stage_name, "Stage artifact summary not found")
     return repository.read_summary(stage_name)
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/checkpoint", summary="Get stage checkpoint", response_model=StageCheckpointResponse)
+@router.get("/runs/{run_id}/stages/{stage_name}/checkpoint", summary="Get stage checkpoint", response_model=StageCheckpointResponse, tags=["Run Artifacts"])
 def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
     repository = _stage_artifact_repository(run_id, stage_name, "Checkpoint not found")
     checkpoint = repository.read_checkpoint(stage_name)
@@ -487,7 +488,7 @@ def get_run_stage_checkpoint(run_id: str, stage_name: str) -> JSONPayload:
     return checkpoint
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/metrics", summary="Get stage metrics", response_model=StageMetricsResponse)
+@router.get("/runs/{run_id}/stages/{stage_name}/metrics", summary="Get stage metrics", response_model=StageMetricsResponse, tags=["Run Artifacts"])
 def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
     repository = _stage_artifact_repository(run_id, stage_name, "Stage metrics not found")
     metrics = repository.read_metrics(stage_name)
@@ -496,7 +497,7 @@ def get_run_stage_metrics(run_id: str, stage_name: str) -> JSONPayload:
     return metrics
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/output", summary="Get stage output", response_model=list[dict[str, Any]])
+@router.get("/runs/{run_id}/stages/{stage_name}/output", summary="Get stage output", response_model=list[dict[str, Any]], tags=["Run Artifacts"])
 def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
     repository = _stage_artifact_repository(run_id, stage_name, "Stage output not found")
     output = repository.read_output(stage_name)
@@ -505,7 +506,7 @@ def get_run_stage_output(run_id: str, stage_name: str) -> list[JSONPayload]:
     return output
 
 
-@router.get("/runs/{run_id}/stages/{stage_name}/errors", summary="Get stage errors", response_model=list[ErrorResponse])
+@router.get("/runs/{run_id}/stages/{stage_name}/errors", summary="Get stage errors", response_model=list[ErrorResponse], tags=["Run Artifacts"])
 def get_run_stage_errors(run_id: str, stage_name: str) -> list[JSONPayload]:
     repository = _stage_artifact_repository(run_id, stage_name, "Stage errors not found")
     errors = repository.read_errors(stage_name)
@@ -514,7 +515,7 @@ def get_run_stage_errors(run_id: str, stage_name: str) -> list[JSONPayload]:
     return errors
 
 
-@router.get("/runs/{run_id}/errors", summary="Get run errors", response_model=list[ErrorResponse])
+@router.get("/runs/{run_id}/errors", summary="Get run errors", response_model=list[ErrorResponse], tags=["Run Artifacts"])
 def get_run_errors(run_id: str) -> list[JSONPayload]:
     repository = _run_repository(run_id)
     errors = repository.read_errors(run_id)
@@ -523,7 +524,7 @@ def get_run_errors(run_id: str) -> list[JSONPayload]:
     return errors
 
 
-@router.get("/runs/{run_id}/metrics", summary="Get run metrics summary", response_model=RunMetricsSummaryResponse)
+@router.get("/runs/{run_id}/metrics", summary="Get run metrics summary", response_model=RunMetricsSummaryResponse, tags=["Run Artifacts"])
 def get_run_metrics(run_id: str) -> JSONPayload:
     repository = _run_repository(run_id)
     metrics = repository.read_metrics_summary(run_id)
@@ -532,7 +533,7 @@ def get_run_metrics(run_id: str) -> JSONPayload:
     return metrics
 
 
-@router.get("/runs/{run_id}", summary="Get run detail", response_model=dict[str, Any])
+@router.get("/runs/{run_id}", summary="Get run detail", response_model=dict[str, Any], tags=["Run Management"])
 def get_run_detail(run_id: str) -> JSONPayload:
     repository = _run_repository(run_id)
     detail = repository.read_detail(run_id)
