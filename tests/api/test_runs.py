@@ -37,6 +37,7 @@ def test_openapi_documents_run_routes():
     assert schema["paths"]["/runs/{run_id}/schedule"]["put"]["summary"] == "Update run schedule"
     assert schema["paths"]["/runs/{run_id}/schedule"]["get"]["summary"] == "Get run schedule"
     assert schema["paths"]["/runs/{run_id}/schedule/status"]["get"]["summary"] == "Get run schedule status"
+    assert schema["paths"]["/runs/{run_id}/hubspot-delivery"]["put"]["summary"] == "Update run HubSpot delivery"
     assert schema["paths"]["/runs/{run_id}/artifacts"]["get"]["summary"] == "Get artifact catalog"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/output"]["get"]["summary"] == "Get stage output"
     assert schema["paths"]["/runs/{run_id}/stages/{stage_name}/summary"]["get"]["summary"] == "Get stage artifact summary"
@@ -196,6 +197,53 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
         "hubspot_credentials_ref": "hubspot/tekton/juan",
     }
     assert "hubspot_bearer_token" not in manifest["hubspot_delivery"]
+
+
+def test_update_run_hubspot_delivery_sanitizes_bearer_token(tmp_path, monkeypatch):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+
+    client = TestClient(app)
+    response = client.put(
+        f"/runs/{ctx.run_id}/hubspot-delivery",
+        json={
+            "hubspot_user_id": "123",
+            "hubspot_owner_id": "456",
+            "hubspot_company_id": "tekton-company-001",
+            "hubspot_credentials_ref": "hubspot/tekton/juan",
+            "hubspot_bearer_token": "secret-token",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": ctx.run_id,
+        "hubspot_delivery": {
+            "hubspot_user_id": "123",
+            "hubspot_owner_id": "456",
+            "hubspot_company_id": "tekton-company-001",
+            "hubspot_credentials_ref": "hubspot/tekton/juan",
+        },
+    }
+
+    detail_response = client.get(f"/runs/{ctx.run_id}")
+    assert detail_response.status_code == 200
+    hubspot_delivery = detail_response.json()["hubspot_delivery"]
+    assert hubspot_delivery["hubspot_credentials_ref"] == "hubspot/tekton/juan"
+    assert "hubspot_bearer_token" not in hubspot_delivery
 
 
 def test_get_run_detail_returns_existing_manifest(tmp_path, monkeypatch):

@@ -74,6 +74,19 @@ class RunScheduleStatusResponse(BaseModel):
     checked_at: str | None = None
 
 
+class HubSpotDeliveryRequest(BaseModel):
+    hubspot_user_id: str | None = None
+    hubspot_owner_id: str | None = None
+    hubspot_company_id: str | None = None
+    hubspot_credentials_ref: str | None = None
+    hubspot_bearer_token: str | None = None
+
+
+class HubSpotDeliveryResponse(BaseModel):
+    run_id: str
+    hubspot_delivery: dict[str, Any]
+
+
 class RunExecutionResponse(BaseModel):
     run_id: str
     status: str

@@ -11,6 +11,8 @@ from oie.api.schemas.runs import (
     ErrorResponse,
     ExecuteRunRequest,
     HTTPErrorResponse,
+    HubSpotDeliveryRequest,
+    HubSpotDeliveryResponse,
     RunExecutionResponse,
     RunMetricsSummaryResponse,
     RunScheduleRequest,
@@ -261,6 +263,29 @@ def _write_schedule_response(run_id: str, request: RunScheduleRequest) -> JSONPa
         return write_run_schedule(ctx, request.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.put("/runs/{run_id}/hubspot-delivery", summary="Update run HubSpot delivery", response_model=HubSpotDeliveryResponse)
+def update_run_hubspot_delivery(run_id: str, request: HubSpotDeliveryRequest) -> JSONPayload:
+    ctx = _ctx_for_existing_run(
+        run_id=run_id,
+        config={},
+        flags={},
+        mode=None,
+    )
+    repository = RunRepository(ctx)
+    manifest = repository.read_detail(run_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    hubspot_delivery = {
+        key: value
+        for key, value in request.model_dump(exclude_none=True).items()
+        if key != "hubspot_bearer_token"
+    }
+    manifest["hubspot_delivery"] = hubspot_delivery
+    write_manifest(ctx, manifest)
+    return {"run_id": run_id, "hubspot_delivery": hubspot_delivery}
 
 
 @router.get("/runs/{run_id}/schedule/status", summary="Get run schedule status", response_model=RunScheduleStatusResponse)
