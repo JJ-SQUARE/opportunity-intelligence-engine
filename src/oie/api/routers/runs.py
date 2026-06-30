@@ -95,18 +95,9 @@ def _ctx_for_existing_run(
         flags=flags,
         mode=mode or str(manifest.get("mode") or "default"),
     )
-    ctx.run_id = run_id
+    configure_ctx_for_run_storage(ctx, run_id)
     ctx.run_date = str(manifest.get("run_date") or ctx.run_date)
     ctx.mode = str(manifest.get("mode") or ctx.mode)
-
-    runs_base_dir = ctx.paths["runs_base_dir"]
-    run_dir = f"{runs_base_dir}/{run_id}"
-    ctx.paths["run_dir"] = run_dir
-    ctx.paths["manifest_path"] = f"{run_dir}/manifest.json"
-    ctx.paths["stage_dirs"] = {
-        stage: f"{run_dir}/{index:02d}_{stage}"
-        for index, stage in enumerate(PIPELINE_STAGES, start=1)
-    }
     return ctx
 
 
