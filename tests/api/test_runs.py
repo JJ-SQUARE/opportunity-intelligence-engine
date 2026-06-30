@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from oie.api.main import app
 from oie.orchestration.run_context import RunContext
+from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, read_run_manifest, write_manifest
 
 
@@ -231,6 +232,29 @@ def test_create_run_persists_account_user_and_hubspot_delivery_metadata(tmp_path
         "hubspot_credentials_ref": "hubspot/tekton/juan",
     }
     assert "hubspot_bearer_token" not in manifest["hubspot_delivery"]
+
+
+def test_run_repository_reads_configuration_snapshot(tmp_path):
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["config_path"] = str(runs_path / ctx.run_id / "configuration.json")
+    write_manifest(ctx, manifest)
+
+    import json
+
+    config_path = runs_path / ctx.run_id / "configuration.json"
+    config_path.write_text(
+        json.dumps({"mode": "dry-run", "flags": {"dry_run": True}}),
+        encoding="utf-8",
+    )
+
+    repository = RunRepository(ctx)
+
+    assert repository.read_configuration(ctx.run_id) == {
+        "mode": "dry-run",
+        "flags": {"dry_run": True},
+    }
 
 
 def test_get_run_configuration_returns_404_when_snapshot_missing(tmp_path, monkeypatch):
