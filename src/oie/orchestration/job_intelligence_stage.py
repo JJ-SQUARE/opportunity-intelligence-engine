@@ -30,7 +30,7 @@ class JobIntelligenceStage(Stage):
         enriched_job = enriched_jobs[0] if enriched_jobs else {}
 
         return {
-            "id": str(item.get("id")),
+            "id": str(item.get("id") or "unknown_job")
             "value": enriched_job,
             "metadata": dict(item.get("metadata") or {}),
         }
