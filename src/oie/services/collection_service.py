@@ -58,6 +58,10 @@ class CollectionService:
         if (ats.get("recruitee", {}) or {}).get("enabled", False):
             enabled.append("recruitee")
 
+        static_jobs = (self.ctx.config.get("collectors", {}) or {}).get("static_jobs", {}) or {}
+        if static_jobs.get("jobs"):
+            enabled.append("static_jobs")
+
         return enabled
 
     def _normalize_queries(self, queries: List[Any]) -> List[Dict[str, str]]:

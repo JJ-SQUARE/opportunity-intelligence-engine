@@ -103,11 +103,16 @@ class RunRepository:
         return write_manifest(self.ctx, manifest)
 
     def build_configuration(self) -> RunConfiguration:
-        return RunConfiguration(
-            **dict(self.ctx.config),
-            flags=dict(self.ctx.flags),
-            mode=self.ctx.mode,
-        )
+        config = dict(self.ctx.config)
+        hubspot_delivery = dict(config.get("hubspot_delivery") or {})
+        hubspot_delivery.pop("hubspot_bearer_token", None)
+        if hubspot_delivery:
+            config["hubspot_delivery"] = hubspot_delivery
+        return {
+            **config,
+            "flags": dict(self.ctx.flags),
+            "mode": self.ctx.mode,
+        }
 
     def write_configuration(self, configuration_path: Path, configuration: RunConfiguration) -> Path:
         write_json_file(configuration_path, dict(configuration))
@@ -120,10 +125,7 @@ class RunRepository:
         config_path = manifest.get("config_path")
         if not config_path:
             return None
-        configuration = read_json_file(Path(config_path))
-        if configuration is None:
-            return None
-        return RunConfiguration(**configuration)
+        return read_json_file(Path(config_path))
 
     def delete_run(self, run_id: str) -> bool:
         run_dir = Path(self.ctx.paths["runs_base_dir"]) / run_id

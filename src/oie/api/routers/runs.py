@@ -99,7 +99,12 @@ def _ctx_for_existing_run(
     if manifest is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    merged_config = dict(config)
+    saved_configuration = repository.read_configuration(run_id)
+    saved_config = dict(saved_configuration) if saved_configuration else {}
+    saved_config.pop("flags", None)
+    saved_config.pop("mode", None)
+
+    merged_config = {**saved_config, **dict(config)}
     for metadata_key in ("account", "user", "hubspot_delivery"):
         if metadata_key not in merged_config and manifest.get(metadata_key):
             merged_config[metadata_key] = dict(manifest.get(metadata_key, {}) or {})
@@ -129,11 +134,11 @@ def create_run(request: CreateRunRequest) -> CreateRunResponse:
     configuration_path = Path(ctx.paths["run_dir"]) / "configuration.json"
     manifest["config_path"] = str(configuration_path)
     repository = RunRepository(ctx)
-    repository.write_detail(manifest)
     configuration_path = repository.write_configuration(
         configuration_path,
         repository.build_configuration(),
     )
+    repository.write_detail(manifest)
     return CreateRunResponse(
         run_id=manifest["run_id"],
         status=manifest["status"],

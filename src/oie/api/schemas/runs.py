@@ -4,11 +4,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from oie.orchestration.run_context import RunConfig, RunFlags
+from oie.orchestration.run_context import RunFlags
 
 
 class CreateRunRequest(BaseModel):
-    config: RunConfig = Field(default_factory=dict)
+    config: dict[str, Any] = Field(default_factory=dict)
     flags: RunFlags = Field(default_factory=dict)
     mode: str | None = None
 
@@ -22,7 +22,7 @@ class CreateRunResponse(BaseModel):
 
 
 class ExecuteRunRequest(BaseModel):
-    config: RunConfig = Field(default_factory=dict)
+    config: dict[str, Any] = Field(default_factory=dict)
     flags: RunFlags = Field(default_factory=dict)
     mode: str | None = None
     start_stage: str | None = None
