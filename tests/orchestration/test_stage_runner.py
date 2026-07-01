@@ -1022,7 +1022,7 @@ def test_stage_runner_runs_normalize_jobs_stage(monkeypatch, tmp_path):
     paths = NormalizeJobsStage(ctx).artifact_paths()
     output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
 
-    assert checkpoint["stage"] == "company_gate"
+    assert checkpoint["stage"] == "normalize_jobs"
     assert checkpoint["status"] == "completed"
     assert checkpoint["input_count"] == 1
     assert checkpoint["processed_count"] == 1
