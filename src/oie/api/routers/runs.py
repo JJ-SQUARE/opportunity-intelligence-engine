@@ -125,8 +125,13 @@ def _ctx_for_existing_run(
 
 @router.post("/runs", summary="Create run", response_model=CreateRunResponse, tags=["Run Management"])
 def create_run(request: CreateRunRequest) -> CreateRunResponse:
+    from oie.api.main import BASE_CONFIG
+    merged_config = {**BASE_CONFIG, **dict(request.config)}
+    for key in ("queries", "sources", "run", "job_intelligence", "collectors"):
+        if key in request.config:
+            merged_config[key] = request.config[key]
     ctx = RunContext.create(
-        config=request.config,
+        config=merged_config,
         flags=request.flags,
         mode=request.mode,
     )

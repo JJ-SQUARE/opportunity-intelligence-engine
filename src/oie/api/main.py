@@ -1,10 +1,36 @@
 from __future__ import annotations
 
+import os
+from typing import Any
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from oie.api.routers.runs import router as runs_router
+
+
+def _load_base_config() -> dict[str, Any]:
+    config_path = os.environ.get("OIE_CONFIG_PATH", "")
+    if not config_path:
+        return {}
+    try:
+        import yaml
+        def _expand(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {k: _expand(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_expand(v) for v in value]
+            if isinstance(value, str):
+                return os.path.expandvars(value)
+            return value
+        with open(config_path, "r", encoding="utf-8") as f:
+            return _expand(yaml.safe_load(f) or {})
+    except Exception:
+        return {}
+
+
+BASE_CONFIG: dict[str, Any] = _load_base_config()
 
 class HealthResponse(BaseModel):
     status: str
