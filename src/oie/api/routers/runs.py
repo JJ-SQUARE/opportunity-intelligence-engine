@@ -201,7 +201,7 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
 
 STAGE_CLASSES = {
     "collect_jobs": CollectJobsStage,
-    "company_gate": NormalizeJobsStage,
+    "normalize_jobs": NormalizeJobsStage,
     "freshness_gate": JobIntelligenceStage,
     "domain_gate": CompanyGateStage,
 }
