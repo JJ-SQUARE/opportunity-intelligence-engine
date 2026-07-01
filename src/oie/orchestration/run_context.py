@@ -136,7 +136,8 @@ class RunContext:
 
         database_settings = resolve_database_settings(config)
         db_path = database_settings.path or "data/oie.db"
-        runs_base_dir = config.get("runs", {}).get("path", "data/runs")
+        import os
+        runs_base_dir = config.get("runs", {}).get("path") or os.environ.get("OIE_RUNS_PATH", "data/runs")
         run_dir = f"{runs_base_dir}/{run_id}"
 
         return cls(
