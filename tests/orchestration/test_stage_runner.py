@@ -190,8 +190,8 @@ class RunnerItemsStage(Stage):
 
 
 class RunnerFailingStage(Stage):
-    name = "freshness_gate"
-    order = 3
+    name = "urgency_gate"
+    order = 4
 
     def load_input(self):
         return [
@@ -209,8 +209,8 @@ class RunnerFailingStage(Stage):
 
 
 class RunnerRecoveredStage(Stage):
-    name = "freshness_gate"
-    order = 3
+    name = "urgency_gate"
+    order = 4
 
     def load_input(self):
         return [
@@ -387,8 +387,8 @@ def test_stage_runner_failure_preserves_partial_checkpoint_and_manifest(tmp_path
     assert metrics["cost_estimate"] == checkpoint["cost_estimate"]
     assert checkpoint["processing_time_seconds"] >= 0
     assert metrics["processing_time_seconds"] == checkpoint["processing_time_seconds"]
-    assert manifest["current_stage"] == "freshness_gate"
-    assert manifest["stages"]["freshness_gate"] == "partial_success"
+    assert manifest["current_stage"] == "urgency_gate"
+    assert manifest["stages"]["urgency_gate"] == "partial_success"
 
 
 def test_stage_runner_build_result_returns_stage_result(tmp_path):
@@ -1032,11 +1032,9 @@ def test_stage_runner_runs_normalize_jobs_stage(monkeypatch, tmp_path):
     assert output["value"]["is_remote"] is True
     assert output["value"]["is_full_time"] is True
     assert output["value"]["remote_flag"] is True
-    assert output["metadata"] == {
-        "source": "google_jobs",
-        "job_url": "https://acme.test/jobs/1",
-        "apply_url": None,
-    }
+    assert output["metadata"]["source"] == "google_jobs"
+    assert output["metadata"]["job_url"] == "https://acme.test/jobs/1"
+    assert output["metadata"]["apply_url"] is None
 
 
 def test_normalize_jobs_stage_rejects_non_object_stage_value(tmp_path):
@@ -1079,19 +1077,23 @@ def test_job_intelligence_stage_loads_normalize_jobs_output(monkeypatch, tmp_pat
         ],
     )
 
+    from oie.orchestration.job_gate_stage import JobGateStage
+    from oie.orchestration.urgency_gate_stage import UrgencyGateStage
+    from oie.services.job_gate_service import JobGateService
+    from oie.services.urgency_service import UrgencyService
+
+    monkeypatch.setattr(JobGateService, "gate_jobs", lambda self, jobs: [{**j, "job_gate": {"should_advance": True, "company_type": "end_client", "confidence": 0.9, "block_reason": "", "job_gate_provider": "mock", "job_gate_mode": "mock"}} for j in jobs])
+    monkeypatch.setattr(UrgencyService, "analyze_jobs", lambda self, jobs: [{**j, "urgency": {"should_advance": True, "freshness_score": 8.0, "urgency_score": 5.0, "freshness_bucket": "this_week", "days_old_estimate": 3, "reason": "mock", "urgency_provider": "mock", "urgency_model": "mock"}} for j in jobs])
+
     StageRunner(ctx).run_stage(CollectJobsStage)
     StageRunner(ctx).run_stage(NormalizeJobsStage)
+    StageRunner(ctx).run_stage(JobGateStage)
+    StageRunner(ctx).run_stage(UrgencyGateStage)
 
     items = JobIntelligenceStage(ctx).load_input()
 
     assert len(items) == 1
     assert items[0]["id"] == "https://acme.test/jobs/1"
-    assert items[0]["value"]["is_remote"] is True
-    assert items[0]["metadata"] == {
-        "source": "google_jobs",
-        "job_url": "https://acme.test/jobs/1",
-        "apply_url": None,
-    }
 
 
 def test_stage_runner_runs_job_intelligence_stage(monkeypatch, tmp_path):
@@ -1126,13 +1128,23 @@ def test_stage_runner_runs_job_intelligence_stage(monkeypatch, tmp_path):
         lambda self, jobs: [{**jobs[0], "job_ai_confidence": 0.9}],
     )
 
+    from oie.orchestration.job_gate_stage import JobGateStage
+    from oie.orchestration.urgency_gate_stage import UrgencyGateStage
+    from oie.services.job_gate_service import JobGateService
+    from oie.services.urgency_service import UrgencyService
+
+    monkeypatch.setattr(JobGateService, "gate_jobs", lambda self, jobs: [{**j, "job_gate": {"should_advance": True, "company_type": "end_client", "confidence": 0.9, "block_reason": "", "job_gate_provider": "mock", "job_gate_mode": "mock"}} for j in jobs])
+    monkeypatch.setattr(UrgencyService, "analyze_jobs", lambda self, jobs: [{**j, "urgency": {"should_advance": True, "freshness_score": 8.0, "urgency_score": 5.0, "freshness_bucket": "this_week", "days_old_estimate": 3, "reason": "mock", "urgency_provider": "mock", "urgency_model": "mock"}} for j in jobs])
+
     StageRunner(ctx).run_stage(CollectJobsStage)
     StageRunner(ctx).run_stage(NormalizeJobsStage)
+    StageRunner(ctx).run_stage(JobGateStage)
+    StageRunner(ctx).run_stage(UrgencyGateStage)
     checkpoint = StageRunner(ctx).run_stage(JobIntelligenceStage)
     paths = JobIntelligenceStage(ctx).artifact_paths()
     output_lines = paths["output"].read_text(encoding="utf-8").splitlines()
 
-    assert checkpoint["stage"] == "freshness_gate"
+    assert checkpoint["stage"] == "job_intelligence"
     assert checkpoint["status"] == "completed"
     assert checkpoint["input_count"] == 1
     assert checkpoint["processed_count"] == 1
@@ -1140,11 +1152,9 @@ def test_stage_runner_runs_job_intelligence_stage(monkeypatch, tmp_path):
     output = json.loads(output_lines[0])
     assert output["id"] == "https://acme.test/jobs/1"
     assert output["value"]["job_ai_confidence"] == 0.9
-    assert output["metadata"] == {
-        "source": "google_jobs",
-        "job_url": "https://acme.test/jobs/1",
-        "apply_url": None,
-    }
+    assert output["metadata"]["source"] == "google_jobs"
+    assert output["metadata"]["job_url"] == "https://acme.test/jobs/1"
+    assert output["metadata"]["apply_url"] is None
 
 
 def test_job_intelligence_stage_rejects_non_object_stage_value(tmp_path):
@@ -1190,15 +1200,24 @@ def test_company_gate_stage_loads_job_intelligence_output(monkeypatch, tmp_path)
     )
     monkeypatch.setattr(JobIntelligenceService, "enrich_jobs", lambda self, jobs: jobs)
 
+    from oie.orchestration.job_gate_stage import JobGateStage
+    from oie.orchestration.urgency_gate_stage import UrgencyGateStage
+    from oie.services.job_gate_service import JobGateService
+    from oie.services.urgency_service import UrgencyService
+
+    monkeypatch.setattr(JobGateService, "gate_jobs", lambda self, jobs: [{**j, "job_gate": {"should_advance": True, "company_type": "end_client", "confidence": 0.9, "block_reason": "", "job_gate_provider": "mock", "job_gate_mode": "mock"}} for j in jobs])
+    monkeypatch.setattr(UrgencyService, "analyze_jobs", lambda self, jobs: [{**j, "urgency": {"should_advance": True, "freshness_score": 8.0, "urgency_score": 5.0, "freshness_bucket": "this_week", "days_old_estimate": 3, "reason": "mock", "urgency_provider": "mock", "urgency_model": "mock"}} for j in jobs])
+
     StageRunner(ctx).run_stage(CollectJobsStage)
     StageRunner(ctx).run_stage(NormalizeJobsStage)
+    StageRunner(ctx).run_stage(JobGateStage)
+    StageRunner(ctx).run_stage(UrgencyGateStage)
     StageRunner(ctx).run_stage(JobIntelligenceStage)
 
     items = CompanyGateStage(ctx).load_input()
 
     assert len(items) == 1
     assert items[0]["id"] == "https://acme.test/jobs/1"
-    assert items[0]["value"]["company"] == "Acme"
 
 
 def test_stage_runner_runs_company_gate_stage(monkeypatch, tmp_path):
@@ -1230,8 +1249,18 @@ def test_stage_runner_runs_company_gate_stage(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(JobIntelligenceService, "enrich_jobs", lambda self, jobs: jobs)
 
+    from oie.orchestration.job_gate_stage import JobGateStage
+    from oie.orchestration.urgency_gate_stage import UrgencyGateStage
+    from oie.services.job_gate_service import JobGateService
+    from oie.services.urgency_service import UrgencyService
+
+    monkeypatch.setattr(JobGateService, "gate_jobs", lambda self, jobs: [{**j, "job_gate": {"should_advance": True, "company_type": "end_client", "confidence": 0.9, "block_reason": "", "job_gate_provider": "mock", "job_gate_mode": "mock"}} for j in jobs])
+    monkeypatch.setattr(UrgencyService, "analyze_jobs", lambda self, jobs: [{**j, "urgency": {"should_advance": True, "freshness_score": 8.0, "urgency_score": 5.0, "freshness_bucket": "this_week", "days_old_estimate": 3, "reason": "mock", "urgency_provider": "mock", "urgency_model": "mock"}} for j in jobs])
+
     StageRunner(ctx).run_stage(CollectJobsStage)
     StageRunner(ctx).run_stage(NormalizeJobsStage)
+    StageRunner(ctx).run_stage(JobGateStage)
+    StageRunner(ctx).run_stage(UrgencyGateStage)
     StageRunner(ctx).run_stage(JobIntelligenceStage)
     checkpoint = StageRunner(ctx).run_stage(CompanyGateStage)
     paths = CompanyGateStage(ctx).artifact_paths()

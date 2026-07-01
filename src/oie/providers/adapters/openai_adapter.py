@@ -610,6 +610,186 @@ recommended_channel: {lead_payload.get("recommended_channel") or ""}
             "lead_scoring_mode": "live_api",
         }
 
+    def _urgency_gate_prompts(self, job_payload: Dict[str, Any]) -> tuple[str, str]:
+        system_prompt = """
+Act as a job posting freshness and urgency analyst.
+Your task is to estimate how recent and urgent a job posting is.
+
+Return ONLY a valid JSON object with this exact schema:
+{
+  "days_old_estimate": 0,
+  "freshness_score": 0.0,
+  "freshness_bucket": "same_day|this_week|last_2_weeks|this_month|1_to_3_months|3_to_6_months|older_than_6_months|unknown",
+  "urgency_score": 0.0,
+  "should_advance": true,
+  "reason": ""
+}
+
+Rules:
+- days_old_estimate: best estimate of days since posting. Use 0 for today/just posted/hours ago.
+- freshness_score: 0.0 to 10.0. Same day=10, this week=8, 2 weeks=7, this month=6, 1-3 months=4, 3-6 months=2, older=0, unknown=5.
+- urgency_score: 0.0 to 10.0. Score based on urgency signals in description: "ASAP", "immediate", "urgent", "contratación inmediata", "urgente", etc.
+- should_advance=false only when days_old_estimate > 180 AND urgency_score < 2.
+- When posted_at is missing and no urgency signals exist, use freshness_score=5.0 and should_advance=true.
+- reason: brief explanation of the freshness/urgency assessment.
+""".strip()
+
+        posted_at = str(job_payload.get("posted_at_raw") or job_payload.get("detected_at") or "").strip()
+        description = self._truncate(job_payload.get("description") or "", 800)
+
+        user_prompt = f"""
+Evaluate the freshness and urgency of this job posting.
+
+posted_at: {posted_at or "unknown"}
+title: {job_payload.get("title") or ""}
+company: {job_payload.get("company") or ""}
+description_snippet: {description}
+""".strip()
+
+        return system_prompt, user_prompt
+
+    def analyze_urgency(self, job_payload: Dict[str, Any]) -> Dict[str, Any]:
+        system_prompt, user_prompt = self._urgency_gate_prompts(job_payload)
+        result = self._chat_completion_json(system_prompt, user_prompt)
+
+        try:
+            freshness_score = float(result.get("freshness_score", 5.0) or 5.0)
+            urgency_score = float(result.get("urgency_score", 0.0) or 0.0)
+            days_old = int(result.get("days_old_estimate", -1) or -1)
+        except Exception:
+            freshness_score = 5.0
+            urgency_score = 0.0
+            days_old = -1
+
+        return {
+            "days_old_estimate": days_old,
+            "freshness_score": max(0.0, min(freshness_score, 10.0)),
+            "freshness_bucket": str(result.get("freshness_bucket") or "unknown").strip(),
+            "urgency_score": max(0.0, min(urgency_score, 10.0)),
+            "should_advance": bool(result.get("should_advance", True)),
+            "reason": str(result.get("reason") or "").strip(),
+            "urgency_provider": self.provider_name,
+            "urgency_model": self._openai_model(),
+        }
+
+    def _job_gate_prompts(self, job_payload: Dict[str, Any]) -> tuple[str, str]:
+        system_prompt = """
+Act as a commercial filter for Tekton Labs, a nearshore software development company.
+Your task is to quickly decide if a job posting comes from a company worth investigating further.
+
+Tekton Labs sells software development services to end clients and product companies.
+We are NOT interested in: staffing agencies, outsourcing/nearshore competitors, job boards,
+aggregators, confidential postings, or noise.
+
+Return ONLY a valid JSON object with this exact schema:
+{
+  "should_advance": true,
+  "company_type": "end_client|product_company|consulting|staffing_agency|outsourcing|nearshore|job_board|competitor|confidential|noise|unknown",
+  "confidence": 0.0,
+  "block_reason": ""
+}
+
+Rules:
+- should_advance=true for end_client, product_company, unknown (when insufficient evidence to block).
+- should_advance=false for staffing_agency, outsourcing, nearshore, job_board, competitor, confidential, noise.
+- competitor means a company that sells software development services similar to Tekton Labs.
+- outsourcing/nearshore means a company that places developers with other companies.
+- confidence is how sure you are about company_type (0.0 to 1.0).
+- block_reason explains why blocked, empty string if advancing.
+- When in doubt, let it advance (should_advance=true). Apollo will confirm later.
+- Use conservative judgment: only block when evidence is clear.
+""".strip()
+
+        user_prompt = f"""
+Evaluate this job posting.
+
+company: {job_payload.get("company") or ""}
+title: {job_payload.get("title") or job_payload.get("job_title") or ""}
+source: {job_payload.get("source") or ""}
+job_url: {job_payload.get("job_url") or job_payload.get("url") or ""}
+description: {self._truncate(job_payload.get("description") or "", 1200)}
+""".strip()
+
+        return system_prompt, user_prompt
+
+    def gate_job(self, job_payload: Dict[str, Any]) -> Dict[str, Any]:
+        system_prompt, user_prompt = self._job_gate_prompts(job_payload)
+        result = self._chat_completion_json(system_prompt, user_prompt)
+
+        try:
+            confidence = float(result.get("confidence", 0.0) or 0.0)
+        except Exception:
+            confidence = 0.0
+
+        return {
+            "should_advance": bool(result.get("should_advance", True)),
+            "company_type": str(result.get("company_type") or "unknown").strip().lower(),
+            "confidence": max(0.0, min(confidence, 1.0)),
+            "block_reason": str(result.get("block_reason") or "").strip(),
+            "job_gate_provider": self.provider_name,
+            "job_gate_model": self._openai_model(),
+            "job_gate_mode": "live_api",
+        }
+
+    def _job_gate_prompts(self, job_payload: Dict[str, Any]) -> tuple[str, str]:
+        system_prompt = """
+Act as a commercial filter for Tekton Labs, a nearshore software development company.
+Your task is to quickly decide if a job posting comes from a company worth investigating further.
+
+Tekton Labs sells software development services to end clients and product companies.
+We are NOT interested in: staffing agencies, outsourcing/nearshore competitors, job boards,
+aggregators, confidential postings, or noise.
+
+Return ONLY a valid JSON object with this exact schema:
+{
+  "should_advance": true,
+  "company_type": "end_client|product_company|consulting|staffing_agency|outsourcing|nearshore|job_board|competitor|confidential|noise|unknown",
+  "confidence": 0.0,
+  "block_reason": ""
+}
+
+Rules:
+- should_advance=true for end_client, product_company, unknown (when insufficient evidence to block).
+- should_advance=false for staffing_agency, outsourcing, nearshore, job_board, competitor, confidential, noise.
+- competitor means a company that sells software development services similar to Tekton Labs.
+- outsourcing/nearshore means a company that places developers with other companies.
+- confidence is how sure you are about company_type (0.0 to 1.0).
+- block_reason explains why blocked, empty string if advancing.
+- When in doubt, let it advance (should_advance=true). Apollo will confirm later.
+- Use conservative judgment: only block when evidence is clear.
+""".strip()
+
+        user_prompt = f"""
+Evaluate this job posting.
+
+company: {job_payload.get("company") or ""}
+title: {job_payload.get("title") or job_payload.get("job_title") or ""}
+source: {job_payload.get("source") or ""}
+job_url: {job_payload.get("job_url") or job_payload.get("url") or ""}
+description: {self._truncate(job_payload.get("description") or "", 1200)}
+""".strip()
+
+        return system_prompt, user_prompt
+
+    def gate_job(self, job_payload: Dict[str, Any]) -> Dict[str, Any]:
+        system_prompt, user_prompt = self._job_gate_prompts(job_payload)
+        result = self._chat_completion_json(system_prompt, user_prompt)
+
+        try:
+            confidence = float(result.get("confidence", 0.0) or 0.0)
+        except Exception:
+            confidence = 0.0
+
+        return {
+            "should_advance": bool(result.get("should_advance", True)),
+            "company_type": str(result.get("company_type") or "unknown").strip().lower(),
+            "confidence": max(0.0, min(confidence, 1.0)),
+            "block_reason": str(result.get("block_reason") or "").strip(),
+            "job_gate_provider": self.provider_name,
+            "job_gate_model": self._openai_model(),
+            "job_gate_mode": "live_api",
+        }
+
     def _job_intelligence_prompts(self, job_payload: Dict[str, Any]) -> tuple[str, str]:
         system_prompt = """
 Act as a Senior Job Intelligence Analyst for Tekton Labs.

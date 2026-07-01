@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from oie.orchestration.normalize_jobs_stage import NormalizeJobsStage
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
 from oie.orchestration.stage_item import StageItem
@@ -11,11 +10,12 @@ from oie.services.provider_control_service import ProviderControlService
 
 
 class JobIntelligenceStage(Stage):
-    name = "freshness_gate"
-    order = 3
+    name = "job_intelligence"
+    order = 5
 
     def load_input(self) -> list[StageItem]:
-        return StageCheckpointManager(NormalizeJobsStage(self.ctx)).read_output()
+        from oie.orchestration.urgency_gate_stage import UrgencyGateStage
+        return StageCheckpointManager(UrgencyGateStage(self.ctx)).read_output()
 
     def process_item(self, item: StageItem) -> StageItem:
         job = self._job_from_item(item)

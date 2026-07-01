@@ -11,7 +11,7 @@ from oie.services.hiring_signals_service import HiringSignalsService
 
 class CompanyGateStage(Stage):
     name = "domain_gate"
-    order = 4
+    order = 5
 
     def load_input(self) -> list[StageItem]:
         return StageCheckpointManager(JobIntelligenceStage(self.ctx)).read_output()

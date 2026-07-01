@@ -43,8 +43,10 @@ from oie.api.schemas.runs import (
 from oie.orchestration.json_payload import JSONPayload
 from oie.orchestration.collect_jobs_stage import CollectJobsStage
 from oie.orchestration.normalize_jobs_stage import NormalizeJobsStage
-from oie.orchestration.company_gate_stage import CompanyGateStage
+from oie.orchestration.job_gate_stage import JobGateStage
+from oie.orchestration.urgency_gate_stage import UrgencyGateStage
 from oie.orchestration.job_intelligence_stage import JobIntelligenceStage
+from oie.orchestration.company_gate_stage import CompanyGateStage
 from oie.orchestration.pipeline_orchestrator import PipelineOrchestrator
 from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
@@ -212,7 +214,9 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
 STAGE_CLASSES = {
     "collect_jobs": CollectJobsStage,
     "normalize_jobs": NormalizeJobsStage,
-    "freshness_gate": JobIntelligenceStage,
+    "company_gate": JobGateStage,
+    "urgency_gate": UrgencyGateStage,
+    "job_intelligence": JobIntelligenceStage,
     "domain_gate": CompanyGateStage,
 }
 

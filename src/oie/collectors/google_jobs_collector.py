@@ -58,6 +58,13 @@ class GoogleJobsCollector(BaseJobCollector):
         return target
 
     def _normalize_job(self, raw_job: Dict[str, Any]) -> Dict[str, Any]:
+        raw = raw_job.get("raw") or {}
+        detected_extensions = raw.get("detected_extensions") or {}
+        posted_at = (
+            raw_job.get("detected_at")
+            or detected_extensions.get("posted_at")
+            or ""
+        )
         return {
             "title": raw_job.get("title", ""),
             "company": raw_job.get("company", ""),
@@ -66,11 +73,13 @@ class GoogleJobsCollector(BaseJobCollector):
             "apply_url": raw_job.get("apply_url", ""),
             "description": raw_job.get("description", ""),
             "source": self.collector_name,
-            "detected_at": raw_job.get("detected_at", ""),
+            "detected_at": posted_at,
+            "posted_at_raw": posted_at,
             "remote_flag": raw_job.get("remote_flag", False),
             "contractor_flag": raw_job.get("contractor_flag", False),
             "url": raw_job.get("url", ""),
             "source_meta": raw_job.get("source_meta", {}) or {},
+            "raw": raw,
         }
 
     def collect(self) -> List[Dict[str, Any]]:

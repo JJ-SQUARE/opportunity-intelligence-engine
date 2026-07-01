@@ -190,7 +190,7 @@ def test_next_pending_stage_returns_first_non_completed_stage(tmp_path):
 
     from oie.orchestration.run_manifest import next_pending_stage
 
-    assert next_pending_stage(manifest) == "freshness_gate"
+    assert next_pending_stage(manifest) == "urgency_gate"
 
 
 def test_next_pending_stage_returns_none_when_all_stages_completed(tmp_path):
