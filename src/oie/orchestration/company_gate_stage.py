@@ -22,7 +22,7 @@ class CompanyGateStage(Stage):
         company = companies[0] if companies else {}
 
         return {
-            "id": str(item.get("id") or company.get("company") or "unknown_company"),
+            "id": str(company.get("company") or item.get("id") or "unknown_company"),
             "value": company,
             "metadata": {
                 **dict(item.get("metadata") or {}),
