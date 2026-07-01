@@ -185,6 +185,7 @@ def test_next_pending_stage_returns_first_non_completed_stage(tmp_path):
     ctx = RunContext.create(config={"runs": {"path": str(tmp_path / "runs")}})
     manifest = build_initial_manifest(ctx)
     manifest["stages"]["collect_jobs"] = "completed"
+    manifest["stages"]["normalize_jobs"] = "completed"
     manifest["stages"]["company_gate"] = "completed"
 
     from oie.orchestration.run_manifest import next_pending_stage
