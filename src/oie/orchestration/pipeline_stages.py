@@ -2,6 +2,7 @@ from __future__ import annotations
 
 PIPELINE_STAGES = [
     "collect_jobs",
+    "normalize_jobs",
     "company_gate",
     "freshness_gate",
     "domain_gate",
