@@ -33,7 +33,10 @@ python -m pip install -r requirements.txt
 ## Arrancar el servidor
 
 ```bash
-OIE_RUNS_PATH=runs PYTHONPATH=src uvicorn oie.api.main:app --reload
+source .env && \
+OIE_RUNS_PATH=runs \
+OIE_CONFIG_PATH=config/queries.yaml \
+PYTHONPATH=src uvicorn oie.api.main:app --reload
 ```
 
 URLs locales:
@@ -50,15 +53,17 @@ URLs locales:
 ## Pipeline ejecutable
 
 ```
-collect_jobs → normalize_jobs → freshness_gate → domain_gate
+collect_jobs → normalize_jobs → company_gate → urgency_gate → job_intelligence → domain_gate
 ```
 
 | `stage_name` | Clase | Descripción |
 |---|---|---|
-| `collect_jobs` | `CollectJobsStage` | Recolecta ofertas de trabajo |
+| `collect_jobs` | `CollectJobsStage` | Recolecta ofertas de trabajo vía SerpAPI / static |
 | `normalize_jobs` | `NormalizeJobsStage` | Normaliza y limpia los datos |
-| `freshness_gate` | `JobIntelligenceStage` | Analiza frescura e inteligencia de jobs |
-| `domain_gate` | `CompanyGateStage` | Agrupa y filtra por empresa |
+| `company_gate` | `JobGateStage` | Filtro AI: descarta staffing, competitors, job boards |
+| `urgency_gate` | `UrgencyGateStage` | AI evalúa frescura y urgencia, filtra jobs >6 meses |
+| `job_intelligence` | `JobIntelligenceStage` | Enriquecimiento AI: tech_stack, signals, seniority, domain |
+| `domain_gate` | `CompanyGateStage` | Agrega por empresa y aplica filtros post-aggregate |
 
 Stages no ejecutables individualmente retornan `{"detail": "Stage not executable"}`.
 
@@ -67,7 +72,7 @@ Stages no ejecutables individualmente retornan `{"detail": "Stage not executable
 ## Crear un run — UI
 
 El usuario final solo necesita especificar **países** y **keywords**.
-El resto de la configuración viene preconfigurada en el servidor.
+El resto de la configuración viene preconfigurada en el servidor vía `OIE_CONFIG_PATH`.
 
 ### Request mínimo para UI
 
@@ -78,24 +83,33 @@ POST /runs
   "config": {
     "queries": [
       { "name": "React Remote", "q": "React remote" },
-      { "name": "Backend Remote", "q": "backend engineer remote" }
+      { "name": "Backend Remote", "q": "backend engineer remote" },
+      { "name": "Desarrollador Remoto", "q": "desarrollador remoto" }
     ],
     "sources": {
       "google_jobs": {
         "enabled": true,
-        "locations": ["Mexico", "Colombia", "Argentina"]
+        "location_mode": "matrix",
+        "locations": ["United States", "Mexico", "Colombia"],
+        "num_pages": 1
       },
       "discovery": {
-        "linkedin_serpapi": { "enabled": true }
+        "linkedin_serpapi": { "enabled": true, "num_pages": 1 }
       }
     }
   }
 }
 ```
 
+### Nota sobre Google Jobs y geografía
+
+Google Jobs devuelve resultados solo cuando la query coincide con el idioma del mercado:
+- `"United States"`, `"Canada"` → queries en inglés
+- `"Mexico"`, `"Colombia"`, `"Argentina"` → queries en español (`"desarrollador remoto"`, `"ingeniero remoto"`)
+
 ### Keywords disponibles (ejemplos del config base)
 
-| Keyword sugerida | Query |
+| Keyword | Query |
 |---|---|
 | Software Engineer | `software engineer remote` |
 | Backend Engineer | `backend engineer remote` |
@@ -106,14 +120,16 @@ POST /runs
 | Node.js | `Node.js remote` |
 | .NET | `.NET remote` |
 | Cloud / AWS / Azure | `cloud remote`, `AWS remote`, `Azure remote` |
+| Desarrollador (LATAM) | `desarrollador remoto` |
+| Ingeniero (LATAM) | `ingeniero remoto` |
 
 ### Países disponibles (config base)
 
-Mexico, United States, Peru, Colombia, Ecuador, Chile, Argentina, Canada, Panama, Guatemala
+United States, Canada, Mexico, Colombia, Peru, Ecuador, Chile, Argentina, Panama, Guatemala
 
 ### Sin credenciales — desarrollo y pruebas
 
-Usar `static_jobs` para inyectar datos de prueba sin consumir APIs:
+Usar `static_jobs` con `no_llm: true` para probar sin consumir APIs:
 
 ```json
 POST /runs
@@ -166,18 +182,13 @@ POST /runs/{run_id}/execute
 ### Desde un stage específico
 
 ```json
-{
-  "start_stage": "normalize_jobs"
-}
+{ "start_stage": "company_gate" }
 ```
 
 ### Rerun desde un stage (borra checkpoint anterior)
 
 ```json
-{
-  "start_stage": "normalize_jobs",
-  "rerun": true
-}
+{ "start_stage": "company_gate", "rerun": true }
 ```
 
 ### Response
@@ -210,8 +221,8 @@ POST /runs/{run_id}/stages/{stage_name}/execute
   "status": "completed",
   "input_count": 42,
   "processed_count": 42,
-  "output_count": 42,
-  "rejected_count": 0,
+  "output_count": 38,
+  "rejected_count": 4,
   "errors": [],
   "processing_time_seconds": 1.23
 }
@@ -231,24 +242,16 @@ GET /runs/{run_id}/metrics         — métricas del run
 GET /runs/{run_id}/configuration   — configuración persistida
 ```
 
-### Response — status
-
-```json
-{
-  "run_id": "20260701_020222_503c27bf",
-  "status": "pending",
-  "current_stage": null
-}
-```
-
 ### Response — lista de stages
 
 ```json
 [
-  { "stage": "collect_jobs",   "status": "completed" },
-  { "stage": "normalize_jobs", "status": "completed" },
-  { "stage": "freshness_gate", "status": "pending"   },
-  { "stage": "domain_gate",    "status": "pending"   }
+  { "stage": "collect_jobs",    "status": "completed" },
+  { "stage": "normalize_jobs",  "status": "completed" },
+  { "stage": "company_gate",    "status": "completed" },
+  { "stage": "urgency_gate",    "status": "completed" },
+  { "stage": "job_intelligence","status": "completed" },
+  { "stage": "domain_gate",     "status": "completed" }
 ]
 ```
 
@@ -433,28 +436,30 @@ src/oie/
     routers/runs.py
     schemas/runs.py
   orchestration/
-    pipeline_orchestrator.py
     pipeline_stages.py
     stage_runner.py
     stage_base.py
     run_context.py
     run_manifest.py
     run_repository.py
-    run_schedule.py
-    run_storage_resolver.py
-    stage_artifact_repository.py
+    job_gate_stage.py
+    urgency_gate_stage.py
+    job_intelligence_stage.py
+    company_gate_stage.py
   services/
-    service_provider.py
+    job_gate_service.py
+    urgency_service.py
+    job_intelligence_service.py
+    hiring_signals_service.py
   collectors/
     static_jobs_collector.py
     google_jobs_collector.py
     linkedin_serpapi_collector.py
-    ...
 config/
   queries.yaml
 tests/
   api/test_runs.py
-  orchestration/
+  orchestration/test_stage_runner.py
 ```
 
 ---
