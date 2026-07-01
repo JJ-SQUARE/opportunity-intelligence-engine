@@ -1,26 +1,14 @@
 # Opportunity Intelligence Engine (OIE)
 
-Opportunity Intelligence Engine (OIE) is a modular pipeline for discovering commercial opportunities from job postings.
-It provides a FastAPI API to create runs, execute the complete pipeline or individual stages, inspect artifacts, monitor execution, schedule future executions, configure HubSpot delivery metadata, and integrate with external systems.
-
-The project is designed around:
-
-- Independent pipeline stages
-- Checkpointing
-- Resumability
-- Observability
-- Deterministic execution
-- Explicit artifacts
-- API-first operation
+Pipeline modular para descubrir oportunidades comerciales a partir de ofertas de trabajo.
+API-first, con checkpointing, reanudación, observabilidad y ejecución determinista.
 
 ---
 
-## Requirements
+## Requisitos
 
 - Python 3.12+
 - pip
-
-Install dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -28,15 +16,29 @@ python -m pip install -r requirements.txt
 
 ---
 
-## Run the API Locally
+## Variables de entorno
+
+| Variable | Descripción | Ejemplo |
+|---|---|---|
+| `OIE_RUNS_PATH` | Directorio donde se guardan los runs | `runs` |
+| `OIE_CONFIG_PATH` | Path al yaml de configuración base | `config/queries.yaml` |
+| `SERPAPI_KEY` | API key de SerpAPI | |
+| `OPENAI_API_KEY` | API key de OpenAI | |
+| `APOLLO_API_KEY` | API key de Apollo | |
+| `HUNTER_API_KEY` | API key de Hunter | |
+| `HUBSPOT_BEARER_TOKEN` | Token de HubSpot | |
+
+---
+
+## Arrancar el servidor
 
 ```bash
-PYTHONPATH=src python -m uvicorn oie.api.main:app --reload
+OIE_RUNS_PATH=runs PYTHONPATH=src uvicorn oie.api.main:app --reload
 ```
 
-Default local URLs:
+URLs locales:
 
-| Endpoint | URL |
+| | URL |
 |---|---|
 | API | http://127.0.0.1:8000 |
 | Swagger UI | http://127.0.0.1:8000/docs |
@@ -45,192 +47,288 @@ Default local URLs:
 
 ---
 
-## Pipeline
-
-Current executable staged API pipeline:
+## Pipeline ejecutable
 
 ```
-collect_jobs
-    ↓
-company_gate
-    ↓
-freshness_gate
-    ↓
-domain_gate
+collect_jobs → normalize_jobs → freshness_gate → domain_gate
 ```
 
-Current stage mapping:
+| `stage_name` | Clase | Descripción |
+|---|---|---|
+| `collect_jobs` | `CollectJobsStage` | Recolecta ofertas de trabajo |
+| `normalize_jobs` | `NormalizeJobsStage` | Normaliza y limpia los datos |
+| `freshness_gate` | `JobIntelligenceStage` | Analiza frescura e inteligencia de jobs |
+| `domain_gate` | `CompanyGateStage` | Agrupa y filtra por empresa |
 
-| `stage_name` | Executes |
-|---|---|
-| `collect_jobs` | `CollectJobsStage` |
-| `company_gate` | `NormalizeJobsStage` |
-| `freshness_gate` | `JobIntelligenceStage` |
-| `domain_gate` | `CompanyGateStage` |
-
-The complete orchestrated pipeline also includes additional internal steps for company enrichment, scoring, lead generation, persistence, analytics, market outputs, and outbound exports.
+Stages no ejecutables individualmente retornan `{"detail": "Stage not executable"}`.
 
 ---
 
-## Current Pipeline Stage Registry
+## Crear un run — UI
 
-Defined pipeline stage order:
+El usuario final solo necesita especificar **países** y **keywords**.
+El resto de la configuración viene preconfigurada en el servidor.
 
+### Request mínimo para UI
+
+```json
+POST /runs
+
+{
+  "config": {
+    "queries": [
+      { "name": "React Remote", "q": "React remote" },
+      { "name": "Backend Remote", "q": "backend engineer remote" }
+    ],
+    "sources": {
+      "google_jobs": {
+        "enabled": true,
+        "locations": ["Mexico", "Colombia", "Argentina"]
+      },
+      "discovery": {
+        "linkedin_serpapi": { "enabled": true }
+      }
+    }
+  }
+}
 ```
-collect_jobs
-company_gate
-freshness_gate
-domain_gate
-company_analyzer
-icp_match
-lead_generation
-delivery
-company_classification
-opportunity_scoring
-company_limit
-lead_contact_generation
-lead_ranking
-lead_dedup
-snapshot_persistence
-opportunity_dataset
-opportunity_dataset_export
-outbound_export
+
+### Keywords disponibles (ejemplos del config base)
+
+| Keyword sugerida | Query |
+|---|---|
+| Software Engineer | `software engineer remote` |
+| Backend Engineer | `backend engineer remote` |
+| Frontend Developer | `frontend developer remote` |
+| Fullstack Engineer | `full stack engineer remote` |
+| React | `React remote` |
+| Angular | `Angular remote` |
+| Node.js | `Node.js remote` |
+| .NET | `.NET remote` |
+| Cloud / AWS / Azure | `cloud remote`, `AWS remote`, `Azure remote` |
+
+### Países disponibles (config base)
+
+Mexico, United States, Peru, Colombia, Ecuador, Chile, Argentina, Canada, Panama, Guatemala
+
+### Sin credenciales — desarrollo y pruebas
+
+Usar `static_jobs` para inyectar datos de prueba sin consumir APIs:
+
+```json
+POST /runs
+
+{
+  "config": {
+    "collectors": {
+      "static_jobs": {
+        "jobs": [
+          {
+            "title": "Senior Python Engineer",
+            "company": "Acme Corp",
+            "location": "Remote",
+            "job_url": "https://acme.com/jobs/1",
+            "description": "We are hiring a senior Python engineer.",
+            "detected_at": "2026-01-01"
+          }
+        ]
+      }
+    }
+  },
+  "flags": { "no_llm": true }
+}
 ```
 
-Not every registered stage is independently executable yet. Non-executable stages return:
+### Response de creación
 
 ```json
 {
-  "detail": "Stage not executable"
+  "run_id": "20260701_020222_503c27bf",
+  "status": "pending",
+  "current_stage": null,
+  "manifest_path": "runs/.../manifest.json",
+  "configuration_path": "runs/.../configuration.json"
 }
 ```
 
 ---
 
-## Run Statuses
+## Ejecutar el pipeline
 
-| Status |
-|---|
-| `pending` |
-| `running` |
-| `completed` |
-| `partial_success` |
-| `failed` |
-| `cancelled` |
-| `skipped` |
-| `waiting_for_user` |
-| `company_pipeline_completed` |
-
----
-
-## API Endpoints
-
-### Health
+### Pipeline completo
 
 ```
-GET /health
+POST /runs/{run_id}/execute
+
+{}
 ```
 
----
+### Desde un stage específico
 
-## Run Management Endpoints
-
-### Run lifecycle
-
+```json
+{
+  "start_stage": "normalize_jobs"
+}
 ```
-POST   /runs
-GET    /runs
-GET    /runs/{run_id}
-DELETE /runs/{run_id}
 
-POST   /runs/{run_id}/execute
-POST   /runs/{run_id}/cancel
-POST   /runs/{run_id}/pause
-POST   /runs/{run_id}/resume
-GET    /runs/{run_id}/status
-GET    /runs/{run_id}/metrics
-GET    /runs/{run_id}/errors
-GET    /runs/{run_id}/artifacts
+### Rerun desde un stage (borra checkpoint anterior)
+
+```json
+{
+  "start_stage": "normalize_jobs",
+  "rerun": true
+}
+```
+
+### Response
+
+```json
+{
+  "run_id": "20260701_020222_503c27bf",
+  "status": "completed",
+  "jobs_count": 42,
+  "companies_count": 0,
+  "leads_count": 0
+}
 ```
 
 ---
 
-### Stage execution
+## Ejecutar un stage individual
 
 ```
 POST /runs/{run_id}/stages/{stage_name}/execute
 
-GET  /runs/{run_id}/stages/{stage_name}/checkpoint
-GET  /runs/{run_id}/stages/{stage_name}/metrics
-GET  /runs/{run_id}/stages/{stage_name}/output
-GET  /runs/{run_id}/stages/{stage_name}/errors
+{}
 ```
 
-Stage artifact endpoints:
+### Response
 
-- `checkpoint` — progress snapshot written at the end of each stage execution
-- `metrics` — timing, counts, and performance data produced by the stage
-- `output` — the data records produced and passed downstream
-- `errors` — structured error records registered during execution
+```json
+{
+  "stage": "collect_jobs",
+  "status": "completed",
+  "input_count": 42,
+  "processed_count": 42,
+  "output_count": 42,
+  "rejected_count": 0,
+  "errors": [],
+  "processing_time_seconds": 1.23
+}
+```
 
 ---
 
-### Configuration
+## Monitorear un run
 
 ```
-GET /runs/{run_id}/configuration
-PUT /runs/{run_id}/configuration
+GET /runs                          — lista todos los runs
+GET /runs/{run_id}                 — detalle completo del run
+GET /runs/{run_id}/status          — status actual
+GET /runs/{run_id}/stages          — estado de cada stage
+GET /runs/{run_id}/errors          — errores del run
+GET /runs/{run_id}/metrics         — métricas del run
+GET /runs/{run_id}/configuration   — configuración persistida
 ```
 
-The run configuration is persisted as a snapshot at run creation time. Subsequent updates via `PUT` modify the stored configuration for the run without affecting already-completed stages.
+### Response — status
 
----
-
-### Scheduling
-
-```
-POST   /runs/{run_id}/schedule
-PUT    /runs/{run_id}/schedule
-GET    /runs/{run_id}/schedule
-GET    /runs/{run_id}/schedule/status
-DELETE /runs/{run_id}/schedule
+```json
+{
+  "run_id": "20260701_020222_503c27bf",
+  "status": "pending",
+  "current_stage": null
+}
 ```
 
-Schedule fields:
+### Response — lista de stages
 
-| Field | Values |
+```json
+[
+  { "stage": "collect_jobs",   "status": "completed" },
+  { "stage": "normalize_jobs", "status": "completed" },
+  { "stage": "freshness_gate", "status": "pending"   },
+  { "stage": "domain_gate",    "status": "pending"   }
+]
+```
+
+### Statuses posibles
+
+| Status | Descripción |
 |---|---|
-| `frequency` | `daily`, `weekly`, `monthly` |
-| `duration` | e.g. `permanent`, `1 week`, `2 weeks`, `1 month` |
-| `scheduled_times` | list of `HH:MM` values |
-| `scheduled_days` | optional weekdays |
-| `enabled` | boolean |
+| `pending` | No ejecutado |
+| `running` | En ejecución |
+| `completed` | Completado exitosamente |
+| `partial_success` | Algunos items fallaron |
+| `failed` | Error en ejecución |
+| `cancelled` | Cancelado manualmente |
+| `skipped` | Saltado |
+| `waiting_for_user` | Esperando input |
+| `company_pipeline_completed` | Pipeline de empresas completo |
 
-Example:
+---
+
+## Inspeccionar artifacts de un stage
+
+```
+GET /runs/{run_id}/stages/{stage_name}/checkpoint   — snapshot de progreso
+GET /runs/{run_id}/stages/{stage_name}/metrics      — tiempos y conteos
+GET /runs/{run_id}/stages/{stage_name}/output       — registros producidos
+GET /runs/{run_id}/stages/{stage_name}/errors       — errores del stage
+GET /runs/{run_id}/stages/{stage_name}/summary      — resumen del stage
+```
+
+---
+
+## Controlar un run
+
+```
+POST   /runs/{run_id}/cancel   — cancelar
+POST   /runs/{run_id}/pause    — pausar
+POST   /runs/{run_id}/resume   — reanudar
+DELETE /runs/{run_id}          — eliminar
+```
+
+---
+
+## Scheduling
+
+```
+POST   /runs/{run_id}/schedule        — crear schedule
+PUT    /runs/{run_id}/schedule        — actualizar schedule
+GET    /runs/{run_id}/schedule        — leer schedule
+GET    /runs/{run_id}/schedule/status — estado del schedule
+DELETE /runs/{run_id}/schedule        — eliminar schedule
+```
+
+### Ejemplo
 
 ```json
 {
   "frequency": "weekly",
   "duration": "permanent",
-  "scheduled_times": ["09:00", "15:00"],
+  "scheduled_times": ["09:00"],
   "scheduled_days": ["monday", "wednesday"],
   "enabled": true
 }
 ```
 
+| Campo | Valores |
+|---|---|
+| `frequency` | `daily`, `weekly`, `monthly` |
+| `duration` | `permanent`, `1 week`, `2 weeks`, `1 month` |
+| `scheduled_times` | lista de `HH:MM` |
+| `scheduled_days` | días de la semana opcionales |
+
 ---
 
-### HubSpot delivery
+## HubSpot Delivery
 
 ```
-GET    /runs/{run_id}/hubspot-delivery
-PUT    /runs/{run_id}/hubspot-delivery
-DELETE /runs/{run_id}/hubspot-delivery
+GET    /runs/{run_id}/hubspot-delivery   — leer config
+PUT    /runs/{run_id}/hubspot-delivery   — crear/actualizar
+DELETE /runs/{run_id}/hubspot-delivery   — eliminar
 ```
-
-Used to persist HubSpot delivery metadata for a run. Sensitive fields such as bearer tokens are never returned by the API. Instead, the API stores and resolves a credentials reference.
-
-Example:
 
 ```json
 {
@@ -241,370 +339,99 @@ Example:
 }
 ```
 
----
-
-### Artifacts
-
-```
-GET /runs/{run_id}/artifact-paths
-GET /runs/{run_id}/outputs
-GET /runs/{run_id}/outputs/{artifact_name}
-```
-
-- `artifact-paths` — returns the artifact paths persisted in `manifest.json` for the run
-- `outputs` — lists all exported files available for the run
-- `outputs/{artifact_name}` — returns the content of the requested artifact, parsed according to its format
-
-Supported output formats:
-
-- `csv`
-- `json`
-- `jsonl`
-- `markdown`
-- `text`
+`hubspot_bearer_token` nunca se devuelve en responses — se almacena pero no se expone.
 
 ---
 
-### Reports
+## ICP Profiles
 
 ```
-GET /runs/{run_id}/readiness
+GET    /runs/{run_id}/icp-profiles                  — listar
+POST   /runs/{run_id}/icp-profiles                  — agregar
+PUT    /runs/{run_id}/icp-profiles                  — reemplazar todos
+DELETE /runs/{run_id}/icp-profiles/{profile_id}     — eliminar uno
 ```
 
-Returns the run readiness report, indicating whether all pipeline stages completed successfully and the output is ready for commercial use.
-
-```
-GET /runs/{run_id}/analytics
-```
-
-Returns the full run analytics report, including stage-level performance data, pipeline metrics, and aggregated counts.
-
-```
-GET /runs/{run_id}/executive-summary
-```
-
-Returns the executive summary generated at the end of the pipeline run.
-
-```
-GET /runs/{run_id}/commercial-report
-```
-
-Returns the commercial report in Markdown format, suitable for direct sharing with the commercial team.
-
-```
-GET /runs/{run_id}/commercial-pipeline
-```
-
-Returns the exported commercial pipeline data.
-
-```
-GET /runs/{run_id}/top-opportunities
-```
-
-Returns the CSV with the highest-ranked commercial opportunities identified during the run.
-
----
-
-### Stage Inspection
-
-```
-GET /runs/{run_id}/stages
-GET /runs/{run_id}/stages/{stage_name}
-GET /runs/{run_id}/stages/{stage_name}/summary
-GET /runs/{run_id}/stages/{stage_name}/checkpoint
-GET /runs/{run_id}/stages/{stage_name}/metrics
-GET /runs/{run_id}/stages/{stage_name}/output
-GET /runs/{run_id}/stages/{stage_name}/errors
+```json
+{
+  "profile_id": "asd-midmarket",
+  "service_line": "ASD",
+  "name": "ASD Midmarket",
+  "enabled": true
+}
 ```
 
 ---
 
-## Typical Execution Flow
+## Artifacts disponibles por run
 
-### 1. Create a run
+```
+manifest.json              — estado del run
+configuration.json         — config persistida
+commercial_pipeline.csv    — pipeline comercial
+commercial.md              — reporte comercial en Markdown
+executive_summary.json     — resumen ejecutivo
+run_analytics.json         — analytics completo
+run_readiness_report.json  — reporte de readiness
+run_metrics_summary.json   — métricas del run
+top_opportunities_export   — top oportunidades
+```
+
+### Endpoints de outputs
+
+```
+GET /runs/{run_id}/outputs                  — lista outputs disponibles
+GET /runs/{run_id}/outputs/{output_name}    — contenido del output
+GET /runs/{run_id}/artifact-paths           — paths de artifacts del manifest
+GET /runs/{run_id}/artifacts                — catálogo de artifacts
+GET /runs/{run_id}/readiness                — reporte de readiness
+GET /runs/{run_id}/analytics                — analytics
+GET /runs/{run_id}/executive-summary        — resumen ejecutivo
+GET /runs/{run_id}/commercial-report        — reporte comercial
+GET /runs/{run_id}/commercial-pipeline      — pipeline comercial
+GET /runs/{run_id}/top-opportunities        — top oportunidades
+```
+
+Formatos soportados: `csv`, `json`, `jsonl`, `markdown`, `text`
+
+---
+
+## Flags útiles
+
+| Flag | Efecto |
+|---|---|
+| `no_llm: true` | Desactiva OpenAI — útil sin credenciales |
+| `dry_run: true` | No ejecuta providers externos |
+
+---
+
+## Testing
 
 ```bash
-curl -X POST http://127.0.0.1:8000/runs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "config": {
-      "runs": {
-        "path": "runs"
-      }
-    },
-    "flags": {
-      "dry_run": true
-    }
-  }'
+PYTHONPATH=src pytest -q                          # suite completa
+PYTHONPATH=src pytest tests/api -q                # solo API
+PYTHONPATH=src pytest tests/api/test_runs.py -q   # solo runs
 ```
 
-### 2. Execute the complete pipeline
+---
+
+## Verificación rápida
 
 ```bash
-curl -X POST http://127.0.0.1:8000/runs/{run_id}/execute \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
-
-### 3. Execute from a specific stage
-
-```bash
-curl -X POST http://127.0.0.1:8000/runs/{run_id}/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "start_stage": "company_gate"
-  }'
-```
-
-### 4. Rerun from a specific stage
-
-```bash
-curl -X POST http://127.0.0.1:8000/runs/{run_id}/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "start_stage": "company_gate",
-    "rerun": true
-  }'
-```
-
-### 5. Execute a single stage
-
-```bash
-curl -X POST http://127.0.0.1:8000/runs/{run_id}/stages/collect_jobs/execute \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
-
-### 6. Inspect execution
-
-```
-GET /runs/{run_id}
-GET /runs/{run_id}/status
-GET /runs/{run_id}/configuration
-GET /runs/{run_id}/metrics
-GET /runs/{run_id}/errors
-GET /runs/{run_id}/artifacts
-GET /runs/{run_id}/stages
-GET /runs/{run_id}/stages/{stage_name}
-GET /runs/{run_id}/stages/{stage_name}/summary
-GET /runs/{run_id}/stages/{stage_name}/checkpoint
-GET /runs/{run_id}/stages/{stage_name}/metrics
-GET /runs/{run_id}/stages/{stage_name}/output
-GET /runs/{run_id}/stages/{stage_name}/errors
+PYTHONPATH=src python -m py_compile src/oie/api/routers/runs.py
+PYTHONPATH=src pytest -q
 ```
 
 ---
 
-## Artifacts
-
-The pipeline produces run-level and stage-level artifacts.
-
-### Run-level artifacts
-
-```
-manifest.json
-configuration.json
-commercial_pipeline.csv
-commercial.md
-apollo_import.csv
-hubspot_companies.json
-hubspot_contacts.json
-hubspot_tasks.json
-hubspot_notes.json
-hubspot_sync_results.json
-companies_export
-jobs_export
-leads_export
-opportunities_export
-top_opportunities_export
-executive_summary.json
-run_readiness_report.json
-run_metrics_summary.json
-run_analytics.json
-historical_company_hiring.csv
-historical_growth_summary.csv
-historical_summary.json
-market_trends_by_source.csv
-market_trends_by_location.csv
-market_new_companies_by_source.csv
-market_trends_summary.json
-market_segmented_companies.csv
-market_segment_summary.csv
-market_segment_summary.json
-collector_metrics.json
-collector_contribution_metrics.csv
-collector_contribution_metrics.json
-collector_roi_metrics.csv
-collector_roi_metrics.json
-provider_operation_metrics.csv
-provider_operation_metrics.json
-```
-
-### Stage-level artifacts
-
-```
-checkpoint.json
-metrics.json
-output.jsonl
-```
-
----
-
-## Architecture
-
-### API Layer
-
-Located under `src/oie/api/`
-
-Responsibilities:
-
-- Expose FastAPI endpoints
-- Validate request and response schemas
-- Create runs
-- Execute runs
-- Execute stages
-- Expose run status
-- Expose stage artifacts
-- Manage schedules
-- Manage HubSpot delivery metadata
-
-Main router: `src/oie/api/routers/runs.py`
-
----
-
-### Orchestration Layer
-
-Located under `src/oie/orchestration/`
-
-Responsibilities:
-
-- Coordinate pipeline execution
-- Manage run context
-- Resolve run storage
-- Manage manifests
-- Manage checkpoints
-- Execute individual stages
-- Expose stage outputs
-- Track metrics and errors
-
-Key files:
-
-```
-pipeline_orchestrator.py
-stage_runner.py
-pipeline_stages.py
-run_context.py
-run_manifest.py
-run_repository.py
-stage_artifact_repository.py
-run_storage_resolver.py
-run_schedule.py
-```
-
----
-
-### PipelineOrchestrator
-
-Main orchestrated flow:
-
-```
-initialize providers
-run company pipeline
-select best leads
-persist run snapshot and master data
-export core reports
-export opportunity outputs
-build executive summary
-export historical outputs
-export market outputs
-export collector outputs
-export provider operation metrics
-build readiness and metrics
-build run analytics
-finalize manifest
-build completed result
-```
-
-The `run()` method has been reduced by extracting coherent helpers:
-
-```
-select_best_leads()
-persist_pipeline_data()
-export_core_reports()
-export_opportunity_outputs()
-build_executive_summary()
-export_historical_outputs()
-export_market_outputs()
-export_collector_outputs()
-export_provider_operation_metrics()
-build_readiness_and_metrics()
-build_run_analytics()
-build_completed_result()
-handle_pipeline_failure()
-```
-
----
-
-### StageRunner
-
-Responsible for executing stage classes with:
-
-- Checkpoint writing
-- Metrics writing
-- Output writing
-- Rerun support
-- Error handling
-- Resumable execution
-
----
-
-### Storage Model
-
-Each run has its own run directory. Typical structure:
-
-```
-runs/
-└── <run_id>/
-    ├── manifest.json
-    ├── configuration.json
-    ├── stages/
-    │   ├── collect_jobs/
-    │   │   ├── checkpoint.json
-    │   │   ├── metrics.json
-    │   │   └── output.jsonl
-    │   ├── company_gate/
-    │   │   ├── checkpoint.json
-    │   │   ├── metrics.json
-    │   │   └── output.jsonl
-    │   ├── freshness_gate/
-    │   │   ├── checkpoint.json
-    │   │   ├── metrics.json
-    │   │   └── output.jsonl
-    │   └── domain_gate/
-    │       ├── checkpoint.json
-    │       ├── metrics.json
-    │       └── output.jsonl
-    └── outputs/
-        ├── commercial_pipeline.csv
-        ├── commercial.md
-        ├── executive_summary.json
-        ├── run_analytics.json
-        ├── run_readiness_report.json
-        └── top_opportunities.csv
-```
-
----
-
-### Repository Structure
+## Estructura del repositorio
 
 ```
 src/oie/
   api/
     main.py
-    routers/
-      runs.py
-    schemas/
-      runs.py
+    routers/runs.py
+    schemas/runs.py
   orchestration/
     pipeline_orchestrator.py
     pipeline_stages.py
@@ -618,212 +445,25 @@ src/oie/
     stage_artifact_repository.py
   services/
     service_provider.py
+  collectors/
+    static_jobs_collector.py
+    google_jobs_collector.py
+    linkedin_serpapi_collector.py
+    ...
+config/
+  queries.yaml
 tests/
-  api/
-    test_runs.py
+  api/test_runs.py
   orchestration/
-    test_pipeline_orchestrator_smoke.py
-    test_pipeline_orchestrator_e2e.py
 ```
 
 ---
 
-## Testing
-
-Run API tests:
-
-```bash
-PYTHONPATH=src pytest tests/api -q
-```
-
-Run orchestrator tests:
-
-```bash
-PYTHONPATH=src pytest tests/orchestration/test_pipeline_orchestrator_smoke.py tests/orchestration/test_pipeline_orchestrator_e2e.py -q
-```
-
-Run the focused regression suite used during the refactor:
-
-```bash
-PYTHONPATH=src pytest tests/orchestration/test_pipeline_orchestrator_smoke.py tests/orchestration/test_pipeline_orchestrator_e2e.py tests/api/test_runs.py -q
-```
-
-Run all tests:
-
-```bash
-PYTHONPATH=src pytest -q
-```
-
-Compile a modified file:
-
-```bash
-PYTHONPATH=src python -m py_compile src/oie/orchestration/pipeline_orchestrator.py
-```
-
-Compile router:
-
-```bash
-PYTHONPATH=src python -m py_compile src/oie/api/routers/runs.py
-```
-
----
-
-## Git Workflow
-
-After a successful change:
+## Git workflow
 
 ```bash
 git status --short
-git add <modified-files>
-git commit -m "<message>"
-git push
-```
-
----
-
-## UI Development
-
-CORS is enabled for local UI development.
-
-Allowed origins:
-
-```
-http://localhost:3000
-http://localhost:5173
-http://127.0.0.1:3000
-http://127.0.0.1:5173
-```
-
-The API is intended to support a future pipeline monitoring UI capable of:
-
-- Creating runs
-- Scheduling runs
-- Updating schedules
-- Configuring HubSpot delivery
-- Executing complete pipelines
-- Executing individual stages
-- Resuming from a selected stage
-- Rerunning stages
-- Monitoring run status
-- Inspecting checkpoints
-- Viewing metrics
-- Viewing artifact catalogs
-- Viewing stage summaries
-- Viewing stage outputs
-- Viewing stage errors
-- Reviewing generated business artifacts
-
----
-
-## Current Status
-
-### Implemented
-
-- Run creation
-- Run listing
-- Run detail
-- Run execution
-- Run execution from selected stage
-- Individual stage execution
-- Stage rerun support
-- Run cancellation
-- Run pause
-- Run resume
-- Run status
-- Run configuration snapshot
-- Run metrics
-- Run errors
-- Run scheduling create/update/read
-- Run schedule status
-- HubSpot delivery configuration
-- Stage status
-- Stage list
-- Stage checkpoints
-- Stage metrics
-- Stage output
-- Stage errors
-- Stage artifact summary
-- Artifact catalog
-- OpenAPI documentation
-- Swagger
-- ReDoc
-- CORS for local UI
-- Orchestrator refactor into smaller helpers
-- Focused test coverage for API and orchestrator behavior
-
----
-
-## Recently Completed Refactor
-
-The pipeline orchestrator was refactored to reduce the size and complexity of `PipelineOrchestrator.run()` without changing behavior.
-
-Completed extractions:
-
-```
-artifact_paths_payload()
-select_best_leads()
-persist_pipeline_data()
-export_core_reports()
-export_opportunity_outputs()
-export_historical_outputs()
-export_market_outputs()
-export_collector_outputs()
-export_provider_operation_metrics()
-build_readiness_and_metrics()
-build_run_analytics()
-build_executive_summary()
-build_completed_result()
-handle_pipeline_failure()
-```
-
-Validation suite used:
-
-```bash
-PYTHONPATH=src python -m py_compile src/oie/orchestration/pipeline_orchestrator.py
-PYTHONPATH=src pytest tests/orchestration/test_pipeline_orchestrator_smoke.py tests/orchestration/test_pipeline_orchestrator_e2e.py tests/api/test_runs.py -q
-```
-
-Latest confirmed result: **80 passed**
-
----
-
-## Next Planned Work
-
-Recommended next sequence:
-
-1. Finish README commit and freeze this refactor baseline.
-2. Add a version tag.
-3. Continue with new endpoints and product capabilities only after the baseline is stable.
-4. Expand independently executable stages.
-5. Add UI-oriented endpoints where needed.
-6. Add ICP profile management.
-7. Add configurable ICPs per service line.
-8. Add incremental company persistence across runs.
-9. Add historical company/opportunity intelligence.
-10. Add HubSpot/Apollo awareness to avoid duplicate commercial work.
-11. Add scheduler daemon or worker process.
-12. Add artifact versioning.
-13. Add UI dashboard for the commercial team.
-
----
-
-## Verification
-
-```bash
-PYTHONPATH=src python -m py_compile src/oie/api/routers/runs.py
-
-PYTHONPATH=src pytest -q
-```
-
-All tests must continue to pass after documentation updates.
-
----
-
-## Suggested Commit
-
-```bash
-git status --short
-git add README.md
-git commit -m "document run management and artifact endpoints"
+git add <archivos>
+git commit -m "<mensaje>"
 git push
 ```
