@@ -3,8 +3,20 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.providers.adapters.openai_adapter import AGGREGATOR_HINTS, CLASSIFICATION_RULE_KEYWORDS
 from oie.services.provider_control_service import ProviderControlService
 from oie.services.provider_execution_service import ProviderExecutionService
+
+PREFILTER_BLOCKED_COMPANY_KEYWORDS: set[str] = (
+    AGGREGATOR_HINTS
+    | CLASSIFICATION_RULE_KEYWORDS.get("staffing", set())
+    | CLASSIFICATION_RULE_KEYWORDS.get("job_board", set())
+)
+
+PREFILTER_BLOCKED_COMPANY_NAMES = {
+    "confidential", "confidentiel", "empresa confidencial",
+    "empresa reservada", "undisclosed", "anonymous",
+}
 
 
 DEFAULT_JOB_INTELLIGENCE = {
@@ -51,7 +63,20 @@ class JobIntelligenceService:
 
     def _should_analyze_job(self, job: Dict[str, Any]) -> bool:
         source = str(job.get("source") or "").strip().lower()
-        return source in self.SERP_SOURCES
+        if source not in self.SERP_SOURCES:
+            return False
+
+        company = str(job.get("company") or "").strip().lower()
+        if company in PREFILTER_BLOCKED_COMPANY_NAMES:
+            return False
+        if any(kw in company for kw in PREFILTER_BLOCKED_COMPANY_KEYWORDS):
+            return False
+
+        job_url = str(job.get("job_url") or job.get("url") or "").strip().lower()
+        if any(hint in job_url for hint in AGGREGATOR_HINTS):
+            return False
+
+        return True
 
     def _max_jobs_to_analyze(self) -> int | None:
         config = (self.ctx.config.get("job_intelligence", {}) or {})

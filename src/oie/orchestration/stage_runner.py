@@ -46,6 +46,12 @@ class StageRunner:
         try:
             for index, item in enumerate(inputs[start_index:], start=start_index):
                 output_item = stage.process_item(item)
+                if output_item is None:
+                    checkpoint["processed_count"] += 1
+                    checkpoint["rejected_count"] += 1
+                    checkpoint["last_processed_index"] = index
+                    checkpoint_manager.write_checkpoint(checkpoint)
+                    continue
                 checkpoint_manager.append_output(output_item)
                 checkpoint_manager.record_processed_item(checkpoint, index, output_item)
                 checkpoint_manager.write_checkpoint(checkpoint)
