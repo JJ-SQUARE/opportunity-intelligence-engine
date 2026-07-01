@@ -169,6 +169,7 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
             flags=request.flags,
             mode=request.mode,
         )
+        first_checkpoint = None
         last_checkpoint = None
         runner = StageRunner(ctx)
         for executable_stage in executable_stages:
@@ -176,12 +177,14 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
                 STAGE_CLASSES[executable_stage],
                 reset=request.rerun,
             )
+            if first_checkpoint is None:
+                first_checkpoint = last_checkpoint
 
         finalize_manifest(ctx, "completed")
         return {
             "run_id": ctx.run_id,
             "status": "completed",
-            "jobs_count": int((last_checkpoint or {}).get("output_count", 0)),
+            "jobs_count": int((first_checkpoint or {}).get("output_count", 0)),
             "companies_count": 0,
             "leads_count": 0,
         }
