@@ -1,4 +1,4 @@
-from typing import get_type_hints
+from typing import Any, get_type_hints
 
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 
@@ -48,6 +48,7 @@ def test_run_config_contract_exposes_typed_sections():
         "account": AccountConfig,
         "user": UserConfig,
         "hubspot_delivery": HubSpotDeliveryConfig,
+        "icp_profiles": list[dict[str, Any]],
     }
     assert set(HubSpotDeliveryConfig.__annotations__) == {
         "hubspot_user_id",
