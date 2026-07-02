@@ -19,6 +19,9 @@ class HunterAdapter(ProviderClient):
         self.api_key = cfg.get("api_key") or os.getenv(api_key_env)
         self.timeout = float(cfg.get("timeout_seconds", 20))
 
+    def is_configured(self) -> bool:
+        return bool(self.api_key)
+
     def search_domain_contacts(self, domain: str) -> Dict[str, Any]:
         if not self.api_key:
             raise ValueError("Missing Hunter api_key")

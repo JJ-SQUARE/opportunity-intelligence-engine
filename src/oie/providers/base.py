@@ -9,5 +9,8 @@ class ProviderClient:
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
         self.config = config or {}
 
+    def is_configured(self) -> bool:
+        return True
+
     def request(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError("ProviderClient.request must be implemented")

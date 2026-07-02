@@ -124,6 +124,9 @@ class OpenAIAdapter(ProviderClient):
             or ""
         ).strip()
 
+    def is_configured(self) -> bool:
+        return bool(self._openai_api_key())
+
     def _openai_model(self) -> str:
         return (
             os.getenv("OIE_OPENAI_MODEL")

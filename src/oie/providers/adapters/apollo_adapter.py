@@ -26,6 +26,9 @@ class ApolloAdapter(ProviderClient):
         self.timeout = float(cfg.get("timeout_seconds", 20))
         self.api_key_env = api_key_env
 
+    def is_configured(self) -> bool:
+        return bool(self.api_key)
+
     def _headers(self) -> Dict[str, str]:
         headers = {
             "accept": "application/json",

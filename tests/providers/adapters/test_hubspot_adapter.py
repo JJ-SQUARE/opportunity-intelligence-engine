@@ -91,3 +91,14 @@ def test_search_task_by_subject_returns_existing_task():
     assert args[0] == "/crm/v3/objects/tasks/search"
     assert payload["filterGroups"][0]["filters"][0]["propertyName"] == "hs_task_subject"
     assert payload["filterGroups"][0]["filters"][0]["value"] == "Revisar reporte: Jane Doe (Acme)"
+
+
+def test_hubspot_adapter_is_configured_true_with_api_key():
+    adapter = HubSpotAdapter(config={"api_key": "test-token"})
+    assert adapter.is_configured() is True
+
+
+def test_hubspot_adapter_is_configured_false_without_api_key(monkeypatch):
+    monkeypatch.delenv("HUBSPOT_BEARER_TOKEN", raising=False)
+    adapter = HubSpotAdapter(config={})
+    assert adapter.is_configured() is False

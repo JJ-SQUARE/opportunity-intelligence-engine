@@ -25,6 +25,9 @@ class SerpAPIAdapter(ProviderClient):
         self.api_key = api_key
         self.timeout = float(cfg.get("timeout_seconds", 20))
 
+    def is_configured(self) -> bool:
+        return bool(self.api_key)
+
     def search_google_jobs(
         self,
         query: str,

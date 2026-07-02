@@ -140,3 +140,14 @@ def test_apollo_adapter_uses_x_api_key_header_name(monkeypatch):
 
     assert captured["headers"]["X-Api-Key"] == "apollo-test-key"
     assert "x-api-key" not in captured["headers"]
+
+
+def test_apollo_adapter_is_configured_true_with_api_key():
+    adapter = ApolloAdapter(config={"api_key": "test-key"})
+    assert adapter.is_configured() is True
+
+
+def test_apollo_adapter_is_configured_false_without_api_key(monkeypatch):
+    monkeypatch.delenv("APOLLO_API_KEY", raising=False)
+    adapter = ApolloAdapter(config={})
+    assert adapter.is_configured() is False

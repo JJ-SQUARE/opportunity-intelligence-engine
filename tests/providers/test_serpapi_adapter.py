@@ -36,3 +36,13 @@ def test_serpapi_adapter_calls_requests_get(monkeypatch):
     assert captured["params"]["num"] == 5
     assert captured["params"]["api_key"] == "test-key"
     assert captured["timeout"] == 9.0
+
+
+def test_serpapi_adapter_is_configured_true_with_api_key():
+    adapter = SerpAPIAdapter(config={"api_key": "test-key"})
+    assert adapter.is_configured() is True
+
+
+def test_serpapi_adapter_is_configured_false_without_api_key():
+    adapter = SerpAPIAdapter(config={})
+    assert adapter.is_configured() is False
