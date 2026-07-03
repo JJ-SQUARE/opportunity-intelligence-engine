@@ -52,6 +52,8 @@ from oie.orchestration.stage_runner import StageRunner
 from oie.orchestration.pipeline_stages import PIPELINE_STAGES
 from oie.orchestration.run_context import RunConfig, RunContext, RunFlags
 from oie.orchestration.run_manifest import build_initial_manifest, finalize_manifest, set_run_status
+from oie.orchestration.stage_errors import ProviderNotConfiguredError
+from oie.services.provider_execution_service import ProviderExecutionBlockedError
 from oie.orchestration.run_schedule import delete_run_schedule, read_run_schedule, run_schedule_status, write_run_schedule
 from oie.orchestration.run_repository import RunRepository
 from oie.orchestration.stage_artifact_repository import StageArtifactRepository
@@ -184,13 +186,29 @@ def execute_run(run_id: str, request: ExecuteRunRequest) -> JSONPayload:
         first_checkpoint = None
         last_checkpoint = None
         runner = StageRunner(ctx)
-        for executable_stage in executable_stages:
-            last_checkpoint = runner.run_stage(
-                STAGE_CLASSES[executable_stage],
-                reset=request.rerun,
+        try:
+            for executable_stage in executable_stages:
+                last_checkpoint = runner.run_stage(
+                    STAGE_CLASSES[executable_stage],
+                    reset=request.rerun,
+                )
+                if first_checkpoint is None:
+                    first_checkpoint = last_checkpoint
+        except (ProviderNotConfiguredError, ProviderExecutionBlockedError) as exc:
+            set_run_status(
+                ctx,
+                run_id,
+                "waiting_for_user",
+                error={"error_type": type(exc).__name__, "error_message": str(exc)},
             )
-            if first_checkpoint is None:
-                first_checkpoint = last_checkpoint
+            return {
+                "run_id": ctx.run_id,
+                "status": "waiting_for_user",
+                "jobs_count": int((first_checkpoint or {}).get("output_count", 0)),
+                "companies_count": 0,
+                "leads_count": 0,
+                "warning": str(exc),
+            }
 
         finalize_manifest(ctx, "completed")
         return {
@@ -233,7 +251,21 @@ def execute_run_stage(run_id: str, stage_name: str, request: ExecuteRunRequest) 
         flags=request.flags,
         mode=request.mode,
     )
-    checkpoint = StageRunner(ctx).run_stage(stage_cls, reset=request.rerun)
+    try:
+        checkpoint = StageRunner(ctx).run_stage(stage_cls, reset=request.rerun)
+    except (ProviderNotConfiguredError, ProviderExecutionBlockedError) as exc:
+        set_run_status(
+            ctx,
+            run_id,
+            "waiting_for_user",
+            current_stage=stage_name,
+            error={"error_type": type(exc).__name__, "error_message": str(exc)},
+        )
+        raise HTTPException(status_code=503, detail={
+            "status": "waiting_for_user",
+            "stage": stage_name,
+            "warning": str(exc),
+        })
     return dict(checkpoint)
 
 

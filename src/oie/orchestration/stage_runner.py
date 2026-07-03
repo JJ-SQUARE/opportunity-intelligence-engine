@@ -5,9 +5,11 @@ from typing import TypeAlias
 from oie.orchestration.run_context import RunContext
 from oie.orchestration.run_manifest import build_initial_manifest, read_manifest, update_stage_status, write_manifest
 from oie.orchestration.stage_checkpoint_manager import StageCheckpointManager
+from oie.orchestration.stage_errors import ProviderNotConfiguredError
 from oie.orchestration.stage_timing import start_timer
 from oie.orchestration.stage_base import Stage
 from oie.orchestration.stage_state import StageState
+from oie.services.provider_execution_service import ProviderExecutionBlockedError
 
 
 StageClass: TypeAlias = type[Stage]
@@ -55,6 +57,13 @@ class StageRunner:
                 checkpoint_manager.append_output(output_item)
                 checkpoint_manager.record_processed_item(checkpoint, index, output_item)
                 checkpoint_manager.write_checkpoint(checkpoint)
+        except (ProviderNotConfiguredError, ProviderExecutionBlockedError) as exc:
+            checkpoint["status"] = "waiting_for_user"
+            checkpoint["errors"].append({"error_type": type(exc).__name__, "error_message": str(exc)})
+            from oie.orchestration.stage_timing import elapsed_seconds
+            checkpoint["processing_time_seconds"] = elapsed_seconds(start_time)
+            self.persist_stage_state(checkpoint_manager, checkpoint)
+            raise
         except Exception as exc:
             checkpoint_manager.record_stage_failure(checkpoint, exc, start_time)
             self.persist_stage_state(checkpoint_manager, checkpoint)
