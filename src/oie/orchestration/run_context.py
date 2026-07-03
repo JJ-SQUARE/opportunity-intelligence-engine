@@ -48,6 +48,7 @@ class RunConfig(TypedDict, total=False):
 class RunFlags(TypedDict, total=False):
     cache_only: bool
     dry_run: bool
+    no_llm: bool
     config_path: str
 
 

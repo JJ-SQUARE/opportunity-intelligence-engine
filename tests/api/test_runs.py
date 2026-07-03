@@ -2370,6 +2370,7 @@ def test_execute_run_resumes_from_start_stage(tmp_path, monkeypatch):
         json={
             "config": {"runs": {"path": str(runs_path)}},
             "start_stage": "company_gate",
+            "flags": {"no_llm": True},
         },
     )
 
@@ -2425,6 +2426,7 @@ def test_execute_run_resumed_stage_with_rerun_resets_previous_output(tmp_path, m
         json={
             "config": {"runs": {"path": str(runs_path)}},
             "start_stage": "company_gate",
+            "flags": {"no_llm": True},
         },
     )
     rerun_response = client.post(
@@ -2433,6 +2435,7 @@ def test_execute_run_resumed_stage_with_rerun_resets_previous_output(tmp_path, m
             "config": {"runs": {"path": str(runs_path)}},
             "start_stage": "company_gate",
             "rerun": True,
+            "flags": {"no_llm": True},
         },
     )
 

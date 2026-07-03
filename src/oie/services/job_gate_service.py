@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from oie.orchestration.run_context import RunContext
+from oie.orchestration.stage_errors import ProviderNotConfiguredError
 from oie.services.provider_control_service import ProviderControlService
-from oie.services.provider_execution_service import ProviderExecutionService
+from oie.services.provider_execution_service import ProviderExecutionBlockedError, ProviderExecutionService
 
 
 PREFILTER_BLOCKED_NAMES = {
@@ -73,12 +74,11 @@ class JobGateService:
             ]
 
         client = self.provider_control_service.registry.get_client("openai")
-        if client is None:
-            self.ctx.metrics["job_gate_skipped_no_client"] = True
-            return [
-                {**job, "job_gate": self._fallback_gate(job, "no_client")}
-                for job in jobs
-            ]
+        if client is None or not client.is_configured():
+            raise ProviderNotConfiguredError(
+                "OpenAI client is not configured. "
+                "Please set OPENAI_API_KEY and retry this stage."
+            )
 
         results = []
         advanced = 0
@@ -109,9 +109,13 @@ class JobGateService:
                     advanced += 1
                 else:
                     blocked += 1
+            except (ProviderNotConfiguredError, ProviderExecutionBlockedError):
+                raise
             except Exception:
                 record["job_gate"] = self._fallback_gate(record, "ai_failed")
-                advanced += 1
+                self.ctx.metrics["job_gate_ai_failed"] = (
+                    int(self.ctx.metrics.get("job_gate_ai_failed", 0)) + 1
+                )
 
             results.append(record)
 
