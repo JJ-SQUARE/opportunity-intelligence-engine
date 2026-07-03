@@ -3809,3 +3809,114 @@ def test_get_run_top_opportunities_returns_404_for_missing_run(tmp_path, monkeyp
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Run not found"}
+
+
+def test_execute_run_stage_provider_not_configured_returns_503_waiting_for_user(tmp_path, monkeypatch):
+    from oie.orchestration.stage_base import Stage
+    from oie.orchestration.stage_errors import ProviderNotConfiguredError
+
+    class ProviderNotConfiguredStage(Stage):
+        name = "company_gate"
+        order = 3
+
+        def load_input(self):
+            return [{"id": "job_1", "value": {"company": "Acme"}}]
+
+        def process_item(self, item):
+            raise ProviderNotConfiguredError(
+                "OpenAI client is not configured. Please set OPENAI_API_KEY and retry this stage."
+            )
+
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+    monkeypatch.setitem(
+        __import__("oie.api.routers.runs", fromlist=["STAGE_CLASSES"]).STAGE_CLASSES,
+        "company_gate",
+        ProviderNotConfiguredStage,
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        f"/runs/{ctx.run_id}/stages/company_gate/execute",
+        json={"config": {"runs": {"path": str(runs_path)}}},
+    )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["status"] == "waiting_for_user"
+    assert detail["stage"] == "company_gate"
+    assert "OPENAI_API_KEY" in detail["warning"]
+
+    refreshed = read_run_manifest(RunContext.create(config={"runs": {"path": str(runs_path)}}), ctx.run_id)
+    assert refreshed["status"] == "waiting_for_user"
+    assert any("OPENAI_API_KEY" in e.get("error_message", "") for e in refreshed["errors"])
+
+
+def test_execute_run_provider_not_configured_returns_200_waiting_for_user(tmp_path, monkeypatch):
+    from oie.orchestration.stage_base import Stage
+    from oie.orchestration.stage_errors import ProviderNotConfiguredError
+
+    class ProviderNotConfiguredStage(Stage):
+        name = "company_gate"
+        order = 3
+
+        def load_input(self):
+            return [{"id": "job_1", "value": {"company": "Acme"}}]
+
+        def process_item(self, item):
+            raise ProviderNotConfiguredError(
+                "OpenAI client is not configured. Please set OPENAI_API_KEY and retry this stage."
+            )
+
+    runs_path = tmp_path / "runs"
+    ctx = RunContext.create(config={"runs": {"path": str(runs_path)}})
+    manifest = build_initial_manifest(ctx)
+    manifest["stages"]["collect_jobs"] = "completed"
+    write_manifest(ctx, manifest)
+
+    original_create = RunContext.create
+
+    def fake_create(config=None, flags=None, mode=None):
+        return original_create(
+            config={"runs": {"path": str(runs_path)}},
+            flags=flags,
+            mode=mode,
+        )
+
+    monkeypatch.setattr("oie.orchestration.run_repository.RunContext.create", fake_create)
+    monkeypatch.setitem(
+        __import__("oie.api.routers.runs", fromlist=["STAGE_CLASSES"]).STAGE_CLASSES,
+        "company_gate",
+        ProviderNotConfiguredStage,
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        f"/runs/{ctx.run_id}/execute",
+        json={
+            "config": {"runs": {"path": str(runs_path)}},
+            "start_stage": "company_gate",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "waiting_for_user"
+    assert payload.get("warning") is not None
+    assert "OPENAI_API_KEY" in payload["warning"]
+
+    refreshed = read_run_manifest(RunContext.create(config={"runs": {"path": str(runs_path)}}), ctx.run_id)
+    assert refreshed["status"] == "waiting_for_user"

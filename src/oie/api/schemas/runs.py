@@ -122,6 +122,7 @@ class RunExecutionResponse(BaseModel):
     jobs_count: int
     companies_count: int
     leads_count: int
+    warning: str | None = None
 
 
 class RunStageStatusResponse(BaseModel):

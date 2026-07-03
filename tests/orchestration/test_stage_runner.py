@@ -3084,3 +3084,79 @@ def test_outbound_export_stage_rejects_non_object_stage_value(tmp_path):
         assert str(exc) == "OutboundExportStage item value must be a payload object."
     else:
         raise AssertionError("Expected TypeError")
+
+
+def test_stage_runner_provider_not_configured_sets_waiting_for_user(tmp_path):
+    from oie.orchestration.stage_errors import ProviderNotConfiguredError
+
+    class ProviderNotConfiguredStage(Stage):
+        name = "urgency_gate"
+        order = 4
+
+        def load_input(self):
+            return [
+                {"id": "ok_1", "value": 1},
+                {"id": "no_key", "value": 2},
+            ]
+
+        def process_item(self, item):
+            if item["id"] == "no_key":
+                raise ProviderNotConfiguredError("OpenAI client is not configured. Please set OPENAI_API_KEY and retry this stage.")
+            return {"id": item["id"], "value": item["value"] * 10}
+
+    import json
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        StageRunner(ctx).run_stage(ProviderNotConfiguredStage)
+    except ProviderNotConfiguredError:
+        pass
+    else:
+        raise AssertionError("Expected ProviderNotConfiguredError to propagate")
+
+    paths = ProviderNotConfiguredStage(ctx).artifact_paths()
+    checkpoint = json.loads(paths["checkpoint"].read_text(encoding="utf-8"))
+    manifest = json.loads((paths["stage_dir"].parent / "manifest.json").read_text(encoding="utf-8"))
+
+    assert checkpoint["status"] == "waiting_for_user"
+    assert checkpoint["errors"][0]["error_type"] == "ProviderNotConfiguredError"
+    assert "OPENAI_API_KEY" in checkpoint["errors"][0]["error_message"]
+    assert manifest["stages"]["urgency_gate"] == "waiting_for_user"
+
+
+def test_stage_runner_provider_execution_blocked_sets_waiting_for_user(tmp_path):
+    from oie.services.provider_execution_service import ProviderExecutionBlockedError
+
+    class ProviderBlockedStage(Stage):
+        name = "urgency_gate"
+        order = 4
+
+        def load_input(self):
+            return [{"id": "blocked_1", "value": 1}]
+
+        def process_item(self, item):
+            raise ProviderExecutionBlockedError("Budget exceeded for openai")
+
+    import json
+    ctx = RunContext.create(
+        config={"runs": {"path": str(tmp_path / "runs")}},
+        flags={},
+    )
+
+    try:
+        StageRunner(ctx).run_stage(ProviderBlockedStage)
+    except ProviderExecutionBlockedError:
+        pass
+    else:
+        raise AssertionError("Expected ProviderExecutionBlockedError to propagate")
+
+    paths = ProviderBlockedStage(ctx).artifact_paths()
+    checkpoint = json.loads(paths["checkpoint"].read_text(encoding="utf-8"))
+    manifest = json.loads((paths["stage_dir"].parent / "manifest.json").read_text(encoding="utf-8"))
+
+    assert checkpoint["status"] == "waiting_for_user"
+    assert checkpoint["errors"][0]["error_type"] == "ProviderExecutionBlockedError"
+    assert manifest["stages"]["urgency_gate"] == "waiting_for_user"
